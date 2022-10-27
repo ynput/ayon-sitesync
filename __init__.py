@@ -12,3 +12,5 @@ class SiteSyncAddon(BaseServerAddon):
 
     settings_model: Type[SiteSyncSettings] = SiteSyncSettings
 
+    frontend_scopes: dict[str, Any] = {"project": {}}
+

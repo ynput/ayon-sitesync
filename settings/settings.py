@@ -5,7 +5,10 @@ from openpype.settings import (
     ensure_unique_names,
     normalize_name)
 
-
+from .providers.local_drive import LocalDriveSubmodel
+from .providers.gdrive import GoogleDriveSubmodel
+from .providers.dropbox import DropboxSubmodel
+from .providers.sftp import SFTPSubmodel
 def provider_resolver():
     """Return a list of value/label dicts for the enumerator.
 
@@ -21,11 +24,6 @@ def provider_resolver():
     return [{"value": f"{key}", "label": f"{label}"}
             for key, label in provider_dict.items()]
 
-
-class ListPerPlatform(BaseSettingsModel):
-    windows: list[str] = Field(default_factory=list)
-    linux: list[str] = Field(default_factory=list)
-    darwin: list[str] = Field(default_factory=list)
 
 
 class SitesSubmodel(BaseSettingsModel):
@@ -64,17 +62,17 @@ class SiteSyncSettings(BaseSettingsModel):
     # Here only example usage (must be imported first!)
     # TODO tie change of provider enum value to load particular settings
     # currently not implemented in core code
-    # local_drive_settings: LocalDriveSubmodel = Field(
-    #     default_factory=LocalDriveSubmodel, title="Local Drive")
-    #
-    # google_drive_settings: GoogleDriveSubmodel = Field(
-    #     default_factory=GoogleDriveSubmodel, title="Google Drive")
-    #
-    # dropbox_settings: DropboxSubmodel = Field(
-    #     default_factory=DropboxSubmodel, title="Dropbox")
-    #
-    # sftp_settings: SFTPSubmodel = Field(
-    #     default_factory=SFTPSubmodel, title="SFTP")
+    local_drive_settings: LocalDriveSubmodel = Field(
+        default_factory=LocalDriveSubmodel, title="Local Drive")
+
+    google_drive_settings: GoogleDriveSubmodel = Field(
+        default_factory=GoogleDriveSubmodel, title="Google Drive")
+
+    dropbox_settings: DropboxSubmodel = Field(
+        default_factory=DropboxSubmodel, title="Dropbox")
+
+    sftp_settings: SFTPSubmodel = Field(
+        default_factory=SFTPSubmodel, title="SFTP")
 
     @validator("sites")
     def ensure_unique_names(cls, value):

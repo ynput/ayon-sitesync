@@ -3,7 +3,10 @@ from pydantic import Field
 from openpype.settings import BaseSettingsModel
 from openpype.settings.anatomy.roots import Root, default_roots
 
-from ..settings import ListPerPlatform
+class ListPerPlatform(BaseSettingsModel):
+    windows: list[str] = Field(default_factory=list)
+    linux: list[str] = Field(default_factory=list)
+    darwin: list[str] = Field(default_factory=list)
 
 
 class SFTPSubmodel(BaseSettingsModel):
@@ -38,9 +41,15 @@ class SFTPSubmodel(BaseSettingsModel):
     )
 
     sftp_key: ListPerPlatform = Field(
-        title="SFTP password",
+        title="SFTP key path",
         default_factory=ListPerPlatform,
         description="Use password or ssh key to authenticate",
+    )
+
+    sftp_key_pass: str = Field(
+        "",
+        title="SFTP user ssh key password",
+        description="Password for ssh key",
     )
 
     roots: list[Root] = Field(

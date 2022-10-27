@@ -2,7 +2,10 @@ from pydantic import Field
 
 from openpype.settings import BaseSettingsModel
 
-from ..settings import ListPerPlatform
+class ListPerPlatform(BaseSettingsModel):
+    windows: list[str] = Field(default_factory=list)
+    linux: list[str] = Field(default_factory=list)
+    darwin: list[str] = Field(default_factory=list)
 
 
 class GoogleDriveSubmodel(BaseSettingsModel):
