@@ -1,15 +1,10 @@
 import { useState, useEffect } from 'react'
-import { useSelector } from 'react-redux'
 import axios from 'axios'
-
-import LoadingPage from '../loading'
 
 import SiteSyncSummary from './summary'
 
-const SiteSyncPage = () => {
-  const context = useSelector((state) => ({ ...state.context }))
-  const projectName = context.projectName
 
+const SiteSyncPage = ({projectName, addonName, addonVersion}) => {
   const localSite = 'local'
   const remoteSite = 'remote'
 
@@ -18,7 +13,16 @@ const SiteSyncPage = () => {
   const [repreNames, setRepreNames] = useState([])
 
   useEffect(() => {
+    if (!projectName || !addonName || !addonVersion)
+      return
+
     setLoading(true)
+
+    // TODO: Use addon's own endpoint instead the deprecated one
+    // so the url would be:
+    //
+    // `/api/addons/${addonName}/${addonVersion}/ .... `
+
     const url = `/api/projects/${projectName}/sitesync/params`
     axios
       .get(url)
@@ -35,7 +39,8 @@ const SiteSyncPage = () => {
       })
   }, [projectName])
 
-  if (loading) return <LoadingPage />
+  if (loading)
+    return <main>Loading...</main>
 
   return (
     <main>
