@@ -16,6 +16,7 @@ class GoogleDriveSubmodel(BaseSettingsModel):
     root: root folder on GDrive, `/My Drive` prefix is required for classic
         GDrive, shared disks don't need that
     """
+    _layout = "compact"
     credentials_url: ListPerPlatform = Field(
         title="Credentials url",
         default_factory=ListPerPlatform,

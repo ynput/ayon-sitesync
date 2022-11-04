@@ -17,7 +17,7 @@ class SFTPSubmodel(BaseSettingsModel):
     accessible on shared drive for all artists, use sftp_pass if no shared
     drive present on artist's machines.
     """
-
+    _layout = "compact"
     sftp_host: str = Field(
         "",
         title="SFTP host name",

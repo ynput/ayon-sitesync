@@ -9,6 +9,8 @@ from .providers.local_drive import LocalDriveSubmodel
 from .providers.gdrive import GoogleDriveSubmodel
 from .providers.dropbox import DropboxSubmodel
 from .providers.sftp import SFTPSubmodel
+
+
 def provider_resolver():
     """Return a list of value/label dicts for the enumerator.
 
@@ -16,14 +18,16 @@ def provider_resolver():
     displayed in the UI.
     """
     provider_dict = {
-        "gdrive": "Google Drive",
-        "local_drive": "Local Drive",
-        "dropbox": "Dropbox",
-        "sftp": "SFTP"
+        "gdrive_model": "Google Drive",
+        "local_model": "Local Drive",
+        "dropbox_model": "Dropbox",
+        "sftp_model": "SFTP"
     }
     return [{"value": f"{key}", "label": f"{label}"}
             for key, label in provider_dict.items()]
 
+
+provider_enum = provider_resolver()
 
 
 class SitesSubmodel(BaseSettingsModel):
@@ -37,11 +41,19 @@ class SitesSubmodel(BaseSettingsModel):
                     " site"
     )
 
-    provider = Field(
-        "Local Drive",
-        title="Provider enum",
-        enum_resolver=provider_resolver,
+    provider: str = Field(
+        "",
+        title="Provider",
+        description="Switch between providers",
+        enum_resolver=lambda: provider_enum,
+        conditionalEnum=True
     )
+
+    local_model: LocalDriveSubmodel = Field(default_factory=LocalDriveSubmodel)
+    gdrive_model: GoogleDriveSubmodel = Field(
+        default_factory=GoogleDriveSubmodel)
+    dropbox_model: DropboxSubmodel = Field(default_factory=DropboxSubmodel)
+    sftp_model: SFTPSubmodel = Field(default_factory=SFTPSubmodel)
 
     name: str = Field(..., title="Site name")
 
@@ -57,22 +69,6 @@ class SiteSyncSettings(BaseSettingsModel):
         default_factory=list,
         title="Sites",
     )
-
-    # Implemented providers settings are in `ADDON_ROOT/settings/provicers`
-    # Here only example usage (must be imported first!)
-    # TODO tie change of provider enum value to load particular settings
-    # currently not implemented in core code
-    local_drive_settings: LocalDriveSubmodel = Field(
-        default_factory=LocalDriveSubmodel, title="Local Drive")
-
-    google_drive_settings: GoogleDriveSubmodel = Field(
-        default_factory=GoogleDriveSubmodel, title="Google Drive")
-
-    dropbox_settings: DropboxSubmodel = Field(
-        default_factory=DropboxSubmodel, title="Dropbox")
-
-    sftp_settings: SFTPSubmodel = Field(
-        default_factory=SFTPSubmodel, title="SFTP")
 
     @validator("sites")
     def ensure_unique_names(cls, value):

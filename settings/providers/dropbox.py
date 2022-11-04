@@ -11,6 +11,7 @@ class ListPerPlatform(BaseSettingsModel):
 
 class DropboxSubmodel(BaseSettingsModel):
     """Specific settings for Dropbox sites."""
+    _layout = "compact"
     token: str = Field(
         "",
         title="Access token",
