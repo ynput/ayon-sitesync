@@ -80,7 +80,8 @@ def zip_client_side(addon_package_dir, current_dir, zip_file_name,
         temp_dir_to_zip = os.path.join(private_dir, "temp")
         # shutil.copytree expects glob-style patterns, not regex
         ignore_patterns = ["*.pyc", "*__pycache__*"]
-        shutil.copytree(client_dir, temp_dir_to_zip,
+        shutil.copytree(client_dir,
+                        os.path.join(temp_dir_to_zip, zip_file_name),
                         ignore=shutil.ignore_patterns(*ignore_patterns))
 
         toml_path = os.path.join(client_dir, "pyproject.toml")
