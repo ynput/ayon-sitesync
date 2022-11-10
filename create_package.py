@@ -15,6 +15,7 @@ import os
 import re
 import shutil
 import logging
+import sys
 
 # skip non server side folders
 IGNORE_DIR_PATTERNS = ["package", "__pycache__", "client", r"^\."]
@@ -161,16 +162,13 @@ def _find_key_value(init_file, value):
 
 
 if __name__ == "__main__":
-    main()
-    # current_dir = os.path.dirname(os.path.abspath(__file__))
-    # ignore_patterns = IGNORE_DIR_PATTERNS
-    # dir_names = [f for f in os.listdir(current_dir)
-    #              if os.path.isdir(os.path.join(current_dir, f))]
-    #
-    # for folder_name in dir_names:
-    #     for pattern in ignore_patterns:
-    #         if re.search(pattern, folder_name):
-    #             continue
+    import argparse
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output_dir",
+                        help="Folder url to to create package in."
+                             "Will be purged first!")
 
+    kwargs = parser.parse_args(sys.argv[1:]).__dict__
+    main(**kwargs)
 
