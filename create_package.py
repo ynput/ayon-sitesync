@@ -1,5 +1,7 @@
 """Prepares server package from addon repo to upload to server.
 
+Requires Python3.9. (Or at least 3.8+).
+
 This script should be called from cloned addon repo.
 
 It will produce 'package' subdirectory which could be pasted into server
