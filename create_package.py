@@ -42,7 +42,7 @@ def main(output_dir=None):
         addon_name = _find_key_value(init_file, "name")
         log.info(f"Preparing package for {addon_name}-{addon_version}")
 
-    zip_file_name = f"{addon_name}_{addon_version}.zip"
+    zip_file_name = f"{addon_name}_{addon_version}"
     addon_package_dir = os.path.join(output_dir, addon_name,
                                      addon_version)
     os.makedirs(addon_package_dir)
