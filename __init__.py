@@ -6,7 +6,7 @@ from .settings.settings import SiteSyncSettings
 
 
 class SiteSyncAddon(BaseServerAddon):
-    name = "openpype4-sitesync-addon"
+    name = "sitesync"
     title = "Site Sync Addon"
     version = "1.0.0"
 
