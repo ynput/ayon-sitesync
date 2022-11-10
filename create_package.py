@@ -6,7 +6,12 @@ It will produce 'package' subdirectory which could be pasted into server
 addon directory directly (eg. into `openpype4-backend/addons`).
 
 Format of package folder:
-ADDON_REPO/package/openpype4-example-addon/1.0.0
+ADDON_REPO/package/sitesync/1.0.0
+
+If there is command line argument `--output_dir` filled, version folder
+(eg. `sitesync/1.0.0`) will be created there (if already present, it will be
+purged first). This could be used to create package directly in server folder
+if available.
 
 Package contains server side files directly,
 client side code zipped in `private` subfolder.
@@ -31,10 +36,6 @@ def main(output_dir=None):
     if not output_dir:
         output_dir = os.path.join(current_dir, "package")
 
-    if os.path.isdir(output_dir):
-        log.info(f"Purging {output_dir}")
-        shutil.rmtree(output_dir)
-
     with open(os.path.join(current_dir, "version.py")) as fp:
         init_file = fp.read()
         addon_version = _find_key_value(init_file, "__version__")
@@ -42,6 +43,12 @@ def main(output_dir=None):
     with open(os.path.join(current_dir, "__init__.py")) as fp:
         init_file = fp.read()
         addon_name = _find_key_value(init_file, "name")
+
+    new_created_version_dir = os.path.join(output_dir,
+                                           addon_name, addon_version)
+    if os.path.isdir(new_created_version_dir):
+        log.info(f"Purging {new_created_version_dir}")
+        shutil.rmtree(output_dir)
 
     log.info(f"Preparing package for {addon_name}-{addon_version}")
 
@@ -67,7 +74,7 @@ def zip_client_side(addon_package_dir, current_dir, zip_file_name,
         addon_package_dir (str): package dir in addon repo dir
         current_dir (str): addon repo dir
         zip_file_name (str): file name in format {ADDON_NAME}_{ADDON_VERSION}
-            (eg. 'openpype-example-addon_1.0.0')
+            (eg. 'sitesync_1.0.0')
         log (logging.Logger)
     """
     if not log:
@@ -170,8 +177,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--output_dir",
-                        help="Folder url to to create package in."
-                             "Will be purged first!")
+                        help="Folder url to to create package with version in."
+                             "If addon version folder exists, will be purged!")
 
     kwargs = parser.parse_args(sys.argv[1:]).__dict__
     main(**kwargs)
