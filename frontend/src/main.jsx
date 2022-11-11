@@ -4,12 +4,11 @@ import Addon from './addon'
 
 import axios from 'axios'
 
-import 'primereact/resources/themes/arya-blue/theme.css'
 import 'primereact/resources/primereact.min.css'
 import 'primeicons/primeicons.css'
-
+import 'openpype-components/dist/style.css'
 import './index.sass'
-import './primetheme.sass'
+
 
 const AddonWrapper = () => {
   const [context, setContext] = React.useState(null)
