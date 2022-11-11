@@ -40,10 +40,9 @@ const SiteSyncPage = ({projectName, addonName, addonVersion}) => {
   }, [projectName])
 
   if (loading)
-    return <main>Loading...</main>
+    return null
 
   return (
-    <main>
       <SiteSyncSummary
         projectName={projectName}
         localSite={localSite}
@@ -51,7 +50,6 @@ const SiteSyncPage = ({projectName, addonName, addonVersion}) => {
         names={repreNames}
         totalCount={totalCount}
       />
-    </main>
   )
 }
 
