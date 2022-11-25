@@ -1,12 +1,11 @@
-import { useState, useEffect } from 'react'
-
 import axios from 'axios'
+import { useState, useEffect } from 'react'
+import { Section, TablePanel } from 'openpype-components'
 
 import { DataTable } from 'primereact/datatable'
 import { Column } from 'primereact/column'
 import { MultiSelect } from 'primereact/multiselect'
 import { FilterMatchMode } from 'primereact/api'
-import { Section, Panel, TableWrapper } from '/src/components'
 
 import { formatStatus, SYNC_STATES } from './common'
 import SiteSyncDetail from './detail'
@@ -153,8 +152,7 @@ const SiteSyncSummary = ({
           }}
         />
       )}
-      <Panel className="nopad">
-        <TableWrapper>
+        <TablePanel loading={loading}>
           <DataTable
             scrollable
             responsive
@@ -178,7 +176,6 @@ const SiteSyncSummary = ({
             onPage={onPage}
             onSort={onSort}
             onFilter={onFilter}
-            loading={loading}
           >
             <Column
               field="folder"
@@ -232,8 +229,7 @@ const SiteSyncSummary = ({
               style={{ maxWidth: 250 }}
             />
           </DataTable>
-        </TableWrapper>
-      </Panel>
+        </TablePanel>
     </Section>
   )
 }

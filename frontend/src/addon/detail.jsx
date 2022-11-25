@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
 import axios from 'axios'
+import { useState, useEffect } from 'react'
+import { TablePanel } from 'openpype-components'
 
 import { Dialog } from 'primereact/dialog'
 import { DataTable } from 'primereact/datatable'
@@ -27,48 +28,41 @@ const formatFileSize = (bytes, si = false, dp = 1) => {
   return bytes.toFixed(dp) + ' ' + units[u]
 }
 
-const SiteSyncDetailTable = ({ data, localSite, remoteSite }) => {
-  return (
-    <div
-      className="wrapper"
-      style={{ display: 'flex', margin: '20px', marginTop: '50px' }}
-    >
-      <DataTable
-        value={data}
-        scrollable="true"
-        responsive="true"
-        responsiveLayout="scroll"
-        scrollHeight="flex"
-        selectionMode="single"
-        style={{ flexGrow: 1 }}
-      >
-        <Column field="baseName" header="Name" />
-        <Column
-          field="size"
-          header="Size"
-          body={(row) => formatFileSize(row.size)}
-          style={{ maxWidth: 200 }}
-        />
-        {localSite && (
-          <Column
-            field="localStatus"
-            header="Local"
-            body={(val) => formatStatus(val.localStatus)}
-            style={{ maxWidth: 150 }}
-          />
-        )}
-        {remoteSite && (
-          <Column
-            field="remoteStatus"
-            header="Remote"
-            body={(val) => formatStatus(val.remoteStatus)}
-            style={{ maxWidth: 150 }}
-          />
-        )}
-      </DataTable>
-    </div>
-  )
-}
+const SiteSyncDetailTable = ({ data, localSite, remoteSite }) => (
+  <DataTable
+    value={data}
+    scrollable="true"
+    responsive="true"
+    responsiveLayout="scroll"
+    scrollHeight="flex"
+    selectionMode="single"
+    style={{ flexGrow: 1 }}
+  >
+    <Column field="baseName" header="Name" />
+    <Column
+      field="size"
+      header="Size"
+      body={(row) => formatFileSize(row.size)}
+      style={{ maxWidth: 200 }}
+    />
+    {localSite && (
+      <Column
+        field="localStatus"
+        header="Local"
+        body={(val) => formatStatus(val.localStatus)}
+        style={{ maxWidth: 150 }}
+      />
+    )}
+    {remoteSite && (
+      <Column
+        field="remoteStatus"
+        header="Remote"
+        body={(val) => formatStatus(val.remoteStatus)}
+        style={{ maxWidth: 150 }}
+      />
+    )}
+  </DataTable>
+)
 
 const FILES_QUERY = `
 query Files($projectName: String!, $representationId: String!) {
@@ -153,15 +147,13 @@ const SiteSyncDetail = ({
       onHide={onHide}
       style={{ minHeight: '40%', minWidth: 900 }}
     >
-      {loading ? (
-        <span>loading</span>
-      ) : (
+      <TablePanel className="nopad transparent" loading={loading}>
         <SiteSyncDetailTable
           data={files}
           localSite={localSite}
           remoteSite={remoteSite}
         />
-      )}
+      </TablePanel>
     </Dialog>
   )
 }
