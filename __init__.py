@@ -9,7 +9,7 @@ from .settings.settings import SiteSyncSettings
 from .version import __version__
 
 
-class SiteSyncAddon(BaseServerAddon):
+class SiteSync(BaseServerAddon):
     name = "sitesync"
     title = "Site Sync Addon"
     version = __version__
@@ -20,6 +20,7 @@ class SiteSyncAddon(BaseServerAddon):
 
     def initialize(self) -> None:
         logging.info("Init SiteSyncAddon")
+
     def get_local_client_info(
             self,
             base_url: str | None = None,
