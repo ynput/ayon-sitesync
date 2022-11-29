@@ -19,7 +19,7 @@ class SiteSync(BaseServerAddon):
     frontend_scopes: dict[str, Any] = {"project": {}}
 
     def initialize(self) -> None:
-        logging.info("Init SiteSyncAddon")
+        logging.info("Init SiteSync")
 
     def get_local_client_info(
             self,
