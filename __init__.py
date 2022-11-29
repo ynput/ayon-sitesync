@@ -11,7 +11,7 @@ from .version import __version__
 
 class SiteSync(BaseServerAddon):
     name = "sitesync"
-    title = "Site Sync Addon"
+    title = "Site Sync"
     version = __version__
 
     settings_model: Type[SiteSyncSettings] = SiteSyncSettings
