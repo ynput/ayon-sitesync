@@ -1459,21 +1459,25 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             )
             return SyncStatus.DO_NOTHING
 
-        local_status = file["localStatus"]
-        remote_status = file["remoteStatus"]
+        local_status = file["localStatus"]["status"]
+        remote_status = file["remoteStatus"]["status"]
 
-        if local_status["status"] not in [SiteSyncStatus.OK]:
-            if local_status["retries"] < int(config_preset["retry_cnt"]):
+        if (local_status != SiteSyncStatus.OK and
+                remote_status == SiteSyncStatus.OK):
+            retries = file["local_status"]["retries"]
+            if retries < int(config_preset["retry_cnt"]):
                 return SyncStatus.DO_DOWNLOAD
 
-        if remote_status["status"] not in [SiteSyncStatus.OK]:
-            if remote_status["retries"] < int(config_preset["retry_cnt"]):
+        if (remote_status != SiteSyncStatus.OK and
+                local_status == SiteSyncStatus.OK):
+            retries = file["remoteStatus"]["retries"]
+            if retries < int(config_preset["retry_cnt"]):
                 return SyncStatus.DO_UPLOAD
 
         return SyncStatus.DO_NOTHING
 
     def update_db(self, project_name, new_file_id, file, representation,
-                  site, error=None, progress=None, priority=None):
+                  site_name, side, error=None, progress=None, priority=None):
         """
             Update 'provider' portion of records in DB with success (file_id)
             or error (exception)
@@ -1483,8 +1487,9 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
               each file might come from different collection
             new_file_id (string):
             file (dictionary): info about processed file (pulled from DB)
-            representation (dictionary): parent repr of file (from DB)
-            site (string): label ('gdrive', 'S3')
+            representation (dict): representation from DB
+            site_name (str):
+            side (string): 'local' | 'remote'
             error (string): exception message
             progress (float): 0-1 of progress of upload/download
             priority (int): 0-100 set priority
@@ -1492,42 +1497,42 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         Returns:
             None
         """
-        representation_id = representation.get("_id")
-        file_id = None
-        if file:
-            file_id = file.get("_id")
+        files_status = []
+        for file_info in representation["files"]:
+            status_doc = copy.deepcopy(file_info[f"{side}Status"])
+            status_doc["fileHash"] = file_info["fileHash"]
+            if file_info["fileHash"] == file["fileHash"]:
+                if new_file_id:
+                    status_doc["status"] = SiteSyncStatus.OK
+                    status_doc["id"] = new_file_id
+                    status_doc.pop("message")
+                    status_doc.pop("retries")
+                elif progress is not None:
+                    status_doc["status"] = SiteSyncStatus.IN_PROGRESS
+                    status_doc["progress"] = progress
+                elif error:
+                    status_doc["status"] = SiteSyncStatus.FAILED
+                    tries = status_doc.get("retries", 0)
+                    tries += 1
+                    status_doc["retries"] = tries
+                    status_doc["message"] = error
+            files_status.append(status_doc)
 
-        query = {
-            "_id": representation_id
+        representation_id = representation["representationId"]
+
+        endpoint = f"projects/{project_name}/sitesync/state/{representation_id}/{site_name}"  # noqa
+
+        # get to upload
+        kwargs = {
+            "files": files_status
         }
 
-        update = {}
-        if new_file_id:
-            update["$set"] = self._get_success_dict(new_file_id)
-            # reset previous errors if any
-            update["$unset"] = self._get_error_dict("", "", "")
-        elif progress is not None:
-            update["$set"] = self._get_progress_dict(progress)
-        elif priority is not None:
-            update["$set"] = self._get_priority_dict(priority, file_id)
-        else:
-            tries = self._get_tries_count(file, site)
-            tries += 1
+        if priority:
+            kwargs["priority"] = priority
 
-            update["$set"] = self._get_error_dict(error, tries)
-
-        arr_filter = [
-            {'s.name': site}
-        ]
-        if file_id:
-            arr_filter.append({'f._id': ObjectId(file_id)})
-
-        self.connection.database[project_name].update_one(
-            query,
-            update,
-            upsert=True,
-            array_filters=arr_filter
-        )
+        response = get_server_api_connection().post(endpoint, **kwargs)
+        if response.status != "200":
+            raise RuntimeError("Cannot update status")
 
         if progress is not None or priority is not None:
             return
@@ -1539,6 +1544,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             error_str = ''
 
         source_file = file.get("path", "")
+
         self.log.debug(
             (
                 "File for {} - {source_file} process {status} {error_str}"

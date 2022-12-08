@@ -349,6 +349,7 @@ class SyncServerThread(threading.Thread):
                                     files_processed_info.append((file,
                                                                  sync,
                                                                  remote_site,
+                                                                 "remote",
                                                                  project_name
                                                                  ))
                                     processed_file_path.add(file_path)
@@ -368,6 +369,7 @@ class SyncServerThread(threading.Thread):
                                     files_processed_info.append((file,
                                                                  sync,
                                                                  local_site,
+                                                                 "local",
                                                                  project_name
                                                                  ))
                                     processed_file_path.add(file_path)
@@ -380,7 +382,8 @@ class SyncServerThread(threading.Thread):
                         return_exceptions=True)
                     for file_id, info in zip(files_created,
                                              files_processed_info):
-                        file, representation, site, project_name = info
+                        file, representation, site_name, side, project_name = \
+                            info
                         error = None
                         if isinstance(file_id, BaseException):
                             error = str(file_id)
@@ -389,7 +392,8 @@ class SyncServerThread(threading.Thread):
                                               file_id,
                                               file,
                                               representation,
-                                              site,
+                                              site_name,
+                                              side,
                                               error)
 
                 duration = time.time() - start_time
