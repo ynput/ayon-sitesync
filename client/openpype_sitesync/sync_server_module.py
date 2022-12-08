@@ -12,8 +12,7 @@ import click
 from bson.objectid import ObjectId
 
 from openpype.client import get_projects
-from openpype.modules import OpenPypeModule
-from openpype_interfaces import ITrayModule
+from openpype.modules import OpenPypeModule, ITrayModule
 from openpype.settings import (
     get_project_settings,
     get_system_settings,
@@ -28,10 +27,17 @@ from openpype.settings.lib import (
 from .providers.local_drive import LocalDriveHandler
 from .providers import lib
 
-from .utils import time_function, SyncStatus, SiteAlreadyPresentError
+from .utils import (
+    time_function,
+    SyncStatus,
+    SiteAlreadyPresentError,
+    SiteSyncStatus
+)
 
 from openpype.client import get_representations, get_representation_by_id
 
+
+from openpype.client.server.server_api import get_server_api_connection, get
 
 log = Logger.get_logger("SyncServer")
 
@@ -1372,7 +1378,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         return sites.get(site, 'N/A')
 
     @time_function
-    def get_sync_representations(self, project_name, active_site, remote_site):
+    def get_sync_representations(self, project_name, active_site, remote_site,
+                                 limit=10):
         """
             Get representations that should be synced, these could be
             recognised by presence of document in 'files.sites', where key is
@@ -1394,88 +1401,28 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         """
         self.log.debug("Check representations for : {}".format(project_name))
         self.connection.Session["AVALON_PROJECT"] = project_name
-        # retry_cnt - number of attempts to sync specific file before giving up
-        retries_arr = self._get_retries_arr(project_name)
-        match = {
-            "type": "representation",
-            "$or": [
-                {"$and": [
-                    {
-                        "files.sites": {
-                            "$elemMatch": {
-                                "name": active_site,
-                                "created_dt": {"$exists": True}
-                            }
-                        }}, {
-                        "files.sites": {
-                            "$elemMatch": {
-                                "name": {"$in": [remote_site]},
-                                "created_dt": {"$exists": False},
-                                "tries": {"$in": retries_arr}
-                            }
-                        }
-                    }]},
-                {"$and": [
-                    {
-                        "files.sites": {
-                            "$elemMatch": {
-                                "name": active_site,
-                                "created_dt": {"$exists": False},
-                                "tries": {"$in": retries_arr}
-                            }
-                        }}, {
-                        "files.sites": {
-                            "$elemMatch": {
-                                "name": {"$in": [remote_site]},
-                                "created_dt": {"$exists": True}
-                            }
-                        }
-                    }
-                ]}
-            ]
-        }
 
-        aggr = [
-            {"$match": match},
-            {'$unwind': '$files'},
-            {'$addFields': {
-                'order_remote': {
-                    '$filter': {'input': '$files.sites', 'as': 'p',
-                                'cond': {'$eq': ['$$p.name', remote_site]}
-                                }},
-                'order_local': {
-                    '$filter': {'input': '$files.sites', 'as': 'p',
-                                'cond': {'$eq': ['$$p.name', active_site]}
-                                }},
-            }},
-            {'$addFields': {
-                'priority': {
-                    '$cond': [
-                        {'$size': '$order_local.priority'},
-                        {'$first': '$order_local.priority'},
-                        {'$cond': [
-                            {'$size': '$order_remote.priority'},
-                            {'$first': '$order_remote.priority'},
-                            self.DEFAULT_PRIORITY]}
-                    ]
-                },
-            }},
-            {'$group': {
-                '_id': '$_id',
-                # pass through context - same for representation
-                'context': {'$addToSet': '$context'},
-                'data': {'$addToSet': '$data'},
-                # pass through files as a list
-                'files': {'$addToSet': '$files'},
-                'priority': {'$max': "$priority"},
-            }},
-            {"$sort": {'priority': -1, '_id': 1}},
-        ]
-        self.log.debug("active_site:{} - remote_site:{}".format(
-            active_site, remote_site
-        ))
-        self.log.debug("query: {}".format(aggr))
-        representations = self.connection.aggregate(aggr)
+        endpoint = f"projects/{project_name}/sitesync/state"
+
+        # get to upload
+        kwargs = {"localSite": active_site,
+                  "remoteSite": remote_site,
+                  "localStatusFilter": [SiteSyncStatus.OK],
+                  "remoteStatusFilter": [SiteSyncStatus.QUEUED,
+                                         SiteSyncStatus.FAILED]}
+
+
+        response = get_server_api_connection().get(endpoint, **kwargs)
+        representations = response.data["representations"]
+
+        # get to download
+        if len(representations) < limit:
+            kwargs["localStatusFilter"] = [SiteSyncStatus.QUEUED,
+                                           SiteSyncStatus.FAILED]
+            kwargs["remoteStatusFilter"] = [SiteSyncStatus.OK]
+
+            response = get_server_api_connection().get(endpoint, **kwargs)
+            representations.extend(response.data["representations"])
 
         return representations
 
@@ -1505,8 +1452,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         Returns:
             (string) - one of SyncStatus
         """
-        sites = file.get("sites") or []
-
         if get_local_site_id() not in (local_site, remote_site):
             # don't do upload/download for studio sites
             self.log.debug(
@@ -1514,24 +1459,16 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             )
             return SyncStatus.DO_NOTHING
 
-        _, remote_rec = self._get_site_rec(sites, remote_site) or {}
-        if remote_rec:  # sync remote target
-            created_dt = remote_rec.get("created_dt")
-            if not created_dt:
-                tries = self._get_tries_count_from_rec(remote_rec)
-                # file will be skipped if unsuccessfully tried over threshold
-                # error metadata needs to be purged manually in DB to reset
-                if tries < int(config_preset["retry_cnt"]):
-                    return SyncStatus.DO_UPLOAD
-            else:
-                _, local_rec = self._get_site_rec(sites, local_site) or {}
-                if not local_rec or not local_rec.get("created_dt"):
-                    tries = self._get_tries_count_from_rec(local_rec)
-                    # file will be skipped if unsuccessfully tried over
-                    # threshold times, error metadata needs to be purged
-                    # manually in DB to reset
-                    if tries < int(config_preset["retry_cnt"]):
-                        return SyncStatus.DO_DOWNLOAD
+        local_status = file["localStatus"]
+        remote_status = file["remoteStatus"]
+
+        if local_status["status"] not in [SiteSyncStatus.OK]:
+            if local_status["retries"] < int(config_preset["retry_cnt"]):
+                return SyncStatus.DO_DOWNLOAD
+
+        if remote_status["status"] not in [SiteSyncStatus.OK]:
+            if remote_status["retries"] < int(config_preset["retry_cnt"]):
+                return SyncStatus.DO_UPLOAD
 
         return SyncStatus.DO_NOTHING
 

@@ -21,6 +21,15 @@ class SyncStatus:
     DO_DOWNLOAD = 2
 
 
+class SiteSyncStatus:
+    NA = -1
+    IN_PROGRESS = 0
+    QUEUED = 1
+    FAILED = 2
+    PAUSED = 3
+    OK = 4
+
+
 def time_function(method):
     """ Decorator to print how much time function took.
         For debugging.

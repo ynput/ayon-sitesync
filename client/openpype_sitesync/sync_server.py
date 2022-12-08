@@ -285,16 +285,23 @@ class SyncServerThread(threading.Thread):
                 project_name = None
                 enabled_projects = self.module.get_enabled_projects()
                 for project_name in enabled_projects:
-                    preset = self.module.sync_project_settings[project_name]
-
                     local_site, remote_site = self._working_sites(project_name)
                     if not all([local_site, remote_site]):
                         continue
 
+                    preset = self.module.sync_project_settings[project_name]
+                    site_preset = preset.get('sites')[remote_site]
+
+                    handler, remote_provider, limit = \
+                        self._get_remote_provider_info(project_name,
+                                                       remote_site,
+                                                       site_preset)
+
                     sync_repres = self.module.get_sync_representations(
                         project_name,
                         local_site,
-                        remote_site
+                        remote_site,
+                        limit
                     )
 
                     task_files_to_process = []
@@ -306,23 +313,13 @@ class SyncServerThread(threading.Thread):
                     # reuse same id
                     processed_file_path = set()
 
-                    site_preset = preset.get('sites')[remote_site]
-                    remote_provider = \
-                        self.module.get_provider_for_site(site=remote_site)
-                    handler = lib.factory.get_provider(remote_provider,
-                                                       project_name,
-                                                       remote_site,
-                                                       presets=site_preset)
-                    limit = lib.factory.get_provider_batch_limit(
-                        remote_provider)
                     # first call to get_provider could be expensive, its
                     # building folder tree structure in memory
                     # call only if needed, eg. DO_UPLOAD or DO_DOWNLOAD
                     for sync in sync_repres:
+                        sync_id = sync["representationId"]
                         if self.module.\
-                                is_representation_paused(sync['_id']):
-                            continue
-                        if limit <= 0:
+                                is_representation_paused(sync_id):
                             continue
                         files = sync.get("files") or []
                         if files:
@@ -338,7 +335,6 @@ class SyncServerThread(threading.Thread):
                                     preset.get('config'))
                                 if status == SyncStatus.DO_UPLOAD:
                                     tree = handler.get_tree()
-                                    limit -= 1
                                     task = asyncio.create_task(
                                         upload(self.module,
                                                project_name,
@@ -358,7 +354,6 @@ class SyncServerThread(threading.Thread):
                                     processed_file_path.add(file_path)
                                 if status == SyncStatus.DO_DOWNLOAD:
                                     tree = handler.get_tree()
-                                    limit -= 1
                                     task = asyncio.create_task(
                                         download(self.module,
                                                  project_name,
@@ -487,3 +482,15 @@ class SyncServerThread(threading.Thread):
             return None, None
 
         return local_site, remote_site
+
+    def _get_remote_provider_info(self, project_name, remote_site,
+                                  site_preset):
+        remote_provider = self.module.get_provider_for_site(site=remote_site)
+        handler = lib.factory.get_provider(remote_provider,
+                                           project_name,
+                                           remote_site,
+                                           presets=site_preset)
+        limit = lib.factory.get_provider_batch_limit(
+            remote_provider)
+
+        return handler, remote_provider, limit
