@@ -194,10 +194,19 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         if not self.get_sync_project_setting(project_name):
             raise ValueError("Project not configured")
 
-        self.reset_site_on_representation(project_name,
-                                          representation_id,
-                                          site_name=site_name,
-                                          remove=True)
+        sync_info = self._get_state_sync_state(project_name, representation_id,
+                                               site_name)
+        if not sync_info:
+            msg = "Site {} not found".format(site_name)
+            self.log.warning(msg)
+            return
+
+        endpoint = f"projects/{project_name}/sitesync/state/{representation_id}/{site_name}"  # noqa
+
+        response = get_server_api_connection().delete(endpoint)
+        if response.status_code not in [200, 204]:
+            raise RuntimeError("Cannot update status")
+
         if remove_local_files:
             self._remove_local_file(project_name, representation_id, site_name)
 
@@ -1600,7 +1609,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
 
     def reset_site_on_representation(self, project_name, representation_id,
                                      side=None, file_id=None, site_name=None,
-                                     remove=False, pause=None, force=False):
+                                     pause=None, force=False):
         """
             Reset information about synchronization for particular 'file_id'
             and provider.
@@ -1620,7 +1629,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             file_id (string):  file _id in representation
             side (string): local or remote side
             site_name (string): for adding new site
-            remove (bool): if True remove site altogether
             pause (bool or None): if True - pause, False - unpause
             force (bool): hard reset - currently only for add_site
 
@@ -1655,9 +1663,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
                                       elem, file_id, site_name)
         elif side:  # reset site for whole representation
             self._reset_site(project_name, representation_id, elem, site_name)
-        elif remove:  # remove site for whole representation
-            self._remove_site(project_name,
-                              representation, site_name)
         elif pause is not None:
             self._pause_unpause_site(project_name,
                                      representation, site_name, pause)
