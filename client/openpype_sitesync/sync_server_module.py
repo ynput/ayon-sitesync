@@ -482,8 +482,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
 
                         created_dt = datetime.fromtimestamp(
                             os.path.getmtime(local_file_path))
-                        elem = {"name": site_name,
-                                "created_dt": created_dt}
                         self.add_site(project_name, repre,
                                       site_name=site_name,
                                       file_id=repre_file["_id"],
@@ -1610,46 +1608,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             )
         )
 
-    def _get_file_info(self, files, _id):
-        """
-            Return record from list of records which name matches to 'provider'
-            Could be possibly refactored with '_get_provider_rec' together.
-
-        Args:
-            files (list): of dictionaries with info about published files
-            _id (string): _id of specific file
-
-        Returns:
-            (int, dictionary): index from list and record with metadata
-                               about site (if/when created, errors..)
-            OR (-1, None) if not present
-        """
-        for index, rec in enumerate(files):
-            if rec.get("_id") == _id:
-                return index, rec
-
-        return -1, None
-
-    def _get_site_rec(self, sites, site_name):
-        """
-            Return record from list of records which name matches to
-            'remote_site_name'
-
-        Args:
-            sites (list): of dictionaries
-            site_name (string): 'local_XXX', 'gdrive'
-
-        Returns:
-            (int, dictionary): index from list and record with metadata
-                               about site (if/when created, errors..)
-            OR (-1, None) if not present
-        """
-        for index, rec in enumerate(sites):
-            if rec.get("name") == site_name:
-                return index, rec
-
-        return -1, None
-
     def reset_site_on_representation(self, project_name, representation_id,
                                      side=None, file_id=None, site_name=None):
         """
@@ -1699,58 +1657,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         self.add_site(project_name, representation_id, site_name, file_id,
                       force=True)
 
-    def _update_site(self, project_name, representation_id,
-                     update, arr_filter):
-        """
-            Auxiliary method to call update_one function on DB
-
-            Used for refactoring ugly reset_provider_for_file
-        """
-        query = {
-            "_id": ObjectId(representation_id)
-        }
-
-        self.connection.database[project_name].update_one(
-            query,
-            update,
-            upsert=True,
-            array_filters=arr_filter
-        )
-
-    def _reset_site_for_file(self, project_name, representation_id,
-                             elem, file_id, site_name):
-        """
-            Resets 'site_name' for 'file_id' on representation in 'query' on
-            'project_name'
-        """
-        update = {
-            "$set": {"files.$[f].sites.$[s]": elem}
-        }
-        if not isinstance(file_id, ObjectId):
-            file_id = ObjectId(file_id)
-
-        arr_filter = [
-            {'s.name': site_name},
-            {'f._id': file_id}
-        ]
-
-        self._update_site(project_name, representation_id, update, arr_filter)
-
-    def _reset_site(self, project_name, representation_id, elem, site_name):
-        """
-            Resets 'site_name' for all files of representation in 'query'
-        """
-        update = {
-            "$set": {"files.$[].sites.$[s]": elem}
-        }
-
-        arr_filter = [
-            {'s.name': site_name}
-        ]
-
-        self._update_site(project_name, representation_id, update, arr_filter)
-
-    def _remove_site(self, project_name, representation, site_name):
+    def remove_site(self, project_name, representation, site_name):
         """
             Removes 'site_name' for 'representation' if present.
         """
@@ -1779,7 +1686,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
 
     def _get_state_sync_state(self, project_name,
                               representation_id, site_name):
-
+        """Use server endpoint to get synchronization info for repre_id."""
         payload_dict = {
             "localSite": site_name,
             "remoteSite": site_name,
@@ -1892,105 +1799,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
                 exc_info=True)
         self.enabled = no_errors
         self.widget.show()
-
-    def _get_success_dict(self, new_file_id):
-        """
-            Provide success metadata ("id", "created_dt") to be stored in Db.
-            Used in $set: "DICT" part of query.
-            Sites are array inside of array(file), so real indexes for both
-            file and site are needed for upgrade in DB.
-        Args:
-            new_file_id: id of created file
-        Returns:
-            (dictionary)
-        """
-        val = {"files.$[f].sites.$[s].id": new_file_id,
-               "files.$[f].sites.$[s].created_dt": datetime.now()}
-        return val
-
-    def _get_error_dict(self, error="", tries="", progress=""):
-        """
-            Provide error metadata to be stored in Db.
-            Used for set (error and tries provided) or unset mode.
-        Args:
-            error: (string) - message
-            tries: how many times failed
-        Returns:
-            (dictionary)
-        """
-        val = {"files.$[f].sites.$[s].last_failed_dt": datetime.now(),
-               "files.$[f].sites.$[s].error": error,
-               "files.$[f].sites.$[s].tries": tries,
-               "files.$[f].sites.$[s].progress": progress
-               }
-        return val
-
-    def _get_tries_count_from_rec(self, rec):
-        """
-            Get number of failed attempts to sync from site record
-        Args:
-            rec (dictionary): info about specific site record
-        Returns:
-            (int) - number of failed attempts
-        """
-        if not rec:
-            return 0
-        return rec.get("tries", 0)
-
-    def _get_tries_count(self, file, provider):
-        """
-            Get number of failed attempts to sync
-        Args:
-            file (dictionary): info about specific file
-            provider (string): name of site ('gdrive' or specific user site)
-        Returns:
-            (int) - number of failed attempts
-        """
-        _, rec = self._get_site_rec(file.get("sites", []), provider)
-        return self._get_tries_count_from_rec(rec)
-
-    def _get_progress_dict(self, progress):
-        """
-            Provide progress metadata to be stored in Db.
-            Used during upload/download for GUI to show.
-        Args:
-            progress: (float) - 0-1 progress of upload/download
-        Returns:
-            (dictionary)
-        """
-        val = {"files.$[f].sites.$[s].progress": progress}
-        return val
-
-    def _get_priority_dict(self, priority, file_id):
-        """
-            Provide priority metadata to be stored in Db.
-            Used during upload/download for GUI to show.
-        Args:
-            priority: (int) - priority for file(s)
-        Returns:
-            (dictionary)
-        """
-        if file_id:
-            str_key = "files.$[f].sites.$[s].priority"
-        else:
-            str_key = "files.$[].sites.$[s].priority"
-        return {str_key: int(priority)}
-
-    def _get_retries_arr(self, project_name):
-        """
-            Returns array with allowed values in 'tries' field. If repre
-            contains these values, it means it was tried to be synchronized
-            but failed. We try up to 'self.presets["retry_cnt"]' times before
-            giving up and skipping representation.
-        Returns:
-            (list)
-        """
-        retry_cnt = self.sync_project_settings[project_name].\
-            get("config")["retry_cnt"]
-        arr = [i for i in range(int(retry_cnt))]
-        arr.append(None)
-
-        return arr
 
     def _get_roots_config(self, presets, project_name, site_name):
         """
