@@ -441,7 +441,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
                             os.path.getmtime(local_file_path))
                         elem = {"name": site_name,
                                 "created_dt": created_dt}
-                        self._add_site(project_name, repre, elem,
+                        self._add_site(project_name, repre,
                                        site_name=site_name,
                                        file_id=repre_file["_id"],
                                        force=True)
@@ -996,7 +996,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             self.log.debug("Adding alternate {} to {}".format(
                 alt_site, representation["_id"]))
             self._add_site(project_name,
-                           representation, elem,
+                           representation,
                            alt_site, file_id=file_id, force=True)
 
     def get_repre_info_for_versions(self, project_name, version_ids,
@@ -1424,6 +1424,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             response = get_server_api_connection().get(endpoint, **kwargs)
             representations.extend(response.data["representations"])
 
+        self.add_site(project_name, kwargs["representationId"], "new_site")
+
         return representations
 
     def check_status(self, file, local_site, remote_site, config_preset):
@@ -1531,7 +1533,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             kwargs["priority"] = priority
 
         response = get_server_api_connection().post(endpoint, **kwargs)
-        if response.status != "200":
+        if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
         if progress is not None or priority is not None:
@@ -1660,7 +1662,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             self._pause_unpause_site(project_name,
                                      representation, site_name, pause)
         else:  # add new site to all files for representation
-            self._add_site(project_name, representation, elem, site_name,
+            self._add_site(project_name, representation, site_name,
                            force=force)
 
     def _update_site(self, project_name, representation_id,
@@ -1775,60 +1777,92 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         self._update_site(project_name, representation["_id"],
                           update, arr_filter)
 
-    def _add_site(self, project_name, representation, elem, site_name,
+    def _add_site(self, project_name, representation, site_name,
                   force=False, file_id=None):
         """
-            Adds 'site_name' to 'representation' on 'project_name'
+            Marks 'site_name' to be synced to 'representation'.
 
-            Args:
-                representation (dict)
-                file_id (ObjectId)
+        Args:
+            project_name (str)
+            representation (dict)
+            file_id (uuid)
+            force (bool)
+            file_id (uuid)
 
-            Use 'force' to remove existing or raises ValueError
+        Raises:
+            (SiteAlreadyPresentError) if site_name already present on the
+            representation["id"].
+            Use 'force' to remove existing.
         """
         representation_id = representation["_id"]
-        reset_existing = False
         files = representation.get("files", [])
         if not files:
             self.log.debug("No files for {}".format(representation_id))
             return
 
-        for repre_file in files:
-            if file_id and file_id != repre_file["_id"]:
-                continue
-
-            for site in repre_file.get("sites"):
-                if site["name"] == site_name:
-                    if force or site.get("error"):
-                        self._reset_site_for_file(project_name,
+        if not force:
+            existing = self._get_state_sync_state(project_name,
                                                   representation_id,
-                                                  elem, repre_file["_id"],
                                                   site_name)
-                        reset_existing = True
-                    else:
-                        msg = "Site {} already present".format(site_name)
-                        self.log.info(msg)
-                        raise SiteAlreadyPresentError(msg)
+            if existing:
+                failure = True
+                if file_id:
+                    file_exists = existing.get("files", {}).get(file_id)
+                    if not file_exists:
+                        failure = False
 
-        if reset_existing:
-            return
+                if failure:
+                    msg = "Site {} already present".format(site_name)
+                    self.log.info(msg)
+                    raise SiteAlreadyPresentError(msg)
 
-        if not file_id:
-            update = {
-                "$push": {"files.$[].sites": elem}
-            }
+        new_site_files = []
+        for repre_file in files:
+            file_hash = repre_file["id"]
+            new_site_files.append({
+                "size": repre_file["size"],
+                "status": SiteSyncStatus.QUEUED,
+                "timestamp": datetime.now().timestamp(),
+                "fileHash": file_hash
+            })
 
-            arr_filter = []
-        else:
-            update = {
-                "$push": {"files.$[f].sites": elem}
-            }
-            arr_filter = [
-                {'f._id': file_id}
-            ]
+        payload_dict = {"files": new_site_files}
 
-        self._update_site(project_name, representation_id,
-                          update, arr_filter)
+        self._set_state_sync_state(project_name, representation_id, site_name,
+                                   payload_dict)
+
+
+    def _set_state_sync_state(self, project_name, representation_id, site_name,
+                              payload_dict):
+        """Calls server endpoint to store sync info for 'representation_id'."""
+        endpoint = f"projects/{project_name}/sitesync/state/{representation_id}/{site_name}"  # noqa
+
+        response = get_server_api_connection().post(endpoint, **payload_dict)
+        if response.status_code not in [200, 204]:
+            raise RuntimeError("Cannot update status")
+
+    def _get_state_sync_state(self, project_name,
+                              representation_id, site_name):
+
+        payload_dict = {
+            "localSite": site_name,
+            "remoteSite": site_name,
+            "representationId": representation_id
+        }
+
+        endpoint = f"projects/{project_name}/sitesync/state"
+
+        response = get_server_api_connection().get(endpoint, **payload_dict)
+        if response.status_code != 200:
+            msg = f"Cannot get sync state for representation "\
+                  "{representation_id}"
+            raise RuntimeError(msg)
+
+        representations = response.data["representations"]
+        if representations:
+            representation = representations[0]
+            if representation["localStatus"]["status"] != -1:
+                return representation
 
     def _remove_local_file(self, project_name, representation_id, site_name):
         """
