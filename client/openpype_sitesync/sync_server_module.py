@@ -170,7 +170,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         if not site_name:
             site_name = self.DEFAULT_SITE
 
-        representation = get_representation_by_id(representation_id)
+        representation = get_representation_by_id(project_name,
+                                                  representation_id)
 
         files = representation.get("files", [])
         if not files:
@@ -515,7 +516,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         """
         self.log.info("Pausing SyncServer for {}".format(representation_id))
         self._paused_representations.add(representation_id)
-        representation = get_representation_by_id(representation_id)
+        representation = get_representation_by_id(project_name,
+                                                  representation_id)
         self.update_db(project_name, representation, site_name, pause=True)
 
     def unpause_representation(self, project_name,
@@ -536,7 +538,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         except KeyError:
             pass
         # self.paused_representations is not persistent
-        representation = get_representation_by_id(representation_id)
+        representation = get_representation_by_id(project_name,
+                                                  representation_id)
         self.update_db(project_name, representation, site_name, pause=False)
 
     def is_representation_paused(self, representation_id,
