@@ -1801,61 +1801,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         self._update_site(project_name, representation["_id"],
                           update, arr_filter)
 
-    def _add_site(self, project_name, representation, site_name,
-                  force=False, file_id=None):
-        """
-            Marks 'site_name' to be synced to 'representation'.
-
-        Args:
-            project_name (str)
-            representation (dict)
-            file_id (uuid)
-            force (bool)
-            file_id (uuid)
-
-        Raises:
-            (SiteAlreadyPresentError) if site_name already present on the
-            representation["id"].
-            Use 'force' to remove existing.
-        """
-        representation_id = representation["_id"]
-        files = representation.get("files", [])
-        if not files:
-            self.log.debug("No files for {}".format(representation_id))
-            return
-
-        if not force:
-            existing = self._get_state_sync_state(project_name,
-                                                  representation_id,
-                                                  site_name)
-            if existing:
-                failure = True
-                if file_id:
-                    file_exists = existing.get("files", {}).get(file_id)
-                    if not file_exists:
-                        failure = False
-
-                if failure:
-                    msg = "Site {} already present".format(site_name)
-                    self.log.info(msg)
-                    raise SiteAlreadyPresentError(msg)
-
-        new_site_files = []
-        for repre_file in files:
-            file_hash = repre_file["id"]
-            new_site_files.append({
-                "size": repre_file["size"],
-                "status": SiteSyncStatus.QUEUED,
-                "timestamp": datetime.now().timestamp(),
-                "fileHash": file_hash
-            })
-
-        payload_dict = {"files": new_site_files}
-
-        self._set_state_sync_state(project_name, representation_id, site_name,
-                                   payload_dict)
-
-
     def _set_state_sync_state(self, project_name, representation_id, site_name,
                               payload_dict):
         """Calls server endpoint to store sync info for 'representation_id'."""
