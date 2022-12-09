@@ -1643,7 +1643,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
 
     def reset_site_on_representation(self, project_name, representation_id,
                                      side=None, file_id=None, site_name=None,
-                                     pause=None, force=False):
+                                     pause=None):
         """
             Reset information about synchronization for particular 'file_id'
             and provider.
@@ -1664,7 +1664,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             side (string): local or remote side
             site_name (string): for adding new site
             pause (bool or None): if True - pause, False - unpause
-            force (bool): hard reset - currently only for add_site
 
         Raises:
             SiteAlreadyPresentError - if adding already existing site and
@@ -1690,19 +1689,12 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             else:
                 site_name = remote_site
 
-        elem = {"name": site_name}
+        self.add_site(project_name, representation_id, site_name, file_id,
+                      force=True)
 
-        if file_id:  # reset site for particular file
-            self._reset_site_for_file(project_name, representation_id,
-                                      elem, file_id, site_name)
-        elif side:  # reset site for whole representation
-            self._reset_site(project_name, representation_id, elem, site_name)
-        elif pause is not None:
+        if pause is not None:
             self._pause_unpause_site(project_name,
                                      representation, site_name, pause)
-        else:  # add new site to all files for representation
-            self._add_site(project_name, representation, site_name,
-                           force=force)
 
     def _update_site(self, project_name, representation_id,
                      update, arr_filter):
