@@ -426,8 +426,8 @@ class SFTPHandler(AbstractProvider):
                 pysftp.exceptions.ConnectionException):
             self.log.warning("Couldn't connect", exc_info=True)
 
-    def _mark_progress(self, project_name, file, representation, server, site,
-                       source_path, target_path, direction):
+    def _mark_progress(self, project_name, file, representation, server,
+                       site_name, source_path, target_path, direction):
         """
             Updates progress field in DB by values 0-1.
 
@@ -435,8 +435,10 @@ class SFTPHandler(AbstractProvider):
         """
         pass
         if direction == "upload":
+            side = "remote"
             source_file_size = os.path.getsize(source_path)
         else:
+            side = "local"
             source_file_size = self.conn.stat(source_path).st_size
 
         target_file_size = 0
@@ -451,7 +453,8 @@ class SFTPHandler(AbstractProvider):
                                  new_file_id=None,
                                  file=file,
                                  representation=representation,
-                                 site=site,
+                                 site_name=site_name,
+                                 side=side,
                                  progress=status_val
                                  )
             try:

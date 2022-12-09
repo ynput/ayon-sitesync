@@ -189,8 +189,8 @@ class LocalDriveHandler(AbstractProvider):
         except shutil.SameFileError:
             print("same files, skipping")
 
-    def _mark_progress(self, project_name, file, representation, server, site,
-                       source_path, target_path, direction):
+    def _mark_progress(self, project_name, file, representation, server,
+                       site_name, source_path, target_path, direction):
         """
             Updates progress field in DB by values 0-1.
 
@@ -199,6 +199,9 @@ class LocalDriveHandler(AbstractProvider):
         source_file_size = os.path.getsize(source_path)
         target_file_size = 0
         last_tick = status_val = None
+        side = "local"
+        if direction == "Upload":
+            side = "remote"
         while source_file_size != target_file_size:
             if not last_tick or \
                     time.time() - last_tick >= server.LOG_PROGRESS_SEC:
@@ -209,7 +212,8 @@ class LocalDriveHandler(AbstractProvider):
                                  new_file_id=None,
                                  file=file,
                                  representation=representation,
-                                 site=site,
+                                 site_name=site_name,
+                                 side=side,
                                  progress=status_val
                                  )
             try:

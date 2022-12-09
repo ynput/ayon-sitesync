@@ -518,8 +518,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         """
         self.log.info("Pausing SyncServer for {}".format(representation_id))
         self._paused_representations.add(representation_id)
-        self.reset_site_on_representation(project_name, representation_id,
-                                          site_name=site_name, pause=True)
+        representation = get_representation_by_id(representation_id)
+        self.update_db(project_name, representation, site_name, pause=True)
 
     def unpause_representation(self, project_name,
                                representation_id, site_name):
@@ -539,8 +539,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         except KeyError:
             pass
         # self.paused_representations is not persistent
-        self.reset_site_on_representation(project_name, representation_id,
-                                          site_name=site_name, pause=False)
+        representation = get_representation_by_id(representation_id)
+        self.update_db(project_name, representation_id, site_name, pause=False)
 
     def is_representation_paused(self, representation_id,
                                  check_parents=False, project_name=None):
@@ -1521,8 +1521,10 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
 
         return SyncStatus.DO_NOTHING
 
-    def update_db(self, project_name, new_file_id, file, representation,
-                  site_name, side, error=None, progress=None, priority=None):
+    def update_db(self, project_name, representation, site_name,
+                  new_file_id=None, file=None,
+                  side=None, error=None, progress=None, priority=None,
+                  pause=None):
         """
             Update 'provider' portion of records in DB with success (file_id)
             or error (exception)
@@ -1538,6 +1540,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             error (string): exception message
             progress (float): 0-1 of progress of upload/download
             priority (int): 0-100 set priority
+            pause (bool): stop synchronizing (only before starting of download,
+                upload)
 
         Returns:
             None
@@ -1561,6 +1565,11 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
                     tries += 1
                     status_doc["retries"] = tries
                     status_doc["message"] = error
+                elif pause is not None:
+                    if pause:
+                        status_doc["pause"] = True
+                    else:
+                        status_doc.remove("pause")
             files_status.append(status_doc)
 
         representation_id = representation["representationId"]
@@ -1642,8 +1651,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         return -1, None
 
     def reset_site_on_representation(self, project_name, representation_id,
-                                     side=None, file_id=None, site_name=None,
-                                     pause=None):
+                                     side=None, file_id=None, site_name=None):
         """
             Reset information about synchronization for particular 'file_id'
             and provider.
@@ -1663,7 +1671,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             file_id (string):  file _id in representation
             side (string): local or remote side
             site_name (string): for adding new site
-            pause (bool or None): if True - pause, False - unpause
 
         Raises:
             SiteAlreadyPresentError - if adding already existing site and
@@ -1691,10 +1698,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
 
         self.add_site(project_name, representation_id, site_name, file_id,
                       force=True)
-
-        if pause is not None:
-            self._pause_unpause_site(project_name,
-                                     representation, site_name, pause)
 
     def _update_site(self, project_name, representation_id,
                      update, arr_filter):
@@ -1764,42 +1767,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         response = get_server_api_connection().delete(endpoint)
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
-
-    def _pause_unpause_site(self, project_name, representation,
-                            site_name, pause):
-        """
-            Pauses/unpauses all files for 'representation' based on 'pause'
-
-            Throws ValueError if 'site_name' not found on 'representation'
-        """
-        found = False
-        site = None
-        for repre_file in representation.get("files"):
-            for site in repre_file.get("sites"):
-                if site["name"] == site_name:
-                    found = True
-                    break
-        if not found:
-            msg = "Site {} not found".format(site_name)
-            self.log.info(msg)
-            raise ValueError(msg)
-
-        if pause:
-            site['paused'] = pause
-        else:
-            if site.get('paused'):
-                site.pop('paused')
-
-        update = {
-            "$set": {"files.$[].sites.$[s]": site}
-        }
-
-        arr_filter = [
-            {'s.name': site_name}
-        ]
-
-        self._update_site(project_name, representation["_id"],
-                          update, arr_filter)
 
     def _set_state_sync_state(self, project_name, representation_id, site_name,
                               payload_dict):
