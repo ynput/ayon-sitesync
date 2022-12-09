@@ -142,7 +142,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
 
     """ Start of Public API """
     def add_site(self, project_name, representation_id, site_name=None,
-                 force=False):
+                 file_id=None, force=False):
         """
         Adds new site to representation to be synced.
 
@@ -157,6 +157,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             project_name (string): project name (must match DB)
             representation_id (string): MongoDB _id value
             site_name (string): name of configured and active site
+            file_id (uuid): add file to site info
             force (bool): reset site if exists
 
         Throws:
@@ -170,10 +171,43 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         if not site_name:
             site_name = self.DEFAULT_SITE
 
-        self.reset_site_on_representation(project_name,
-                                          representation_id,
-                                          site_name=site_name,
-                                          force=force)
+        representation = get_representation_by_id(representation_id)
+
+        files = representation.get("files", [])
+        if not files:
+            self.log.debug("No files for {}".format(representation_id))
+            return
+
+        if not force:
+            existing = self._get_state_sync_state(project_name,
+                                                  representation_id,
+                                                  site_name)
+            if existing:
+                failure = True
+                if file_id:
+                    file_exists = existing.get("files", {}).get(file_id)
+                    if not file_exists:
+                        failure = False
+
+                if failure:
+                    msg = "Site {} already present".format(site_name)
+                    self.log.info(msg)
+                    raise SiteAlreadyPresentError(msg)
+
+        new_site_files = []
+        for repre_file in files:
+            file_hash = repre_file["id"]
+            new_site_files.append({
+                "size": repre_file["size"],
+                "status": SiteSyncStatus.QUEUED,
+                "timestamp": datetime.now().timestamp(),
+                "fileHash": file_hash
+            })
+
+        payload_dict = {"files": new_site_files}
+
+        self._set_state_sync_state(project_name, representation_id, site_name,
+                                   payload_dict)
 
     def remove_site(self, project_name, representation_id, site_name,
                     remove_local_files=False):
@@ -450,10 +484,10 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
                             os.path.getmtime(local_file_path))
                         elem = {"name": site_name,
                                 "created_dt": created_dt}
-                        self._add_site(project_name, repre,
-                                       site_name=site_name,
-                                       file_id=repre_file["_id"],
-                                       force=True)
+                        self.add_site(project_name, repre,
+                                      site_name=site_name,
+                                      file_id=repre_file["_id"],
+                                      force=True)
                         sites_added += 1
                 else:
                     if not file_exists and reset_missing:
@@ -1004,9 +1038,9 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
 
             self.log.debug("Adding alternate {} to {}".format(
                 alt_site, representation["_id"]))
-            self._add_site(project_name,
-                           representation,
-                           alt_site, file_id=file_id, force=True)
+            self.add_site(project_name,
+                          representation,
+                          alt_site, file_id=file_id, force=True)
 
     def get_repre_info_for_versions(self, project_name, version_ids,
                                     active_site, remote_site):
