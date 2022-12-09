@@ -540,7 +540,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             pass
         # self.paused_representations is not persistent
         representation = get_representation_by_id(representation_id)
-        self.update_db(project_name, representation_id, site_name, pause=False)
+        self.update_db(project_name, representation, site_name, pause=False)
 
     def is_representation_paused(self, representation_id,
                                  check_parents=False, project_name=None):
