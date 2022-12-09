@@ -127,7 +127,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         self._sync_project_settings = None
         self.sync_server_thread = None  # asyncio requires new thread
 
-        self.action_show_widget = None
         self._paused = False
         self._paused_projects = set()
         self._paused_representations = set()
@@ -1229,17 +1228,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             )
 
     def tray_menu(self, parent_menu):
-        if not self.enabled:
-            return
-
-        from Qt import QtWidgets
-        """Add menu or action to Tray(or parent)'s menu"""
-        action = QtWidgets.QAction(self.label, parent_menu)
-        action.triggered.connect(self.show_widget)
-        parent_menu.addAction(action)
-        parent_menu.addSeparator()
-
-        self.action_show_widget = action
+        pass
 
     @property
     def is_running(self):
@@ -1775,30 +1764,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
 
         ld = self.sync_project_settings[project_name]["config"]["loop_delay"]
         return int(ld)
-
-    def show_widget(self):
-        """Show dialog for Sync Queue"""
-        no_errors = False
-        try:
-            from .tray.app import SyncServerWindow
-            self.widget = SyncServerWindow(self)
-            no_errors = True
-        except ValueError:
-            self.log.info(
-                "No system setting for sync. Not syncing.", exc_info=True
-            )
-        except KeyError:
-            self.log.info((
-                "There are not set presets for SyncServer OR "
-                "Credentials provided are invalid, "
-                "no syncing possible").
-                format(str(self.sync_project_settings)), exc_info=True)
-        except:
-            self.log.error(
-                "Uncaught exception durin start of SyncServer",
-                exc_info=True)
-        self.enabled = no_errors
-        self.widget.show()
 
     def _get_roots_config(self, presets, project_name, site_name):
         """
