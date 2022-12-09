@@ -1718,28 +1718,21 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
 
     def _remove_site(self, project_name, representation, site_name):
         """
-            Removes 'site_name' for 'representation' in 'query'
-
-            Throws ValueError if 'site_name' not found on 'representation'
+            Removes 'site_name' for 'representation' if present.
         """
-        found = False
-        for repre_file in representation.get("files"):
-            for site in repre_file.get("sites"):
-                if site.get("name") == site_name:
-                    found = True
-                    break
-        if not found:
+        representation_id = representation["_id"]
+        sync_info = self._get_state_sync_state(project_name, representation_id,
+                                               site_name)
+        if not sync_info:
             msg = "Site {} not found".format(site_name)
-            self.log.info(msg)
-            raise ValueError(msg)
+            self.log.warning(msg)
+            return
 
-        update = {
-            "$pull": {"files.$[].sites": {"name": site_name}}
-        }
-        arr_filter = []
+        endpoint = f"projects/{project_name}/sitesync/state/{representation_id}/{site_name}"  # noqa
 
-        self._update_site(project_name, representation["_id"],
-                          update, arr_filter)
+        response = get_server_api_connection().delete(endpoint)
+        if response.status_code not in [200, 204]:
+            raise RuntimeError("Cannot update status")
 
     def _pause_unpause_site(self, project_name, representation,
                             site_name, pause):
