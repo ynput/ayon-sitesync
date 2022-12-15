@@ -79,9 +79,10 @@ async def upload(module, project_name, file, representation, provider_name,
                                          True
                                          )
 
-    module.handle_alternate_site(project_name, representation,
+    module.handle_alternate_site(project_name,
+                                 representation["representationId"],
                                  remote_site_name,
-                                 file["_id"], file_id)
+                                 file["fileHash"])
 
     return file_id
 
@@ -135,8 +136,10 @@ async def download(module, project_name, file, representation, provider_name,
                                          True
                                          )
 
-    module.handle_alternate_site(project_name, representation, local_site,
-                                 file["_id"], file_id)
+    module.handle_alternate_site(project_name,
+                                 representation["representationId"],
+                                 local_site,
+                                 file["fileHash"])
 
     return file_id
 
@@ -388,13 +391,13 @@ class SyncServerThread(threading.Thread):
                         if isinstance(file_id, BaseException):
                             error = str(file_id)
                             file_id = None
-                        self.module.update_db(project_name,
-                                              file_id,
-                                              file,
-                                              representation,
-                                              site_name,
-                                              side,
-                                              error)
+                        self.module.update_db(project_name=project_name,
+                                              new_file_id=file_id,
+                                              file=file,
+                                              representation=representation,
+                                              site_name=site_name,
+                                              side=side,
+                                              error=error)
 
                 duration = time.time() - start_time
                 self.log.debug("One loop took {:.2f}s".format(duration))

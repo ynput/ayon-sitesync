@@ -205,6 +205,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             })
 
         payload_dict = {"files": new_site_files}
+        representation_id = representation_id.replace("-", '')
 
         self._set_state_sync_state(project_name, representation_id, site_name,
                                    payload_dict)
@@ -994,8 +995,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
                 return True
         return False
 
-    def handle_alternate_site(self, project_name, representation,
-                              processed_site, file_id, synced_file_id):
+    def handle_alternate_site(self, project_name, representation_id,
+                              processed_site, file_id):
         """
             For special use cases where one site vendors another.
 
@@ -1009,11 +1010,9 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
 
             Args:
                 project_name (str): name of project
-                representation (dict)
+                representation_id (uuid)
                 processed_site (str): real site_name of published/uploaded file
-                file_id (ObjectId): DB id of file handled
-                synced_file_id (str): id of the created file returned
-                    by provider
+                file_id (uuid): DB id of file handled
         """
         sites = self.sync_system_settings.get("sites", {})
         sites[self.DEFAULT_SITE] = {"provider": "local_drive",
@@ -1029,18 +1028,20 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
                 alternate_sites.extend(conf_alternative_sites)
                 continue
 
+        sync_state = self._get_state_sync_state(project_name,
+                                                representation_id,
+                                                processed_site)
+        if not sync_state:
+            raise RuntimeError(f"Cannot find repre with '{representation_id}")
+        payload_dict = {"files": sync_state["files"]}
+
         alternate_sites = set(alternate_sites)
-
         for alt_site in alternate_sites:
-            elem = {"name": alt_site,
-                    "created_dt": datetime.now(),
-                    "id": synced_file_id}
-
             self.log.debug("Adding alternate {} to {}".format(
-                alt_site, representation["_id"]))
-            self.add_site(project_name,
-                          representation,
-                          alt_site, file_id=file_id, force=True)
+                alt_site, representation_id))
+            self._set_state_sync_state(project_name, representation_id,
+                                       site_name,
+                                       payload_dict)
 
     def get_repre_info_for_versions(self, project_name, version_ids,
                                     active_site, remote_site):
