@@ -1429,8 +1429,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
                   "remoteStatusFilter": [SiteSyncStatus.QUEUED,
                                          SiteSyncStatus.FAILED]}
 
-        kwargs["representationId"] = "94dca33a-7705-11ed-8c0a-34e12d91d510"
-
         response = get_server_api_connection().get(endpoint, **kwargs)
         if response.status_code not in [200, 204]:
             raise RuntimeError(
