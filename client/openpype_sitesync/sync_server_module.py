@@ -3,13 +3,12 @@ import sys
 import time
 from datetime import datetime
 import threading
-import platform
 import copy
 import signal
 from collections import deque, defaultdict
-
 import click
-from bson.objectid import ObjectId
+
+from .version import __version__
 
 from openpype.client import get_projects
 from openpype.modules import OpenPypeModule, ITrayModule
@@ -113,6 +112,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
     DEFAULT_PRIORITY = 50  # higher is better, allowed range 1 - 1000
 
     name = "sync_server"
+    version = __version__
+    v4_name = "sitesync"  # temporary,sync_server should be cleaned in Settings
     label = "Sync Queue"
 
     def initialize(self, module_settings):
@@ -143,6 +144,10 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         self.long_running_tasks = deque()
         # projects that long tasks are running on
         self.projects_processed = set()
+
+    @property
+    def endpoint_prefix(self):
+        return "addons/{}/{}".format(self.v4_name, self.version)
 
     """ Start of Public API """
     def add_site(self, project_name, representation_id, site_name=None,
@@ -241,7 +246,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             self.log.warning(msg)
             return
 
-        endpoint = f"projects/{project_name}/sitesync/state/{representation_id}/{site_name}"  # noqa
+        endpoint = f"{self.endpoint_prefix}/projects/{project_name}/sitesync/state/{representation_id}/{site_name}"  # noqa
 
         response = get_server_api_connection().delete(endpoint)
         if response.status_code not in [200, 204]:
@@ -1048,6 +1053,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
                                        site_name,
                                        payload_dict)
 
+    # TODO - for Loaders
     def get_repre_info_for_versions(self, project_name, version_ids,
                                     active_site, remote_site):
         """Returns representation documents for versions and sites combi
@@ -1060,7 +1066,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         Returns:
 
         """
-        endpoint = f"projects/{project_name}/sitesync/state"
+        endpoint = f"{self.endpoint_prefix}/projects/{project_name}/sitesync/state"
 
         # get to upload
         kwargs = {"localSite": active_site,
@@ -1414,7 +1420,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         self.log.debug("Check representations for : {}".format(project_name))
         self.connection.Session["AVALON_PROJECT"] = project_name
 
-        endpoint = f"projects/{project_name}/sitesync/state"
+        endpoint = f"{self.endpoint_prefix}/projects/{project_name}/sitesync/state"
 
         # get to upload
         kwargs = {"localSite": active_site,
@@ -1426,6 +1432,10 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         kwargs["representationId"] = "94dca33a-7705-11ed-8c0a-34e12d91d510"
 
         response = get_server_api_connection().get(endpoint, **kwargs)
+        if response.status_code not in [200, 204]:
+            raise RuntimeError(
+                "Cannot get representations for sync with code {}"
+                .format(response.status_code))
         representations = response.data["representations"]
 
         # get to download
@@ -1544,7 +1554,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
 
         representation_id = representation["representationId"]
 
-        endpoint = f"projects/{project_name}/sitesync/state/{representation_id}/{site_name}"  # noqa
+        endpoint = f"{self.endpoint_prefix}/projects/{project_name}/sitesync/state/{representation_id}/{site_name}"  # noqa
 
         # get to upload
         kwargs = {
@@ -1641,7 +1651,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             self.log.warning(msg)
             return
 
-        endpoint = f"projects/{project_name}/sitesync/state/{representation_id}/{site_name}"  # noqa
+        endpoint = f"{self.endpoint_prefix}/projects/{project_name}/sitesync/state/{representation_id}/{site_name}"  # noqa
 
         response = get_server_api_connection().delete(endpoint)
         if response.status_code not in [200, 204]:
@@ -1699,7 +1709,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
     def _set_state_sync_state(self, project_name, representation_id, site_name,
                               payload_dict):
         """Calls server endpoint to store sync info for 'representation_id'."""
-        endpoint = f"projects/{project_name}/sitesync/state/{representation_id}/{site_name}"  # noqa
+        endpoint = f"{self.endpoint_prefix}/projects/{project_name}/sitesync/state/{representation_id}/{site_name}"  # noqa
 
         response = get_server_api_connection().post(endpoint, **payload_dict)
         if response.status_code not in [200, 204]:
@@ -1716,7 +1726,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             "representationId": representation_id
         }
 
-        endpoint = f"projects/{project_name}/sitesync/state"
+        endpoint = f"{self.endpoint_prefix}/projects/{project_name}/sitesync/state"
 
         response = get_server_api_connection().get(endpoint, **payload_dict)
         if response.status_code != 200:

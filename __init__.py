@@ -8,6 +8,8 @@ from openpype.addons import BaseServerAddon
 from .settings.settings import SiteSyncSettings
 from .version import __version__
 
+from .endpoints import endpoints
+
 
 class SiteSync(BaseServerAddon):
     name = "sitesync"
@@ -20,6 +22,31 @@ class SiteSync(BaseServerAddon):
 
     def initialize(self) -> None:
         logging.info("Init SiteSync")
+
+        self.add_endpoint(
+            "/projects/{project_name}/sitesync/params",
+            endpoints.get_site_sync_params,
+            method="GET",
+        )
+
+        self.add_endpoint(
+            "/projects/{project_name}/sitesync/state",
+            endpoints.get_site_sync_state,
+            method="GET",
+        )
+
+        self.add_endpoint(
+            "/projects/{project_name}/sitesync/state/{representation_id}/{site_name}",  # noqa
+            endpoints.set_site_sync_representation_state,
+            method="POST",
+        )
+
+        self.add_endpoint(
+            "/projects/{project_name}/sitesync/state/{representation_id}/{site_name}",  # noqa
+            endpoints.remove_site_sync_representation_state,
+            method="DELETE",
+        )
+        logging.info("added endpoints")
 
     def get_local_client_info(
             self,
