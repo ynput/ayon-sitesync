@@ -34,7 +34,12 @@ from .utils import (
     SiteSyncStatus
 )
 
-from openpype.client import get_representations, get_representation_by_id
+from openpype.client import (
+    get_representations,
+    get_representation_by_id,
+    get_versions,
+    get_representations_parents
+)
 
 
 from openpype.client.server.server_api import get_server_api_connection, get
@@ -229,8 +234,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         if not self.get_sync_project_setting(project_name):
             raise ValueError("Project not configured")
 
-        sync_info = self._get_state_sync_state(project_name, representation_id,
-                                               site_name)
+        sync_info = self.get_sync_state(project_name, representation_id,
+                                        site_name)
         if not sync_info:
             msg = "Site {} not found".format(site_name)
             self.log.warning(msg)
@@ -1028,9 +1033,9 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
                 alternate_sites.extend(conf_alternative_sites)
                 continue
 
-        sync_state = self._get_state_sync_state(project_name,
-                                                representation_id,
-                                                processed_site)
+        sync_state = self.get_sync_state(project_name,
+                                         representation_id,
+                                         processed_site)
         if not sync_state:
             raise RuntimeError(f"Cannot find repre with '{representation_id}")
         payload_dict = {"files": sync_state["files"]}
@@ -1055,84 +1060,43 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         Returns:
 
         """
-        self.connection.Session["AVALON_PROJECT"] = project_name
-        query = [
-            {"$match": {"parent": {"$in": version_ids},
-                        "type": "representation",
-                        "files.sites.name": {"$exists": 1}}},
-            {"$unwind": "$files"},
-            {'$addFields': {
-                'order_local': {
-                    '$filter': {
-                        'input': '$files.sites', 'as': 'p',
-                        'cond': {'$eq': ['$$p.name', active_site]}
-                    }
-                }
-            }},
-            {'$addFields': {
-                'order_remote': {
-                    '$filter': {
-                        'input': '$files.sites', 'as': 'p',
-                        'cond': {'$eq': ['$$p.name', remote_site]}
-                    }
-                }
-            }},
-            {'$addFields': {
-                'progress_local': {"$arrayElemAt": [{
-                    '$cond': [
-                        {'$size': "$order_local.progress"},
-                        "$order_local.progress",
-                        # if exists created_dt count is as available
-                        {'$cond': [
-                            {'$size': "$order_local.created_dt"},
-                            [1],
-                            [0]
-                        ]}
-                    ]},
-                    0
-                ]}
-            }},
-            {'$addFields': {
-                'progress_remote': {"$arrayElemAt": [{
-                    '$cond': [
-                        {'$size': "$order_remote.progress"},
-                        "$order_remote.progress",
-                        # if exists created_dt count is as available
-                        {'$cond': [
-                            {'$size': "$order_remote.created_dt"},
-                            [1],
-                            [0]
-                        ]}
-                    ]},
-                    0
-                ]}
-            }},
-            {'$group': {  # first group by repre
-                '_id': '$_id',
-                'parent': {'$first': '$parent'},
-                'avail_ratio_local': {
-                    '$first': {
-                        '$divide': [{'$sum': "$progress_local"}, {'$sum': 1}]
-                    }
-                },
-                'avail_ratio_remote': {
-                    '$first': {
-                        '$divide': [{'$sum': "$progress_remote"}, {'$sum': 1}]
-                    }
-                }
-            }},
-            {'$group': {  # second group by parent, eg version_id
-                '_id': '$parent',
-                'repre_count': {'$sum': 1},  # total representations
-                # fully available representation for site
-                'avail_repre_local': {'$sum': "$avail_ratio_local"},
-                'avail_repre_remote': {'$sum': "$avail_ratio_remote"},
-            }},
-        ]
-        # docs = list(self.connection.aggregate(query))
-        return self.connection.aggregate(query)
+        endpoint = f"projects/{project_name}/sitesync/state"
 
+        # get to upload
+        kwargs = {"localSite": active_site,
+                  "remoteSite": remote_site,
+                  "versionIdFilter": version_ids}
+
+        # kwargs["representationId"] = "94dca33a-7705-11ed-8c0a-34e12d91d510"
+
+        response = get_server_api_connection().get(endpoint, **kwargs)
+        representations = response.data.get("representations", [])
+        repinfo_by_version_id = defaultdict(dict)
+        for repre in representations:
+            version_id = repre["versionId"]
+            repre_info = repinfo_by_version_id.get(version_id)
+            if repre_info:
+                repinfo_by_version_id[version_id]["repre_count"] += 1
+                repinfo_by_version_id[version_id]["avail_repre_local"] += \
+                    self._is_available(repre, "localStatus")
+                repinfo_by_version_id[version_id]["avail_repre_remote"] += \
+                    self._is_available(repre, "remoteStatus")
+            else:
+                repinfo_by_version_id[version_id] = {
+                    "_id": version_id,
+                    "repre_count": 1,
+                    'avail_repre_local': self._is_available(repre,
+                                                            "localStatus"),
+                    'avail_repre_remote': self._is_available(repre,
+                                                             "remoteStatus"),
+                }
+
+        return repinfo_by_version_id.values()
     """ End of Public API """
+
+    def _is_available(self, repre, status):
+        """Helper to decide if repre is download/uploaded on site"""
+        return int(repre[status]["status"] == SiteSyncStatus.OK)
 
     def get_local_file_path(self, project_name, site_name, file_path):
         """
@@ -1459,6 +1423,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
                   "remoteStatusFilter": [SiteSyncStatus.QUEUED,
                                          SiteSyncStatus.FAILED]}
 
+        kwargs["representationId"] = "94dca33a-7705-11ed-8c0a-34e12d91d510"
 
         response = get_server_api_connection().get(endpoint, **kwargs)
         representations = response.data["representations"]
@@ -1669,7 +1634,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             Removes 'site_name' for 'representation' if present.
         """
         representation_id = representation["_id"]
-        sync_info = self._get_state_sync_state(project_name, representation_id,
+        sync_info = self.get_sync_state(project_name, representation_id,
                                                site_name)
         if not sync_info:
             msg = "Site {} not found".format(site_name)
@@ -1682,6 +1647,55 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
+    def get_progress_for_repre(self, project_name, representation_id,
+                               local_site_name, remote_site_name=None):
+        """Calculates average progress for representation.
+
+        If site has created_dt >> fully available >> progress == 1
+
+        Could be calculated in aggregate if it would be too slow
+
+        Returns:
+            (dict) with active and remote sites progress
+            {'studio': 1.0, 'gdrive': -1} - gdrive site is not present
+                -1 is used to highlight the site should be added
+            {'studio': 1.0, 'gdrive': 0.0} - gdrive site is present, not
+                uploaded yet
+        """
+        sync_status = self.get_sync_state(project_name, representation_id,
+                                          local_site_name, remote_site_name)
+
+        progress = {local_site_name: -1,
+                    remote_site_name: -1}
+        if not sync_status:
+            return progress
+
+        mapping = {"localStatus": local_site_name,
+                   "remoteStatus": remote_site_name}
+        files = {local_site_name: 0, remote_site_name: 0}
+        doc_files = sync_status.get("files") or []
+        for doc_file in doc_files:
+            for status in mapping.keys():
+                status_info = doc_file[status]
+                site_name = mapping[status]
+                files[site_name] += 1
+                norm_progress = max(progress[site_name], 0)
+                if status_info["status"] == SiteSyncStatus.OK:
+                    progress[site_name] = norm_progress + 1
+                elif status_info.get("progress"):
+                    progress[site_name] = norm_progress + status_info[
+                        "progress"]
+                else:  # site exists, might be failed, do not add again
+                    progress[site_name] = 0
+
+        # for example 13 fully avail. files out of 26 >> 13/26 = 0.5
+        avg_progress = {}
+        avg_progress[local_site_name] = \
+            progress[local_site_name] / max(files[local_site_name], 1)
+        avg_progress[remote_site_name] = \
+            progress[remote_site_name] / max(files[remote_site_name], 1)
+        return avg_progress
+
     def _set_state_sync_state(self, project_name, representation_id, site_name,
                               payload_dict):
         """Calls server endpoint to store sync info for 'representation_id'."""
@@ -1691,12 +1705,14 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
-    def _get_state_sync_state(self, project_name,
-                              representation_id, site_name):
+    def get_sync_state(self, project_name, representation_id, local_site_name,
+                       remote_site_name=None):
         """Use server endpoint to get synchronization info for repre_id."""
+        if not remote_site_name:
+            remote_site_name = local_site_name
         payload_dict = {
-            "localSite": site_name,
-            "remoteSite": site_name,
+            "localSite": local_site_name,
+            "remoteSite": remote_site_name,
             "representationId": representation_id
         }
 
