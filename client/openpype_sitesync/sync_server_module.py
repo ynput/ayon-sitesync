@@ -145,6 +145,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
         # projects that long tasks are running on
         self.projects_processed = set()
 
+
     @property
     def endpoint_prefix(self):
         return "addons/{}/{}".format(self.v4_name, self.version)
@@ -168,6 +169,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             site_name (string): name of configured and active site
             file_id (uuid): add file to site info
             force (bool): reset site if exists
+            status (SiteSyncStatus): current status,
+                default SiteSyncStatus.QUEUED
 
         Throws:
             SiteAlreadyPresentError - if adding already existing site and
@@ -189,9 +192,9 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
             return
 
         if not force:
-            existing = self._get_state_sync_state(project_name,
-                                                  representation_id,
-                                                  site_name)
+            existing = self.get_sync_state(project_name,
+                                           representation_id,
+                                           site_name)
             if existing:
                 failure = True
                 if file_id:
