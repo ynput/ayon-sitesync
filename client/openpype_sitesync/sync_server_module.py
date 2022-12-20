@@ -216,7 +216,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             file_hash = repre_file["id"]
             new_site_files.append({
                 "size": repre_file["size"],
-                "status": SiteSyncStatus.QUEUED,
+                "status": status,
                 "timestamp": datetime.now().timestamp(),
                 "fileHash": file_hash
             })
