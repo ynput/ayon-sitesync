@@ -171,35 +171,32 @@ async def get_site_sync_state(
     else:
         # When a single representation is requested
         # We ignore the rest of the filter
-        pass
+        if folderFilter:
+            conditions.append(f"f.name ILIKE '%{folderFilter}%'")
 
-    # TEMP
-    if folderFilter:
-        conditions.append(f"f.name ILIKE '%{folderFilter}%'")
+        if folderIdFilter:
+            conditions.append(f"f.id IN {SQLTool.array(folderIdFilter)}")
 
-    if folderIdFilter:
-        conditions.append(f"f.id IN {SQLTool.array(folderIdFilter)}")
+        if subsetFilter:
+            conditions.append(f"s.name ILIKE '%{subsetFilter}%'")
 
-    if subsetFilter:
-        conditions.append(f"s.name ILIKE '%{subsetFilter}%'")
+        if versionIdFilter:
+            conditions.append(f"v.id IN {SQLTool.array(versionIdFilter)}")
 
-    if versionIdFilter:
-        conditions.append(f"v.id IN {SQLTool.array(versionIdFilter)}")
+        if localStatusFilter:
+            statusFilter = [str(s.value) for s in localStatusFilter]
+            conditions.append(f"local.status IN ({','.join(statusFilter)})")
 
-    if localStatusFilter:
-        statusFilter = [str(s.value) for s in localStatusFilter]
-        conditions.append(f"local.status IN ({','.join(statusFilter)})")
+        if remoteStatusFilter:
+            statusFilter = [str(s.value) for s in remoteStatusFilter]
+            conditions.append(f"remote.status IN ({','.join(statusFilter)})")
 
-    if remoteStatusFilter:
-        statusFilter = [str(s.value) for s in remoteStatusFilter]
-        conditions.append(f"remote.status IN ({','.join(statusFilter)})")
+        if nameFilter:
+            conditions.append(f"r.name IN {SQLTool.array(nameFilter)}")
 
-    if nameFilter:
-        conditions.append(f"r.name IN {SQLTool.array(nameFilter)}")
-
-    access_list = await folder_access_list(user, project_name, "read")
-    if access_list is not None:
-        conditions.append(f"path like ANY ('{{ {','.join(access_list)} }}')")
+        access_list = await folder_access_list(user, project_name, "read")
+        if access_list is not None:
+            conditions.append(f"path like ANY ('{{ {','.join(access_list)} }}')")
 
     query = f"""
         SELECT
