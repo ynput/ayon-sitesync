@@ -11,7 +11,7 @@ import click
 from .version import __version__
 
 from openpype.client import get_projects
-from openpype.modules import OpenPypeModule, ITrayModule
+from openpype.modules import OpenPypeModule, ITrayModule, IPluginPaths
 from openpype.settings import (
     get_project_settings,
     get_system_settings,
@@ -44,9 +44,10 @@ from openpype.client import (
 from openpype.client.server.server_api import get_server_api_connection, get
 
 log = Logger.get_logger("SyncServer")
+SYNC_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-class SyncServerModule(OpenPypeModule, ITrayModule):
+class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
     """
        Synchronization server that is syncing published files from local to
        any of implemented providers (like GDrive, S3 etc.)
@@ -150,9 +151,12 @@ class SyncServerModule(OpenPypeModule, ITrayModule):
     def endpoint_prefix(self):
         return "addons/{}/{}".format(self.v4_name, self.version)
 
+    def get_plugin_paths(self):
+        return {"publish": os.path.join(SYNC_MODULE_DIR, "plugins", "publish")}
+
     """ Start of Public API """
     def add_site(self, project_name, representation_id, site_name=None,
-                 file_id=None, force=False):
+                 file_id=None, force=False, status=SiteSyncStatus.QUEUED):
         """
         Adds new site to representation to be synced.
 
