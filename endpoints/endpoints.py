@@ -1,4 +1,5 @@
 import os
+import functools
 
 from fastapi import APIRouter, Depends, Path, Query, Response
 from .models import (
@@ -19,6 +20,7 @@ from openpype.entities.user import UserEntity
 from openpype.lib.postgres import Postgres
 from openpype.utils import SQLTool
 
+
 router = APIRouter(tags=["Site sync"])
 
 
@@ -38,6 +40,23 @@ def get_overal_status(files: dict) -> StatusEnum:
         return StatusEnum.QUEUED
     return StatusEnum.NOT_AVAILABLE
 
+
+@functools.cache
+async def check_sync_status_table(project_name):
+
+    await Postgres.execute(
+
+        f"CREATE TABLE IF NOT EXISTS project_{project_name}.sitesync_files_status ("
+           f"""representation_id UUID NOT NULL REFERENCES project_{project_name}.representations(id) ON DELETE CASCADE,
+            site_name VARCHAR NOT NULL,
+            status INTEGER NOT NULL DEFAULT -1,
+            priority INTEGER NOT NULL DEFAULT 50,
+            data JSONB NOT NULL DEFAULT '{{}}'::JSONB,
+            PRIMARY KEY (representation_id, site_name)
+        );"""
+    )
+    await Postgres.execute(f"CREATE INDEX IF NOT EXISTS file_status_idx ON project_{project_name}.sitesync_files_status(status);")
+    await Postgres.execute(f"CREATE INDEX IF NOT EXISTS file_priority_idx ON project_{project_name}.sitesync_files_status(priority desc);")
 
 #
 # GET SITE SYNC PARAMS
@@ -162,7 +181,7 @@ async def get_site_sync_state(
     the result will contain only one representation,
     along with the information on individual files.
     """
-
+    check_sync_status_table(project_name)
     conditions = []
 
     if representationId is not None:
@@ -228,11 +247,11 @@ async def get_site_sync_state(
             project_{project_name}.hierarchy as h
             ON f.id = h.id
         LEFT JOIN
-            project_{project_name}.files as local
+            project_{project_name}.sitesync_files_status as local
             ON local.representation_id = r.id
             AND local.site_name = '{localSite}'
         LEFT JOIN
-            project_{project_name}.files as remote
+            project_{project_name}.sync_status as remote
             ON remote.representation_id = r.id
             AND remote.site_name = '{remoteSite}'
 
@@ -348,6 +367,8 @@ async def set_site_sync_representation_state(
     site_name: str = Path(...),  # TODO: add regex validator/dependency here! Important!
 ) -> Response:
 
+    check_sync_status_table(project_name)
+
     priority = post_data.priority
 
     async with Postgres.acquire() as conn:
@@ -355,7 +376,7 @@ async def set_site_sync_representation_state(
             query = (
                 f"""
                 SELECT priority, data
-                FROM project_{project_name}.files
+                FROM project_{project_name}.sitesync_files_status
                 WHERE representation_id = $1 AND site_name = $2
                 FOR UPDATE
                 """,
@@ -405,7 +426,7 @@ async def set_site_sync_representation_state(
             if do_insert:
                 await conn.execute(
                     f"""
-                    INSERT INTO project_{project_name}.files
+                    INSERT INTO project_{project_name}.sitesync_files_status
                     (representation_id, site_name, status, priority, data)
                     VALUES ($1, $2, $3, $4, $5)
                     """,
@@ -418,7 +439,7 @@ async def set_site_sync_representation_state(
             else:
                 await conn.execute(
                     f"""
-                    UPDATE project_{project_name}.files
+                    UPDATE project_{project_name}.sitesync_files_status
                     SET status = $1, data = $2, priority = $3
                     WHERE representation_id = $4 AND site_name = $5
                     """,
@@ -443,13 +464,14 @@ async def remove_site_sync_representation_state(
     representation_id: str = Depends(dep_representation_id),
     site_name: str = Path(...),  # TODO: add regex validator/dependency here! Important!
 ) -> Response:
+    check_sync_status_table(project_name)
 
     async with Postgres.acquire() as conn:
         async with conn.transaction():
             query = (
                 f"""
                 DELETE
-                FROM project_{project_name}.files
+                FROM project_{project_name}.sitesync_files_status
                 WHERE representation_id = $1 AND site_name = $2
                 """,
                 representation_id,
