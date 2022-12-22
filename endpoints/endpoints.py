@@ -45,7 +45,6 @@ def get_overal_status(files: dict) -> StatusEnum:
 async def check_sync_status_table(project_name):
 
     await Postgres.execute(
-
         f"CREATE TABLE IF NOT EXISTS project_{project_name}.sitesync_files_status ("
            f"""representation_id UUID NOT NULL REFERENCES project_{project_name}.representations(id) ON DELETE CASCADE,
             site_name VARCHAR NOT NULL,
@@ -181,7 +180,7 @@ async def get_site_sync_state(
     the result will contain only one representation,
     along with the information on individual files.
     """
-    check_sync_status_table(project_name)
+    await check_sync_status_table(project_name)
     conditions = []
 
     if representationId is not None:
@@ -251,7 +250,7 @@ async def get_site_sync_state(
             ON local.representation_id = r.id
             AND local.site_name = '{localSite}'
         LEFT JOIN
-            project_{project_name}.sync_status as remote
+            project_{project_name}.sitesync_files_status as remote
             ON remote.representation_id = r.id
             AND remote.site_name = '{remoteSite}'
 
@@ -261,7 +260,6 @@ async def get_site_sync_state(
         LIMIT {pageLength}
         OFFSET { (page-1) * pageLength }
     """
-    print(query)
     repres = []
 
     async for row in Postgres.iterate(query):
@@ -367,7 +365,7 @@ async def set_site_sync_representation_state(
     site_name: str = Path(...),  # TODO: add regex validator/dependency here! Important!
 ) -> Response:
 
-    check_sync_status_table(project_name)
+    await check_sync_status_table(project_name)
 
     priority = post_data.priority
 
@@ -464,7 +462,7 @@ async def remove_site_sync_representation_state(
     representation_id: str = Depends(dep_representation_id),
     site_name: str = Path(...),  # TODO: add regex validator/dependency here! Important!
 ) -> Response:
-    check_sync_status_table(project_name)
+    await check_sync_status_table(project_name)
 
     async with Postgres.acquire() as conn:
         async with conn.transaction():
