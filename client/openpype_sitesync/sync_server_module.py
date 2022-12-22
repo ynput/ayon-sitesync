@@ -152,7 +152,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         return "addons/{}/{}".format(self.v4_name, self.version)
 
     def get_plugin_paths(self):
-        return {"publish": os.path.join(SYNC_MODULE_DIR, "plugins", "publish")}
+        return {"publish": os.path.join(SYNC_MODULE_DIR, "plugins", "publish"),
+                "load": os.path.join(SYNC_MODULE_DIR, "plugins", "load")}
 
     """ Start of Public API """
     def add_site(self, project_name, representation_id, site_name=None,
