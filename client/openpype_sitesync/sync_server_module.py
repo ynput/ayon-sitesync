@@ -40,8 +40,7 @@ from openpype.client import (
     get_representations_parents
 )
 
-
-from openpype.client.server.server_api import get_server_api_connection, get
+import ayon_api
 
 log = Logger.get_logger("SyncServer")
 SYNC_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -58,34 +57,13 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
        Sites structure is created during publish OR by calling 'add_site'
        method.
 
-       By default it will always contain 1 record with
-       "name" ==  self.presets["active_site"] and
-       filled "created_dt" AND 1 or multiple records for all defined
-       remote sites, where "created_dt" is not present.
-       This highlights that file should be uploaded to
-       remote destination
+       State of synchronization is being persisted on the server
+       in `sitesync_files_status` table.
 
-       ''' - example of synced file test_Cylinder_lookMain_v010.ma to GDrive
-        "files" : [
-        {
-            "path" : "{root}/Test/Assets/Cylinder/publish/look/lookMain/v010/
-                     test_Cylinder_lookMain_v010.ma",
-            "_id" : ObjectId("5eeb25e411e06a16209ab78f"),
-            "hash" : "test_Cylinder_lookMain_v010,ma|1592468963,24|4822",
-            "size" : NumberLong(4822),
-            "sites" : [
-                {
-                    "name": "john_local_XD4345",
-                    "created_dt" : ISODate("2020-05-22T08:05:44.000Z")
-                },
-                {
-                    "id" : ObjectId("5eeb25e411e06a16209ab78f"),
-                    "name": "gdrive",
-                    "created_dt" : ISODate("2020-05-55T08:54:35.833Z")
-                ]
-            }
-        },
-        '''
+       By default it will always contain 1 record with
+       "name" ==  self.presets["active_site"] per representation_id with state
+       of all its files
+
         Each Tray app has assigned its own  self.presets["local_id"]
         used in sites as a name.
         Tray is searching only for records where name matches its
@@ -256,7 +234,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         endpoint = f"{self.endpoint_prefix}/projects/{project_name}/sitesync/state/{representation_id}/{site_name}"  # noqa
 
-        response = get_server_api_connection().delete(endpoint)
+        response = ayon_api.delete(endpoint)
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
@@ -1083,7 +1061,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         # kwargs["representationId"] = "94dca33a-7705-11ed-8c0a-34e12d91d510"
 
-        response = get_server_api_connection().get(endpoint, **kwargs)
+        response = ayon_api.get(endpoint, **kwargs)
         representations = response.data.get("representations", [])
         repinfo_by_version_id = defaultdict(dict)
         for repre in representations:
@@ -1437,7 +1415,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                   "remoteStatusFilter": [SiteSyncStatus.QUEUED,
                                          SiteSyncStatus.FAILED]}
 
-        response = get_server_api_connection().get(endpoint, **kwargs)
+        response = ayon_api.get(endpoint, **kwargs)
         if response.status_code not in [200, 204]:
             raise RuntimeError(
                 "Cannot get representations for sync with code {}"
@@ -1450,10 +1428,11 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                                            SiteSyncStatus.FAILED]
             kwargs["remoteStatusFilter"] = [SiteSyncStatus.OK]
 
-            response = get_server_api_connection().get(endpoint, **kwargs)
+            response = ayon_api.get(endpoint, **kwargs)
             representations.extend(response.data["representations"])
 
         self.add_site(project_name, kwargs["representationId"], "new_site")
+        #                                   )
 
         return representations
 
@@ -1570,7 +1549,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         if priority:
             kwargs["priority"] = priority
 
-        response = get_server_api_connection().post(endpoint, **kwargs)
+        response = ayon_api.post(endpoint, **kwargs)
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
@@ -1659,7 +1638,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         endpoint = f"{self.endpoint_prefix}/projects/{project_name}/sitesync/state/{representation_id}/{site_name}"  # noqa
 
-        response = get_server_api_connection().delete(endpoint)
+        response = ayon_api.delete(endpoint)
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
@@ -1717,7 +1696,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         """Calls server endpoint to store sync info for 'representation_id'."""
         endpoint = f"{self.endpoint_prefix}/projects/{project_name}/sitesync/state/{representation_id}/{site_name}"  # noqa
 
-        response = get_server_api_connection().post(endpoint, **payload_dict)
+        response = ayon_api.post(endpoint, **payload_dict)
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
@@ -1734,7 +1713,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         endpoint = f"{self.endpoint_prefix}/projects/{project_name}/sitesync/state"
 
-        response = get_server_api_connection().get(endpoint, **payload_dict)
+        response = ayon_api.get(endpoint, **payload_dict)
         if response.status_code != 200:
             msg = f"Cannot get sync state for representation "\
                   "{representation_id}"
