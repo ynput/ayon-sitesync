@@ -180,7 +180,7 @@ async def get_site_sync_state(
     the result will contain only one representation,
     along with the information on individual files.
     """
-    await check_sync_status_table(project_name)
+    check_sync_status_table(project_name)
     conditions = []
 
     if representationId is not None:
