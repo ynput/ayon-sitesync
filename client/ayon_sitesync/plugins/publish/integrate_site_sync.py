@@ -13,7 +13,7 @@ compatible. Approach should be refactored after v3 is gone.
 import os
 import pyblish.api
 
-from openpype_sitesync.utils import SiteSyncStatus
+from ayon_sitesync.utils import SiteSyncStatus
 
 
 class IntegrateSiteSync(pyblish.api.InstancePlugin):
