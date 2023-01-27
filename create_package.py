@@ -23,6 +23,7 @@ import re
 import shutil
 import logging
 import sys
+import zipfile
 
 # skip non server side folders
 IGNORE_DIR_PATTERNS = ["package", "__pycache__", "client", r"^\."]
@@ -65,7 +66,7 @@ def main(output_dir=None):
     copy_root_files(addon_package_dir, current_dir,
                     IGNORE_FILES_PATTERNS, log)
 
-    zip_client_side(addon_package_dir, current_dir, zip_file_name, log)
+    zip_client_side(addon_package_dir, current_dir, log)
 
     copy_pyproject(addon_package_dir, current_dir)
 
@@ -84,8 +85,7 @@ def copy_pyproject(addon_package_dir, current_dir):
                     private_dir)
 
 
-def zip_client_side(addon_package_dir, current_dir, zip_file_name,
-                    log=None):
+def zip_client_side(addon_package_dir, current_dir, log=None):
     """Copies and zip `client` subfolder into `addon_package_dir'.
 
     Args:
@@ -100,36 +100,55 @@ def zip_client_side(addon_package_dir, current_dir, zip_file_name,
 
     log.info("Preparing client code zip")
     client_dir = os.path.join(current_dir, "client")
-    if os.path.isdir(client_dir):
-        private_dir = os.path.join(addon_package_dir, "private")
-        temp_dir_to_zip = os.path.join(private_dir, "temp", zip_file_name)
-        # shutil.copytree expects glob-style patterns, not regex
-        ignore_patterns = ["*.pyc", "*__pycache__*"]
-        shutil.copytree(client_dir,
-                        temp_dir_to_zip,
-                        ignore=shutil.ignore_patterns(*ignore_patterns))
+    if not os.path.isdir(client_dir):
+        return
 
-        version_path = os.path.join(current_dir, "version.py")
-        # copy version.py to OP module know which version it is
-        if os.path.exists(version_path):
-            directories = [os.path.join(temp_dir_to_zip, o)
-                           for o in os.listdir(temp_dir_to_zip)
-                           if os.path.isdir(os.path.join(temp_dir_to_zip, o))]
-            if len(directories) > 1:
-                raise RuntimeError("Unable to know where to copy version.py")
+    private_dir = os.path.join(addon_package_dir, "private")
+    temp_dir_to_zip = os.path.join(private_dir, "temp")
+    # shutil.copytree expects glob-style patterns, not regex
+    ignore_patterns = ["*.pyc", "*__pycache__*"]
+    shutil.copytree(client_dir,
+                    temp_dir_to_zip,
+                    ignore=shutil.ignore_patterns(*ignore_patterns))
 
-            shutil.copy(version_path,
-                        os.path.join(temp_dir_to_zip, directories[0]))
+    version_path = os.path.join(current_dir, "version.py")
+    # copy version.py to OP module know which version it is
+    if os.path.exists(version_path):
+        directories = [os.path.join(temp_dir_to_zip, o)
+                       for o in os.listdir(temp_dir_to_zip)
+                       if os.path.isdir(os.path.join(temp_dir_to_zip, o))]
+        if len(directories) > 1:
+            raise RuntimeError("Unable to know where to copy version.py")
 
-        toml_path = os.path.join(client_dir, "pyproject.toml")
-        if os.path.exists(toml_path):
-            shutil.copy(toml_path,
-                        os.path.join(addon_package_dir, "private"))
+        shutil.copy(version_path,
+                    os.path.join(temp_dir_to_zip, directories[0]))
 
-        zip_file_path = os.path.join(os.path.join(private_dir, zip_file_name))
-        shutil.make_archive(zip_file_path, 'zip', temp_dir_to_zip)
-        shutil.rmtree(temp_dir_to_zip)
-        os.rmdir(os.path.join(private_dir, "temp"))
+    toml_path = os.path.join(client_dir, "pyproject.toml")
+    if os.path.exists(toml_path):
+        shutil.copy(toml_path, private_dir)
+
+    zip_file_path = os.path.join(private_dir, "client.zip")
+    temp_dir_to_zip_s = temp_dir_to_zip.replace("\\", "/")
+    with zipfile.ZipFile(zip_file_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirnames, filenames in os.walk(temp_dir_to_zip):
+            root_s = root.replace("\\", "/")
+            zip_root = root_s.replace(temp_dir_to_zip_s, "").strip("/")
+            for name in sorted(dirnames):
+                path = os.path.normpath(os.path.join(root, name))
+                zip_path = name
+                if zip_root:
+                    zip_path = "/".join((zip_root, name))
+                zipf.write(path, zip_path)
+
+            for name in filenames:
+                path = os.path.normpath(os.path.join(root, name))
+                zip_path = name
+                if zip_root:
+                    zip_path = "/".join((zip_root, name))
+                if os.path.isfile(path):
+                    zipf.write(path, zip_path)
+
+    shutil.rmtree(temp_dir_to_zip)
 
 
 def copy_root_files(addon_package_dir, current_dir, ignore_patterns, log=None):
