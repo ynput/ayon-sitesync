@@ -1,6 +1,6 @@
 from pydantic import Field
 
-from openpype.settings import BaseSettingsModel
+from ayon_server.settings import BaseSettingsModel
 
 class ListPerPlatform(BaseSettingsModel):
     windows: list[str] = Field(default_factory=list)

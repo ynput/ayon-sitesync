@@ -13,12 +13,12 @@ from .models import (
     SyncStatusModel,
 )
 
-from openpype.access.utils import folder_access_list
-from openpype.api import dep_current_user, dep_project_name, dep_representation_id
-from openpype.entities.representation import RepresentationEntity
-from openpype.entities.user import UserEntity
-from openpype.lib.postgres import Postgres
-from openpype.utils import SQLTool
+from ayon_server.access.utils import folder_access_list
+from ayon_server.api import dep_current_user, dep_project_name, dep_representation_id
+from ayon_server.entities.representation import RepresentationEntity
+from ayon_server.entities.user import UserEntity
+from ayon_server.lib.postgres import Postgres
+from ayon_server.utils import SQLTool
 
 
 router = APIRouter(tags=["Site sync"])
