@@ -1,7 +1,7 @@
 import enum
 import time
 
-from openpype.types import Field, OPModel
+from ayon_server.types import Field, OPModel
 
 
 class StatusEnum(enum.IntEnum):

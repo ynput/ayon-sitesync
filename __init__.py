@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Any, Type
 from nxtools import logging
 
-from openpype.addons import BaseServerAddon
+from ayon_server.addons import BaseServerAddon
 
 from .settings.settings import SiteSyncSettings
 from .version import __version__
