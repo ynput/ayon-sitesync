@@ -6,7 +6,7 @@ import axios from 'axios'
 
 import 'primereact/resources/primereact.min.css'
 import 'primeicons/primeicons.css'
-import 'openpype-components/dist/style.css'
+import '@ynput/ayon-react-components/dist/style.css'
 import './index.sass'
 
 
