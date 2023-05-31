@@ -864,6 +864,18 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         return ret_dict
 
+    def get_launch_hook_paths(self):
+        """Implementation for applications launch hooks.
+
+        Returns:
+            (str): full absolut path to directory with hooks for the module
+        """
+
+        return os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "launch_hooks"
+        )
+
     # Needs to be refactored after Settings are updated
     # # Methods for Settings to get appriate values to fill forms
     # def get_configurable_items(self, scope=None):
@@ -1061,7 +1073,78 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
             In case of user's involvement (reset site), start that right away.
         """
-        self.sync_server_thread.reset_timer()
+
+        if not self.enabled:
+            return
+
+        if self.sync_server_thread is None:
+            self._reset_timer_with_rest_api()
+        else:
+            self.sync_server_thread.reset_timer()
+
+    def is_representation_on_site(
+        self, project_name, representation_id, site_name, max_retries=None
+    ):
+        """Checks if 'representation_id' has all files avail. on 'site_name'
+
+        Args:
+            project_name (str)
+            representation_id (str)
+            site_name (str)
+            max_retries (int) (optional) - provide only if method used in while
+                loop to bail out
+        Returns:
+            (bool): True if 'representation_id' has all files correctly on the
+            'site_name'
+        Raises:
+              (ValueError)  Only If 'max_retries' provided if upload/download
+        failed too many times to limit infinite loop check.
+        """
+        representation = get_representation_by_id(project_name,
+                                                  representation_id,
+                                                  fields=["_id", "files"])
+        if not representation:
+            return False
+
+        on_site = False
+        for file_info in representation.get("files", []):
+            for site in file_info.get("sites", []):
+                if site["name"] != site_name:
+                    continue
+
+                if max_retries:
+                    tries = self._get_tries_count_from_rec(site)
+                    if tries >= max_retries:
+                        raise ValueError("Failed too many times")
+
+                if (site.get("progress") or site.get("error") or
+                        not site.get("created_dt")):
+                    return False
+                on_site = True
+
+        return on_site
+
+    def _reset_timer_with_rest_api(self):
+        # POST to webserver sites to add to representations
+        webserver_url = os.environ.get("OPENPYPE_WEBSERVER_URL")
+        if not webserver_url:
+            self.log.warning("Couldn't find webserver url")
+            return
+
+        rest_api_url = "{}/sync_server/reset_timer".format(
+            webserver_url
+        )
+
+        try:
+            import requests
+        except Exception:
+            self.log.warning(
+                "Couldn't add sites to representations "
+                "('requests' is not available)"
+            )
+            return
+
+        requests.post(rest_api_url)
 
     def get_enabled_projects(self):
         """Returns list of projects which have SyncServer enabled."""

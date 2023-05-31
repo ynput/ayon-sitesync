@@ -195,6 +195,97 @@ def _site_is_working(module, project_name, site_name, site_config):
     return handler.is_active()
 
 
+def download_last_published_workfile(
+    host_name: str,
+    project_name: str,
+    task_name: str,
+    workfile_representation: dict,
+    max_retries: int,
+    anatomy: Anatomy = None,
+) -> str:
+    """Download the last published workfile
+
+    Args:
+        host_name (str): Host name.
+        project_name (str): Project name.
+        task_name (str): Task name.
+        workfile_representation (dict): Workfile representation.
+        max_retries (int): complete file failure only after so many attempts
+        anatomy (Anatomy, optional): Anatomy (Used for optimization).
+            Defaults to None.
+
+    Returns:
+        str: last published workfile path localized
+    """
+
+    if not anatomy:
+        anatomy = Anatomy(project_name)
+
+    # Get sync server module
+    sync_server = ModulesManager().modules_by_name.get("sync_server")
+    if not sync_server or not sync_server.enabled:
+        print("Sync server module is disabled or unavailable.")
+        return
+
+    if not workfile_representation:
+        print(
+            "Not published workfile for task '{}' and host '{}'.".format(
+                task_name, host_name
+            )
+        )
+        return
+
+    last_published_workfile_path = get_representation_path_with_anatomy(
+        workfile_representation, anatomy
+    )
+    if not last_published_workfile_path:
+        return
+
+    # If representation isn't available on remote site, then return.
+    if not sync_server.is_representation_on_site(
+        project_name,
+        workfile_representation["_id"],
+        sync_server.get_remote_site(project_name),
+    ):
+        print(
+            "Representation for task '{}' and host '{}'".format(
+                task_name, host_name
+            )
+        )
+        return
+
+    # Get local site
+    local_site_id = get_local_site_id()
+
+    # Add workfile representation to local site
+    representation_ids = {workfile_representation["_id"]}
+    representation_ids.update(
+        get_linked_representation_id(
+            project_name, repre_id=workfile_representation["_id"]
+        )
+    )
+    for repre_id in representation_ids:
+        if not sync_server.is_representation_on_site(project_name, repre_id,
+                                                     local_site_id):
+            sync_server.add_site(
+                project_name,
+                repre_id,
+                local_site_id,
+                force=True,
+                priority=99
+            )
+    sync_server.reset_timer()
+    print("Starting to download:{}".format(last_published_workfile_path))
+    # While representation unavailable locally, wait.
+    while not sync_server.is_representation_on_site(
+        project_name, workfile_representation["_id"], local_site_id,
+        max_retries=max_retries
+    ):
+        sleep(5)
+
+    return last_published_workfile_path
+
+
 class SyncServerThread(threading.Thread):
     """
         Separate thread running synchronization server with asyncio loop.
@@ -378,8 +469,8 @@ class SyncServerThread(threading.Thread):
                 self.log.warning(
                     "ConnectionResetError in sync loop, trying next loop",
                     exc_info=True)
-            except CancelledError:
-                # just stopping server
+            except asyncio.exceptions.CancelledError:
+                # cancelling timer
                 pass
             except ResumableError:
                 self.log.warning(
