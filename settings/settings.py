@@ -11,6 +11,16 @@ from .providers.dropbox import DropboxSubmodel
 from .providers.sftp import SFTPSubmodel
 
 
+class GeneralSubmodel(BaseSettingsModel):
+    """Properties for loop and module configuration"""
+    retry_cnt: int = Field(3, title="Retry Count")
+    loop_delay: int = Field(60, title="Loop Delay")
+    always_accessible_on: list[str] = Field([],
+                                            title="Always accessible on sites")
+    active_site: str = Field("studio", title="User Default Active Site")
+    remote_site: str = Field("studio", title="User Default Remote Site")
+
+
 def provider_resolver():
     """Return a list of value/label dicts for the enumerator.
 
@@ -31,6 +41,7 @@ provider_enum = provider_resolver()
 
 
 class SitesSubmodel(BaseSettingsModel):
+    """Configured additional sites and properties for their providers"""
     _layout = "expanded"
 
     alternative_sites: list[str] = Field(
@@ -63,11 +74,40 @@ class SitesSubmodel(BaseSettingsModel):
         return normalize_name(value)
 
 
+class LocalSubmodel(BaseSettingsModel):
+    """Select your local and remote site"""
+    active_site: str = Field("",
+                             title="My Active Site",
+                             scope=["site"],
+                             enum_resolver=lambda: ["local", "studio"])
+    active_site_root: str = Field("", title="Root", scope=["site"])  # TODO show only for local_drive sites
+
+    remote_site: str = Field("",
+                             title="My Remote Site",
+                             scope=["site"],
+                             enum_resolver=lambda: ["local", "studio"])  # TODO should query configured sites for project
+    remote_site_root: str = Field("", title="Root", scope=["site"])  # TODO show only for local_drive sites
+
+
 class SiteSyncSettings(BaseSettingsModel):
-    """Test addon settings"""
+    """Settings for synchronization process"""
+    enabled: bool = Field(False)
+
+    config: GeneralSubmodel = Field(
+        default_factory=GeneralSubmodel,
+        title="Config"
+    )
+
     sites: list[SitesSubmodel] = Field(
         default_factory=list,
         title="Sites",
+    )
+
+    local_setting: LocalSubmodel = Field(
+        default_factory=LocalSubmodel,
+        title="Local setting",
+        scope=["site"],
+        description="This setting is only applicable for artist's site",
     )
 
     @validator("sites")
