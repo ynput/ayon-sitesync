@@ -7,6 +7,7 @@ from concurrent.futures._base import CancelledError
 
 from .providers import lib
 from openpype.lib import Logger
+from openpype.pipeline import Anatomy
 
 from .utils import SyncStatus, ResumableError
 
