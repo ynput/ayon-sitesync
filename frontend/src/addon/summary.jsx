@@ -22,7 +22,7 @@ const defaultParams = {
   sortOrder: 1,
   filters: {
     folder: { value: '', matchMode: 'contains' },
-    subset: { value: '', matchMode: 'contains' },
+    product: { value: '', matchMode: 'contains' },
     representation: { value: null, matchMode: FilterMatchMode.IN },
     localStatus: { value: null, matchMode: FilterMatchMode.IN },
     remoteStatus: { value: null, matchMode: FilterMatchMode.IN },
@@ -42,8 +42,8 @@ const buildQueryString = (localSite, remoteSite, lazyParams) => {
   url += `&sortDesc=${lazyParams.sortOrder === 1 ? 'true' : 'false'}`
   if (lazyParams.filters.folder && lazyParams.filters.folder.value)
     url += `&folderFilter=${lazyParams.filters.folder.value}`
-  if (lazyParams.filters.subset && lazyParams.filters.subset.value)
-    url += `&subsetFilter=${lazyParams.filters.subset.value}`
+  if (lazyParams.filters.product && lazyParams.filters.product.value)
+    url += `&subsetFilter=${lazyParams.filters.product.value}`
   if (
     lazyParams.filters.representation &&
     lazyParams.filters.representation.value
@@ -185,8 +185,8 @@ const SiteSyncSummary = ({
               filterMatchModeOptions={textMatchModes}
             />
             <Column
-              field="subset"
-              header="Subset"
+              field="product"
+              header="Product"
               sortable
               filter
               filterMatchModeOptions={textMatchModes}
