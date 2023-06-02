@@ -1812,7 +1812,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
-    def get_progress_for_repre(self, project_name, representation_id,
+    def get_progress_for_repre(self, representation,
                                local_site_name, remote_site_name=None):
         """Calculates average progress for representation.
 
@@ -1827,6 +1827,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             {'studio': 1.0, 'gdrive': 0.0} - gdrive site is present, not
                 uploaded yet
         """
+        project_name = representation["context"]["project"]["name"]
+        representation_id = representation["_id"]
         sync_status = self.get_sync_state(project_name, representation_id,
                                           local_site_name, remote_site_name)
 
