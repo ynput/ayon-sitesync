@@ -24,7 +24,7 @@ class StatusEnum(enum.IntEnum):
 
 class SortByEnum(enum.Enum):
     folder: str = "folder"
-    subset: str = "subset"
+    product: str = "product"
     version: str = "version"
     representation: str = "representation"
     localStatus: str = "localStatus"
@@ -42,9 +42,11 @@ class SyncStatusModel(OPModel):
 
 class SyncStatusPostModel(SyncStatusModel):
     fileHash: str
+    id: str
 
 
 class FileModel(OPModel):
+    id: str
     fileHash: str
     size: int
     path: str
@@ -55,7 +57,7 @@ class FileModel(OPModel):
 
 class SiteSyncSummaryItem(OPModel):
     folder: str = Field(...)
-    subset: str = Field(...)
+    product: str = Field(...)
     version: int = Field(...)
     representation: str = Field(...)
     representationId: str = Field(...)

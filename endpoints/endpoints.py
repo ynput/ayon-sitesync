@@ -1,5 +1,4 @@
 import os
-import functools
 
 from fastapi import APIRouter, Depends, Path, Query, Response
 from .models import (
@@ -19,6 +18,8 @@ from ayon_server.entities.representation import RepresentationEntity
 from ayon_server.entities.user import UserEntity
 from ayon_server.lib.postgres import Postgres
 from ayon_server.utils import SQLTool
+
+from nxtools import logging
 
 
 router = APIRouter(tags=["Site sync"])
@@ -41,7 +42,6 @@ def get_overal_status(files: dict) -> StatusEnum:
     return StatusEnum.NOT_AVAILABLE
 
 
-@functools.cache
 async def check_sync_status_table(project_name):
 
     await Postgres.execute(
@@ -83,8 +83,8 @@ async def get_site_sync_params(
         FROM project_{project_name}.representations as r
         INNER JOIN project_{project_name}.versions as v
             ON r.version_id = v.id
-        INNER JOIN project_{project_name}.subsets as s
-            ON v.subset_id = s.id
+        INNER JOIN project_{project_name}.products as p
+            ON v.product_id = p.id
         INNER JOIN project_{project_name}.hierarchy as h
             ON s.folder_id = h.id
         {SQLTool.conditions(conditions)}
@@ -143,10 +143,10 @@ async def get_site_sync_state(
         description="Filter folders by id, eg filtering by asset id",
         example="57cf375c749611ed89de0242ac140004",
     ),
-    subsetFilter: str
+    productFilter: str
     | None = Query(
         None,
-        description="Filter subsets by name",
+        description="Filter products by name",
         example="animation",
     ),
     versionIdFilter: list[str]
@@ -180,7 +180,7 @@ async def get_site_sync_state(
     the result will contain only one representation,
     along with the information on individual files.
     """
-    check_sync_status_table(project_name)
+    await check_sync_status_table(project_name)
     conditions = []
 
     if representationId is not None:
@@ -195,8 +195,8 @@ async def get_site_sync_state(
         if folderIdFilter:
             conditions.append(f"f.id IN {SQLTool.array(folderIdFilter)}")
 
-        if subsetFilter:
-            conditions.append(f"s.name ILIKE '%{subsetFilter}%'")
+        if productFilter:
+            conditions.append(f"s.name ILIKE '%{productFilter}%'")
 
         if versionIdFilter:
             conditions.append(f"v.id IN {SQLTool.array(versionIdFilter)}")
@@ -219,7 +219,7 @@ async def get_site_sync_state(
     query = f"""
         SELECT
             f.name as folder,
-            s.name as subset,
+            p.name as product,
             v.version as version,
             r.name as representation,
             h.path as path,
@@ -234,11 +234,11 @@ async def get_site_sync_state(
         FROM
             project_{project_name}.folders as f
         INNER JOIN
-            project_{project_name}.subsets as s
-            ON s.folder_id = f.id
+            project_{project_name}.products as p
+            ON p.folder_id = f.id
         INNER JOIN
             project_{project_name}.versions as v
-            ON v.subset_id = s.id
+            ON v.product_id = p.id
         INNER JOIN
             project_{project_name}.representations as r
             ON r.version_id = v.id
@@ -295,43 +295,41 @@ async def get_site_sync_state(
             timestamp=rtime,
         )
 
-        file_list = None
-        if representationId:
-            file_list = []
-            for file_hash, file in files.items():
+        file_list = []
+        for file_hash, file in files.items():
 
-                local_file = lfiles.get(file_hash, {})
-                remote_file = rfiles.get(file_hash, {})
+            local_file = lfiles.get(file_hash, {})
+            remote_file = rfiles.get(file_hash, {})
 
-                file_list.append(
-                    FileModel(
-                        fileHash=file_hash,
-                        size=file["size"],
-                        path=file["path"],
-                        baseName=os.path.split(file["path"])[1],
-                        localStatus=SyncStatusModel(
-                            status=local_file.get("status", StatusEnum.NOT_AVAILABLE),
-                            size=local_file.get("size", 0),
-                            totalSize=file["size"],
-                            timestamp=local_file.get("timestamp", 0),
-                            message=local_file.get("message", None),
-                            retries=local_file.get("retries", 0),
-                        ),
-                        remoteStatus=SyncStatusModel(
-                            status=remote_file.get("status", StatusEnum.NOT_AVAILABLE),
-                            size=remote_file.get("size", 0),
-                            totalSize=file["size"],
-                            timestamp=remote_file.get("timestamp", 0),
-                            message=remote_file.get("message", None),
-                            retries=remote_file.get("retries", 0),
-                        ),
-                    )
+            file_list.append(
+                FileModel(
+                    fileHash=file_hash,
+                    size=file["size"],
+                    path=file["path"],
+                    baseName=os.path.split(file["path"])[1],
+                    localStatus=SyncStatusModel(
+                        status=local_file.get("status", StatusEnum.NOT_AVAILABLE),
+                        size=local_file.get("size", 0),
+                        totalSize=file["size"],
+                        timestamp=local_file.get("timestamp", 0),
+                        message=local_file.get("message", None),
+                        retries=local_file.get("retries", 0),
+                    ),
+                    remoteStatus=SyncStatusModel(
+                        status=remote_file.get("status", StatusEnum.NOT_AVAILABLE),
+                        size=remote_file.get("size", 0),
+                        totalSize=file["size"],
+                        timestamp=remote_file.get("timestamp", 0),
+                        message=remote_file.get("message", None),
+                        retries=remote_file.get("retries", 0),
+                    ),
                 )
+            )
 
         repres.append(
             SiteSyncSummaryItem.construct(
                 folder=row["folder"],
-                subset=row["subset"],
+                product=row["product"],
                 version=row["version"],
                 representation=row["representation"],
                 representationId=row["representation_id"],
@@ -360,11 +358,16 @@ async def get_site_sync_state(
 async def set_site_sync_representation_state(
     post_data: RepresentationStateModel,
     project_name: str = Depends(dep_project_name),
-    user: UserEntity = Depends(dep_current_user),
     representation_id: str = Depends(dep_representation_id),
     site_name: str = Path(...),  # TODO: add regex validator/dependency here! Important!
 ) -> Response:
+    """Adds site information to representation.
 
+    Called after integration to set initial state of representation files on
+    sites.
+    Called repeatedly during synchronization to update progress/store error
+    message
+    """
     await check_sync_status_table(project_name)
 
     priority = post_data.priority
@@ -389,9 +392,11 @@ async def set_site_sync_representation_state(
                 repre = await RepresentationEntity.load(
                     project_name, representation_id, transaction=conn
                 )
+
                 files = {}
-                for fhash, file in repre.data.get("files", {}).items():
-                    files[fhash] = {
+                for file_info in repre._payload.files:
+                    fhash = file_info.hash
+                    files[file_info.id] = {
                         "hash": fhash,
                         "status": StatusEnum.NOT_AVAILABLE,
                         "size": 0,
@@ -402,22 +407,24 @@ async def set_site_sync_representation_state(
                 if priority is None:
                     priority = result[0]["priority"]
 
-            for file in post_data.files:
-                if file.fileHash not in files:
+            for posted_file in post_data.files:
+                posted_file_id = posted_file.id
+                if posted_file_id not in files:
+                    logging.info(f"{posted_file} not in files")
                     continue
-                files[file.fileHash]["timestamp"] = file.timestamp
-                files[file.fileHash]["status"] = file.status
-                files[file.fileHash]["size"] = file.size
+                files[posted_file_id]["timestamp"] = posted_file.timestamp
+                files[posted_file_id]["status"] = posted_file.status
+                files[posted_file_id]["size"] = posted_file.size
 
-                if file.message:
-                    files[file.fileHash]["message"] = file.message
-                elif "message" in files[file.fileHash]:
-                    del files[file.fileHash]["message"]
+                if posted_file.message:
+                    files[posted_file_id]["message"] = posted_file.message
+                elif "message" in files[posted_file_id]:
+                    del files[posted_file_id]["message"]
 
-                if file.retries:
-                    files[file.fileHash]["retries"] = file.retries
-                elif "retries" in files[file.fileHash]:
-                    del files[file.fileHash]["retries"]
+                if posted_file.retries:
+                    files[posted_file_id]["retries"] = posted_file.retries
+                elif "retries" in files[posted_file_id]:
+                    del files[posted_file_id]["retries"]
 
             status = get_overal_status(files)
 
