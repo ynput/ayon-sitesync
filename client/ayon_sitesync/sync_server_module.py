@@ -191,12 +191,12 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         new_site_files = []
         for repre_file in files:
-            file_hash = repre_file["id"]
             new_site_files.append({
                 "size": repre_file["size"],
                 "status": status,
                 "timestamp": datetime.now().timestamp(),
-                "fileHash": file_hash
+                "id": repre_file["id"],
+                "fileHash": repre_file["hash"]
             })
 
         payload_dict = {"files": new_site_files}
@@ -641,7 +641,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             ayon_api.get_addon_project_settings(self.v4_name, self.version,
                                                 project_name))
 
-    def get_active_sites_from_settings(self, settings):
+    def get_active_sites_from_settings(self, sync_settings):
         """
             List available active sites from incoming 'settings'. Used for
             returning 'default' values for Local Settings
@@ -651,7 +651,16 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             Returns:
                 (list) of strings
         """
-        return self._get_enabled_sites_from_settings(settings)
+        sites = [self.DEFAULT_SITE]
+        if self.enabled and sync_settings.get('enabled'):
+            sites.append(self.LOCAL_SITE)
+
+        active_site = sync_settings["config"]["active_site"]
+        # for Tray running background process
+        if active_site not in sites and active_site == get_local_site_id():
+            sites.append(active_site)
+
+        return sites
 
     def get_active_site(self, project_name):
         """
@@ -661,7 +670,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 (string)
         """
         active_site = self.get_sync_project_setting(
-            project_name)['config']['active_site']
+            project_name)['local_setting']['active_site']
         if active_site == self.LOCAL_SITE:
             return get_local_site_id()
         return active_site
@@ -790,11 +799,18 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             ayon_api.get_addon_project_settings(self.v4_name, self.version,
                                                 project_name))
 
-    def get_remote_sites_from_settings(self, settings):
+    def get_remote_sites_from_settings(self, sync_settings):
         """
             Get remote sites for returning 'default' values for Local Settings
         """
-        return self._get_remote_sites_from_settings(settings)
+        if not self.enabled or not sync_settings.get('enabled'):
+            return []
+
+        remote_sites = [self.DEFAULT_SITE, self.LOCAL_SITE]
+        if sync_settings:
+            remote_sites.extend(sync_settings.get("sites").keys())
+
+        return list(set(remote_sites))
 
     def get_remote_site(self, project_name):
         """
@@ -1236,7 +1252,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         Returns:
 
         """
-        endpoint = "{}/projects/{}/sitesync/state".format(self.endpoint_prefix, project_name)
+        endpoint = "{}/projects/{}/sitesync/state".format(self.endpoint_prefix,
+                                                          project_name)
 
         # get to upload
         kwargs = {"localSite": active_site,
@@ -1282,28 +1299,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         local_file_path = handler.resolve_path(file_path)
 
         return local_file_path
-
-    def _get_remote_sites_from_settings(self, sync_settings):
-        if not self.enabled or not sync_settings.get('enabled'):
-            return []
-
-        remote_sites = [self.DEFAULT_SITE, self.LOCAL_SITE]
-        if sync_settings:
-            remote_sites.extend(sync_settings.get("sites").keys())
-
-        return list(set(remote_sites))
-
-    def _get_enabled_sites_from_settings(self, sync_settings):
-        sites = [self.DEFAULT_SITE]
-        if self.enabled and sync_settings.get('enabled'):
-            sites.append(self.LOCAL_SITE)
-
-        active_site = sync_settings["config"]["active_site"]
-        # for Tray running background process
-        if active_site not in sites and active_site == get_local_site_id():
-            sites.append(active_site)
-
-        return sites
 
     def tray_init(self):
         """
@@ -1487,7 +1482,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         if project_name:
             project_enabled = project_name in self.get_enabled_projects()
             project_settings = self.get_sync_project_setting(project_name)
-        sync_enabled = sync_sett["enabled"] and project_enabled
+        sync_enabled = self.enabled and project_enabled
 
         system_sites = {}
         if sync_enabled:
@@ -1608,9 +1603,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
             response = ayon_api.get(endpoint, **kwargs)
             representations.extend(response.data["representations"])
-
-        self.add_site(project_name, kwargs["representationId"], "new_site")
-        #                                   )
 
         return representations
 
