@@ -97,7 +97,7 @@ def create_server_package(
                 continue
 
             dst_root = "addon"
-            if root != addon_output_dir_offset:
+            if root != addon_output_dir:
                 dst_root = os.path.join(
                     dst_root, root[addon_output_dir_offset:]
                 )
@@ -290,8 +290,8 @@ if __name__ == "__main__":
         dest="skip_zip",
         action="store_true",
         help=(
-            "Directory path where package will be created"
-            " (Will be purged if already exists!)"
+            "Skip zipping server package and create only"
+            " server folder structure."
         )
     )
     parser.add_argument(
@@ -299,8 +299,7 @@ if __name__ == "__main__":
         dest="keep_sources",
         action="store_true",
         help=(
-            "Directory path where package will be created"
-            " (Will be purged if already exists!)"
+            "Keep folder structure when server package is created."
         )
     )
     parser.add_argument(
