@@ -23,8 +23,13 @@ import re
 import shutil
 import logging
 import sys
+import json
+import platform
 import zipfile
+import argparse
 
+ADDON_NAME = "sitesync"
+ADDON_CLIENT_DIR = "ayon_sitesync"
 # skip non server side folders
 IGNORE_DIR_PATTERNS = ["package", "__pycache__", "client", r"^\."]
 # skip files from addon root
@@ -33,42 +38,118 @@ IGNORE_FILES_PATTERNS = ["create_package.py", r"^\.", "pyc$"]
 log = logging.getLogger("create_package")
 
 
-def main(output_dir=None):
+class ZipFileLongPaths(zipfile.ZipFile):
+    """Allows longer paths in zip files.
+
+    Regular DOS paths are limited to MAX_PATH (260) characters, including
+    the string's terminating NUL character.
+    That limit can be exceeded by using an extended-length path that
+    starts with the '\\?\' prefix.
+    """
+    _is_windows = platform.system().lower() == "windows"
+
+    def _extract_member(self, member, tpath, pwd):
+        if self._is_windows:
+            tpath = os.path.abspath(tpath)
+            if tpath.startswith("\\\\"):
+                tpath = "\\\\?\\UNC\\" + tpath[2:]
+            else:
+                tpath = "\\\\?\\" + tpath
+
+        return super(ZipFileLongPaths, self)._extract_member(
+            member, tpath, pwd
+        )
+
+
+def create_server_package(
+    output_dir,
+    addon_output_dir,
+    addon_version,
+    log
+):
+    """Create server package zip file.
+
+    The zip file can be installed to a server using UI or rest api endpoints.
+
+    Args:
+        output_dir (str): Directory path to output zip file.
+        addon_output_dir (str): Directory path to addon output directory.
+        addon_version (str): Version of addon.
+        log (logging.Logger): Logger instance.
+    """
+
+    log.info("Creating server package")
+    output_path = os.path.join(
+        output_dir, f"{ADDON_NAME}-{addon_version}.zip"
+    )
+    manifest_data: dict[str, str] = {
+        "addon_name": ADDON_NAME,
+        "addon_version": addon_version
+    }
+    with ZipFileLongPaths(output_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+        # Write a manifest to zip
+        zipf.writestr("manifest.json", json.dumps(manifest_data, indent=4))
+
+        # Move addon content to zip into 'addon' directory
+        addon_output_dir_offset = len(addon_output_dir) + 1
+        for root, _, filenames in os.walk(addon_output_dir):
+            if not filenames:
+                continue
+
+            dst_root = "addon"
+            if root != addon_output_dir:
+                dst_root = os.path.join(
+                    dst_root, root[addon_output_dir_offset:]
+                )
+            for filename in filenames:
+                src_path = os.path.join(root, filename)
+                dst_path = os.path.join(dst_root, filename)
+                zipf.write(src_path, dst_path)
+
+    log.info(f"Output package can be found: {output_path}")
+
+
+def main(output_dir=None, skip_zip=False, keep_sources=False):
     log.info("Start creating package")
     current_dir = os.path.dirname(os.path.abspath(__file__))
     if not output_dir:
         output_dir = os.path.join(current_dir, "package")
 
-    with open(os.path.join(current_dir, "version.py")) as fp:
-        init_file = fp.read()
-        addon_version = _find_key_value(init_file, "__version__")
+    version_content = {}
+    with open(os.path.join(current_dir, "version.py"), "r") as stream:
+        exec(stream.read(), version_content)
+    addon_version: str = version_content["__version__"]
 
-    with open(os.path.join(current_dir, "__init__.py")) as fp:
-        init_file = fp.read()
-        addon_name = _find_key_value(init_file, "name")
+    addon_package_root = os.path.join(output_dir, ADDON_NAME)
+    if os.path.isdir(addon_package_root):
+        log.info(f"Purging {addon_package_root}")
+        shutil.rmtree(addon_package_root)
 
-    new_created_version_dir = os.path.join(output_dir,
-                                           addon_name, addon_version)
-    if os.path.isdir(new_created_version_dir):
-        log.info(f"Purging {new_created_version_dir}")
-        shutil.rmtree(output_dir)
+    log.info(f"Preparing package for {ADDON_NAME}-{addon_version}")
 
-    log.info(f"Preparing package for {addon_name}-{addon_version}")
-
-    zip_file_name = f"{addon_name}_{addon_version}"
-    addon_package_dir = os.path.join(output_dir, addon_name,
-                                     addon_version)
+    addon_package_dir = os.path.join(addon_package_root, addon_version)
     os.makedirs(addon_package_dir)
 
-    copy_non_client_folders(addon_package_dir, current_dir,
-                            IGNORE_DIR_PATTERNS, log)
+    copy_non_client_folders(
+        addon_package_dir, current_dir, IGNORE_DIR_PATTERNS, log)
 
-    copy_root_files(addon_package_dir, current_dir,
-                    IGNORE_FILES_PATTERNS, log)
+    copy_root_files(
+        addon_package_dir, current_dir, IGNORE_FILES_PATTERNS, log)
 
     zip_client_side(addon_package_dir, current_dir, log)
 
     copy_pyproject(addon_package_dir, current_dir)
+
+    # Skip server zipping
+    if not skip_zip:
+        create_server_package(
+            output_dir, addon_package_dir, addon_version, log
+        )
+        # Remove sources only if zip file is created
+        if not keep_sources:
+            log.info("Removing source files for server package")
+            shutil.rmtree(addon_package_root)
+    log.info("Package creation finished")
 
 
 def copy_pyproject(addon_package_dir, current_dir):
@@ -113,23 +194,11 @@ def zip_client_side(addon_package_dir, current_dir, log=None):
 
     version_path = os.path.join(current_dir, "version.py")
     # copy version.py to OP module know which version it is
-    if os.path.exists(version_path):
-        directories = [os.path.join(temp_dir_to_zip, o)
-                       for o in os.listdir(temp_dir_to_zip)
-                       if os.path.isdir(os.path.join(temp_dir_to_zip, o))]
-        if len(directories) > 1:
-            raise RuntimeError("Unable to know where to copy version.py")
-
-        shutil.copy(version_path,
-                    os.path.join(temp_dir_to_zip, directories[0]))
-
-    toml_path = os.path.join(client_dir, "pyproject.toml")
-    if os.path.exists(toml_path):
-        shutil.copy(toml_path, private_dir)
+    shutil.copy(version_path, os.path.join(temp_dir_to_zip, ADDON_CLIENT_DIR))
 
     zip_file_path = os.path.join(private_dir, "client.zip")
     temp_dir_to_zip_s = temp_dir_to_zip.replace("\\", "/")
-    with zipfile.ZipFile(zip_file_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+    with ZipFileLongPaths(zip_file_path, "w", zipfile.ZIP_DEFLATED) as zipf:
         for root, dirnames, filenames in os.walk(temp_dir_to_zip):
             root_s = root.replace("\\", "/")
             zip_root = root_s.replace(temp_dir_to_zip_s, "").strip("/")
@@ -214,22 +283,34 @@ def copy_non_client_folders(addon_package_dir, current_dir, ignore_patterns,
                         dirs_exist_ok=True)
 
 
-def _find_key_value(init_file, value):
-    pattern = rf"{value}[\s+]=[\s+]['\"]([^'\"]*)['\"]"
-    match = re.search(pattern, init_file, re.M)
-    if match:
-        return match.group(1)
-    raise RuntimeError(f"Cannot find {value}")
-
-
 if __name__ == "__main__":
-    import argparse
-
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output_dir",
-                        help="Folder url to to create package with version in."
-                             "If addon version folder exists, will be purged!")
+    parser.add_argument(
+        "--skip-zip",
+        dest="skip_zip",
+        action="store_true",
+        help=(
+            "Skip zipping server package and create only"
+            " server folder structure."
+        )
+    )
+    parser.add_argument(
+        "--keep-sources",
+        dest="keep_sources",
+        action="store_true",
+        help=(
+            "Keep folder structure when server package is created."
+        )
+    )
+    parser.add_argument(
+        "-o", "--output",
+        dest="output_dir",
+        default=None,
+        help=(
+            "Directory path where package will be created"
+            " (Will be purged if already exists!)"
+        )
+    )
 
-    kwargs = parser.parse_args(sys.argv[1:]).__dict__
-    main(**kwargs)
-
+    args = parser.parse_args(sys.argv[1:])
+    main(args.output_dir, args.skip_zip, args.keep_sources)
