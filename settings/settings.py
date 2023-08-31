@@ -5,6 +5,8 @@ from ayon_server.settings import (
     ensure_unique_names,
     normalize_name)
 
+from ayon_server.settings.anatomy.roots import Root
+
 from .providers.local_drive import LocalDriveSubmodel
 from .providers.gdrive import GoogleDriveSubmodel
 from .providers.dropbox import DropboxSubmodel

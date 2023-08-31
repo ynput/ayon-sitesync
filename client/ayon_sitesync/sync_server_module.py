@@ -667,13 +667,15 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             Returns active (mine) site for 'project_name' from settings
 
             Returns:
-                (string)
+                (string) ['studio' - if Site Sync disabled
+                          get_local_site_id - if 'local'
+                          any other site name from local settings or
+                          project settings (site could be forced from PS)
         """
-        active_site = self.get_sync_project_setting(
-            project_name)['local_setting']['active_site']
-        if active_site == self.LOCAL_SITE:
+        active_site_type = self.get_active_site_type(project_name)
+        if active_site_type == self.LOCAL_SITE:
             return get_local_site_id()
-        return active_site
+        return active_site_type
 
     def get_active_site_type(self, project_name, local_settings=None):
         """Active site which is defined by artist.
@@ -682,13 +684,14 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         where might be different active site set by user. The output is limited
         to "studio" and "local".
 
-        This method is used by Anatomy when is decided which
+        This method is used by Anatomy.
 
         Todos:
             Check if sync server is enabled for the project.
             - To be able to do that the sync settings MUST NOT be cached for
                 all projects at once. The sync settings preparation for all
                 projects is reasonable only in sync server loop.
+            `local_settings` is probably obsolete in AYON
 
         Args:
             project_name (str): Name of project where to look for active site.
@@ -697,33 +700,19 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         Returns:
             Literal["studio", "local"]: Active site.
         """
-
         if not self.enabled:
             return "studio"
 
-        if local_settings is None:
-            local_settings = get_local_settings()
+        sync_project_settings = self.get_sync_project_setting(project_name)
 
-        local_project_settings = local_settings.get("projects")
-        sync_server_settings = ayon_api.get_addon_project_settings(
-            self.v4_name, self.version, project_name)
-
-        if not sync_server_settings["enabled"]:
+        if not sync_project_settings["enabled"]:
             return "studio"
 
-        project_active_site = sync_server_settings["config"]["active_site"]
-        if not local_project_settings:
-            return project_active_site
-
-        project_locals = local_project_settings.get(project_name) or {}
-        default_locals = local_project_settings.get(DEFAULT_PROJECT_KEY) or {}
         active_site = (
-            project_locals.get("active_site")
-            or default_locals.get("active_site")
-        )
-        if active_site:
-            return active_site
-        return project_active_site
+                sync_project_settings["local_setting"].get("active_site") or
+                sync_project_settings["config"]["active_site"])
+
+        return active_site
 
     def get_site_root_overrides(
         self, project_name, site_name, local_settings=None
@@ -741,6 +730,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         Returns:
             Union[dict[str, Any], None]: Root overrides for this machine.
+
+            {"work": "c:/projects_local"}
         """
 
         # Validate that site name is valid
@@ -753,32 +744,17 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 ).format(site_name))
             site_name = "local"
 
-        if local_settings is None:
-            local_settings = get_local_settings()
+        sync_server_settings = self.get_sync_project_setting(project_name)
 
-        if not local_settings:
-            return
+        roots = {}
+        local_project_settings = sync_server_settings["local_setting"]
+        for site in ["active_site", "remote_site"]:
+            site_name = local_project_settings[site]
+            root_value = local_project_settings.get(f"{site}_root")
+            if root_value:
+                roots[site_name] = local_project_settings.get(f"{site}_root")
 
-        local_project_settings = local_settings.get("projects") or {}
-
-        # Check for roots existence in local settings first
-        roots_project_locals = (
-            local_project_settings
-            .get(project_name, {})
-        )
-        roots_default_locals = (
-            local_project_settings
-            .get(DEFAULT_PROJECT_KEY, {})
-        )
-
-        # Skip rest of processing if roots are not set
-        if not roots_project_locals and not roots_default_locals:
-            return
-
-        # Combine roots from local settings
-        roots_locals = roots_default_locals.get(site_name) or {}
-        roots_locals.update(roots_project_locals.get(site_name) or {})
-        return roots_locals
+        return roots
 
     # remote sites
     def get_remote_sites(self, project_name):
@@ -816,8 +792,10 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         """
             Returns remote (theirs) site for 'project_name' from settings
         """
-        remote_site = self.get_sync_project_setting(
-            project_name)['config']['remote_site']
+        sync_project_settings = self.get_sync_project_setting(project_name)
+        remote_site = (
+                sync_project_settings["local_setting"].get("remote_site") or
+                sync_project_settings["config"]["remote_site"])
         if remote_site == self.LOCAL_SITE:
             return get_local_site_id()
 
@@ -1187,6 +1165,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                     self.v4_name, self.version, project_name)
             else:
                 project_settings = self.get_sync_project_setting(project_name)
+            if project_name == "demo_Commercial":
+                return True
             if project_settings and project_settings.get("enabled"):
                 return True
         return False
@@ -1425,13 +1405,17 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         project_docs = get_projects(fields=["name"])
         for project_doc in project_docs:
             project_name = project_doc["name"]
-            sites = copy.deepcopy(system_sites) 
+            sites = copy.deepcopy(system_sites)
+
             proj_settings = ayon_api.get_addon_project_settings(
                 self.v4_name, self.version, project_name)
+
             sites.update(self._get_default_site_configs(
                 proj_settings["enabled"], project_name
             ))
+
             sites.update(proj_settings['sites'])
+
             proj_settings["sites"] = sites
 
             sync_project_settings[project_name] = proj_settings
@@ -1686,6 +1670,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             status_doc = copy.deepcopy(file_info["{}Status".format(side)])
             status_doc["fileHash"] = file_info["fileHash"]
             if file_info["fileHash"] == file["fileHash"]:
+                status_doc["id"] = file_info["id"]
                 if new_file_id:
                     status_doc["status"] = SiteSyncStatus.OK
                     status_doc["id"] = new_file_id

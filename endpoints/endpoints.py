@@ -225,7 +225,7 @@ async def get_site_sync_state(
             h.path as path,
 
             r.id as representation_id,
-            r.data as represenation_data,
+            r.files as representation_files,
             local.data as local_data,
             remote.data as remote_data,
             local.status as localStatus,
@@ -263,12 +263,14 @@ async def get_site_sync_state(
     repres = []
 
     async for row in Postgres.iterate(query):
-        rdata = row["represenation_data"]
-        files = rdata.get("files", {})
+        import pprint
+        logging.debug(f"row::{pprint.pformat(row, indent=4)}")
+        files = row["representation_files"]
         file_count = len(files)
-        total_size = sum([f.get("size") for f in files.values()])
+        total_size = sum([f.get("size") for f in files])
 
         ldata = row["local_data"] or {}
+        logging.debug(f"local_data::{pprint.pformat(ldata, indent=4)}")
         lfiles = ldata.get("files", {})
         lsize = sum([f.get("size") for f in lfiles.values()] or [0])
         ltime = max([f.get("timestamp") for f in lfiles.values()] or [0])
@@ -277,6 +279,9 @@ async def get_site_sync_state(
         rfiles = rdata.get("files", {})
         rsize = sum([f.get("size") for f in rfiles.values()] or [0])
         rtime = max([f.get("timestamp") for f in rfiles.values()] or [0])
+
+        logging.debug(f"lfiles::{pprint.pformat(lfiles, indent=4)}")
+        logging.debug(f"rfiles::{pprint.pformat(rfiles, indent=4)}")
 
         local_status = SyncStatusModel(
             status=StatusEnum.NOT_AVAILABLE
@@ -294,31 +299,34 @@ async def get_site_sync_state(
             size=rsize,
             timestamp=rtime,
         )
-
+        logging.debug(f"lfiles::{pprint.pformat(lfiles, indent=4)}")
         file_list = []
-        for file_hash, file in files.items():
-
-            local_file = lfiles.get(file_hash, {})
-            remote_file = rfiles.get(file_hash, {})
+        for file_info in files:
+            file_id = file_info["id"]
+            local_file = lfiles.get(file_id, {})
+            remote_file = rfiles.get(file_id, {})
 
             file_list.append(
                 FileModel(
-                    fileHash=file_hash,
-                    size=file["size"],
-                    path=file["path"],
-                    baseName=os.path.split(file["path"])[1],
+                    id=file_id,
+                    fileHash=file_info["hash"],
+                    size=file_info["size"],
+                    path=file_info["path"],
+                    baseName=os.path.split(file_info["path"])[1],
                     localStatus=SyncStatusModel(
-                        status=local_file.get("status", StatusEnum.NOT_AVAILABLE),
+                        status=local_file.get("status",
+                                              StatusEnum.NOT_AVAILABLE),
                         size=local_file.get("size", 0),
-                        totalSize=file["size"],
+                        totalSize=file_info["size"],
                         timestamp=local_file.get("timestamp", 0),
                         message=local_file.get("message", None),
                         retries=local_file.get("retries", 0),
                     ),
                     remoteStatus=SyncStatusModel(
-                        status=remote_file.get("status", StatusEnum.NOT_AVAILABLE),
+                        status=remote_file.get("status",
+                                               StatusEnum.NOT_AVAILABLE),
                         size=remote_file.get("size", 0),
-                        totalSize=file["size"],
+                        totalSize=file_info["size"],
                         timestamp=remote_file.get("timestamp", 0),
                         message=remote_file.get("message", None),
                         retries=remote_file.get("retries", 0),
