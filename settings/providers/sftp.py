@@ -25,7 +25,7 @@ class SFTPSubmodel(BaseSettingsModel):
     )
 
     sftp_port: int = Field(
-        "",
+        0,
         title="SFTP port",
     )
 
