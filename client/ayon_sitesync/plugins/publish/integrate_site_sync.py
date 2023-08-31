@@ -23,8 +23,7 @@ class IntegrateSiteSync(pyblish.api.InstancePlugin):
     label = "Integrate Site Sync state"
 
     def process(self, instance):
-        if not os.environ.get("OP4_TEST"):
-            self.log.info("notv4")
+        if not os.environ.get("USE_AYON_SERVER"):
             return
 
         project_name = instance.context.data["projectEntity"]["name"]
