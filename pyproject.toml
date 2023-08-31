@@ -10,7 +10,7 @@ repository = "https://github.com/pypeclub/openpype"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "3.7.*"
+python = "^3.9"
 aiohttp = "^3.7"
 aiohttp-middlewares = "^2.0.0"
 dropbox = "^11.20.0"
