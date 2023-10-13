@@ -231,7 +231,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             self.log.warning(msg)
             return
 
-        endpoint = "{}/projects/{}/sitesync/state/{}/{site_name}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
+        endpoint = "{}/{}/state/{}/{site_name}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
 
         response = ayon_api.delete(endpoint)
         if response.status_code not in [200, 204]:
@@ -1566,7 +1566,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         self.log.debug("Check representations for : {}".format(project_name))
         self.connection.Session["AVALON_PROJECT"] = project_name
 
-        endpoint = "{}/projects/{}/sitesync/state".format(self.endpoint_prefix, project_name) # noqa
+        endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name) # noqa
 
         # get to upload
         kwargs = {"localSite": active_site,
@@ -1697,7 +1697,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         representation_id = representation["representationId"]
 
-        endpoint = "{}/projects/{}/sitesync/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
+        endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
 
         # get to upload
         kwargs = {
@@ -1794,7 +1794,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             self.log.warning(msg)
             return
 
-        endpoint = "{}/projects/{}/sitesync/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
+        endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
 
         response = ayon_api.delete(endpoint)
         if response.status_code not in [200, 204]:
@@ -1854,7 +1854,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
     def _set_state_sync_state(self, project_name, representation_id, site_name,
                               payload_dict):
         """Calls server endpoint to store sync info for 'representation_id'."""
-        endpoint = "{}/projects/{}/sitesync/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
+        endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
 
         response = ayon_api.post(endpoint, **payload_dict)
         if response.status_code not in [200, 204]:
@@ -1871,7 +1871,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             "representationId": representation_id
         }
 
-        endpoint = "{}/projects/{}/sitesync/state".format(self.endpoint_prefix, project_name)  # noqa
+        endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name)  # noqa
 
         response = ayon_api.get(endpoint, **payload_dict)
         if response.status_code != 200:
