@@ -18,12 +18,7 @@ const SiteSyncPage = ({projectName, addonName, addonVersion}) => {
 
     setLoading(true)
 
-    // TODO: Use addon's own endpoint instead the deprecated one
-    // so the url would be:
-    //
-    // `/api/addons/${addonName}/${addonVersion}/ .... `
-
-    const url = `/api/projects/${projectName}/sitesync/params`
+    const url = `/api/addons/${addonName}/${addonVersion}/${projectName}/params`
     axios
       .get(url)
       .then((response) => {
@@ -44,6 +39,8 @@ const SiteSyncPage = ({projectName, addonName, addonVersion}) => {
 
   return (
       <SiteSyncSummary
+        addonName={addonName}
+        addonVersion={addonVersion}
         projectName={projectName}
         localSite={localSite}
         remoteSite={remoteSite}

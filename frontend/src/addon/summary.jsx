@@ -70,13 +70,15 @@ const buildQueryString = (localSite, remoteSite, lazyParams) => {
  */
 
 const SiteSyncSummary = ({
+  addonName,
+  addonVersion,
   projectName,
   localSite,
   remoteSite,
   names,
   totalCount,
 }) => {
-  const baseUrl = `/api/projects/${projectName}/sitesync/state`
+  const baseUrl = `/api/addons/${addonName}/${addonVersion}/${projectName}/state`
   const [loading, setLoading] = useState(false)
   const [representations, setRepresentations] = useState([])
   const [selectedRepresentation, setSelectedRepresentation] = useState(null)
