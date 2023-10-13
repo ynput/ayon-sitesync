@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "SiteSync"
-version = "1.0.0"
+version = "1.0.1"
 description = "SiteSync Addon"
 authors = ["OpenPype Team <info@openpype.io>"]
 license = "MIT License"
