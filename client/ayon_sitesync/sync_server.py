@@ -441,16 +441,17 @@ class SyncServerThread(threading.Thread):
                     files_created = await asyncio.gather(
                         *task_files_to_process,
                         return_exceptions=True)
-                    for file_id, info in zip(files_created,
-                                             files_processed_info):
+                    for file_result, info in zip(files_created,
+                                                 files_processed_info):
                         file, representation, site_name, side, project_name = \
                             info
                         error = None
-                        if isinstance(file_id, BaseException):
-                            error = str(file_id)
-                            file_id = None
+                        if isinstance(file_result, BaseException):
+                            error = str(file_result)
+                            file_result = None
+                            self.log.debug(f"Exc:{file_id.__traceback__}")
                         self.module.update_db(project_name=project_name,
-                                              new_file_id=file_id,
+                                              new_file_id=file_result,
                                               file=file,
                                               representation=representation,
                                               site_name=site_name,
