@@ -30,10 +30,10 @@ def provider_resolver():
     displayed in the UI.
     """
     provider_dict = {
-        "gdrive_model": "Google Drive",
-        "local_model": "Local Drive",
-        "dropbox_model": "Dropbox",
-        "sftp_model": "SFTP"
+        "gdrive": "Google Drive",
+        "local": "Local Drive",
+        "dropbox": "Dropbox",
+        "sftp": "SFTP"
     }
     return [{"value": f"{key}", "label": f"{label}"}
             for key, label in provider_dict.items()]
@@ -62,11 +62,11 @@ class SitesSubmodel(BaseSettingsModel):
         conditionalEnum=True
     )
 
-    local_model: LocalDriveSubmodel = Field(default_factory=LocalDriveSubmodel)
-    gdrive_model: GoogleDriveSubmodel = Field(
+    local_drive: LocalDriveSubmodel = Field(default_factory=LocalDriveSubmodel)
+    gdrive: GoogleDriveSubmodel = Field(
         default_factory=GoogleDriveSubmodel)
-    dropbox_model: DropboxSubmodel = Field(default_factory=DropboxSubmodel)
-    sftp_model: SFTPSubmodel = Field(default_factory=SFTPSubmodel)
+    dropbox: DropboxSubmodel = Field(default_factory=DropboxSubmodel)
+    sftp: SFTPSubmodel = Field(default_factory=SFTPSubmodel)
 
     name: str = Field(..., title="Site name")
 
