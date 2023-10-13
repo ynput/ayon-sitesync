@@ -102,7 +102,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             Sets 'enabled' according to global settings for the module.
             Shouldnt be doing any initialization, thats a job for 'tray_init'
         """
-        self.enabled = module_settings[self.name]["enabled"]
+        self.enabled = module_settings[self.v4_name]["enabled"]
 
         # some parts of code need to run sequentially, not in async
         self.lock = None
@@ -1376,7 +1376,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
     def sync_system_settings(self):
         if self._sync_system_settings is None:
             self._sync_system_settings = get_system_settings()["modules"].\
-                get("sync_server")
+                get(self.v4_name)
 
         return self._sync_system_settings
 
