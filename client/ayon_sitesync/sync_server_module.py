@@ -1191,7 +1191,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 processed_site (str): real site_name of published/uploaded file
                 file_id (uuid): DB id of file handled
         """
-        sites = self.sync_system_settings.get("sites", {})
+        sites = self._transform_sites_from_settings(self.sync_system_settings)
         sites[self.DEFAULT_SITE] = {"provider": "local_drive",
                                     "alternative_sites": []}
 
