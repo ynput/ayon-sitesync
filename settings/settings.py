@@ -31,7 +31,7 @@ def provider_resolver():
     """
     provider_dict = {
         "gdrive": "Google Drive",
-        "local": "Local Drive",
+        "local_drive": "Local Drive",
         "dropbox": "Dropbox",
         "sftp": "SFTP"
     }
