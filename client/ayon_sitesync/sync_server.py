@@ -343,6 +343,7 @@ class SyncServerThread(threading.Thread):
                 project_name = None
                 enabled_projects = self.module.get_enabled_projects()
                 for project_name in enabled_projects:
+                    self.log.info(f"Processing '{project_name}'")
                     preset = self.module.sync_project_settings[project_name]
 
                     local_site, remote_site = self._working_sites(project_name,
