@@ -318,7 +318,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         Example is sftp site serving studio files via sftp protocol, physically
         file is only in studio, sftp server has this location mounted.
         """
-        additional_sites = self.sync_system_settings.get("sites", {})
+        additional_sites = self._transform_sites_from_settings(
+            self.sync_system_settings)
 
         alt_site_pairs = self._get_alt_site_pairs(additional_sites)
 
@@ -955,7 +956,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
     #         }
     #     """
     #     allowed_sites = set()
-    #     sites = self.get_all_site_configs(project_name)
+    #     sites = self._get_system_site_configs(project_name)
     #     if project_name:
     #         # Local Settings can select only from allowed sites for project
     #         allowed_sites.update(set(self.get_active_sites(project_name)))
@@ -1401,7 +1402,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
     def _prepare_sync_project_settings(self, exclude_locals):
         sync_project_settings = {}
-        system_sites = self.get_all_site_configs()
+        system_sites = self._transform_sites_from_settings(
+            self.sync_system_settings)
         project_docs = get_projects(fields=["name"])
         for project_doc in project_docs:
             project_name = project_doc["name"]
@@ -1414,7 +1416,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 proj_settings["enabled"], project_name
             ))
 
-            sites.update(proj_settings['sites'])
+            sites.update(self._transform_sites_from_settings(proj_settings))
 
             proj_settings["sites"] = sites
 
@@ -1449,41 +1451,19 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         return self.sync_project_settings.get(project_name)
 
-    def get_all_site_configs(self, project_name=None):
+    def _transform_sites_from_settings(self, settings):
+        """Transforms list of 'sites' from Setting to dict.
+
+        It processes both System and Project Settings as they have same format.
         """
-            Returns (dict) with all sites configured system wide.
-
-            Args:
-                project_name (str)(optional): if present, check if not disabled
-
-            Returns:
-                (dict): {'studio': {'provider':'local_drive'...},
-                         'MY_LOCAL': {'provider':....}}
-        """
-        sync_sett = self.sync_system_settings
-        project_enabled = True
-        project_settings = None
-        if project_name:
-            project_enabled = project_name in self.get_enabled_projects()
-            project_settings = self.get_sync_project_setting(project_name)
-        sync_enabled = self.enabled and project_enabled
-
-        system_sites = {}
-        if sync_enabled:
-            for site_info in sync_sett.get("sites", []):
+        sites = {}
+        if self.enabled:
+            for site_info in settings.get("sites", []):
                 site_name = site_info["name"]
-                if project_settings:
-                    site_settings = project_settings["sites"].get(site_name)
-                    if site_settings:
-                        detail.update(site_settings)
-                system_sites[site_name] = {"enabled": True,
-                                           "provider": site_info["provider"],
-                                           "root": site_info.get("roots", {})}
-
-        system_sites.update(self._get_default_site_configs(sync_enabled,
-                                                           project_name))
-
-        return system_sites
+                site_info["enabled"] = True
+                site_info["root"] = site_info.get(site_info["provider"])
+                sites[site_name] = site_info
+        return sites
 
     def _get_default_site_configs(self, sync_enabled=True, project_name=None):
         """
