@@ -1478,7 +1478,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                         detail.update(site_settings)
                 system_sites[site_name] = {"enabled": True,
                                            "provider": site_info["provider"],
-                                           "root": site_info.get("roots")}
+                                           "root": site_info.get("roots", {})}
 
         system_sites.update(self._get_default_site_configs(sync_enabled,
                                                            project_name))
