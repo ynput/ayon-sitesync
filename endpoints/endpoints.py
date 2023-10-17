@@ -62,10 +62,6 @@ async def check_sync_status_table(project_name):
 #
 
 
-@router.get(
-    "/projects/{project_name}/sitesync/params",
-    response_model=SiteSyncParamsModel,
-)
 async def get_site_sync_params(
     project_name: str = Depends(dep_project_name),
     user: UserEntity = Depends(dep_current_user),
@@ -104,10 +100,6 @@ async def get_site_sync_params(
 #
 
 
-@router.get(
-    "/projects/{project_name}/sitesync/state",
-    response_model=SiteSyncSummaryModel,
-)
 async def get_site_sync_state(
     project_name: str = Depends(dep_project_name),
     user: UserEntity = Depends(dep_current_user),
@@ -358,11 +350,6 @@ async def get_site_sync_state(
 #
 
 
-@router.post(
-    "/projects/{project_name}/sitesync/state/{representation_id}/{site_name}",
-    response_class=Response,
-    status_code=204,
-)
 async def set_site_sync_representation_state(
     post_data: RepresentationStateModel,
     project_name: str = Depends(dep_project_name),
@@ -466,11 +453,6 @@ async def set_site_sync_representation_state(
     return Response(status_code=204)
 
 
-@router.delete(
-    "/projects/{project_name}/sitesync/state/{representation_id}/{site_name}",
-    response_class=Response,
-    status_code=204,
-)
 async def remove_site_sync_representation_state(
     project_name: str = Depends(dep_project_name),
     user: UserEntity = Depends(dep_current_user),
