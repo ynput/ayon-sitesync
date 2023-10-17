@@ -66,7 +66,10 @@ async def get_site_sync_params(
     project_name: str = Depends(dep_project_name),
     user: UserEntity = Depends(dep_current_user),
 ) -> SiteSyncParamsModel:
+    """Counts how many representations are in project.
 
+    Used for SiteSyncSummary table to paginate correctly.
+    """
     access_list = await folder_access_list(user, project_name, "read")
     conditions = []
     if access_list is not None:
@@ -82,7 +85,7 @@ async def get_site_sync_params(
         INNER JOIN project_{project_name}.products as p
             ON v.product_id = p.id
         INNER JOIN project_{project_name}.hierarchy as h
-            ON s.folder_id = h.id
+            ON p.folder_id = h.id
         {SQLTool.conditions(conditions)}
     """
 
