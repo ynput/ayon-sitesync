@@ -10,6 +10,7 @@ from .models import (
     SortByEnum,
     StatusEnum,
     SyncStatusModel,
+    UserSyncSites
 )
 
 from ayon_server.access.utils import folder_access_list
@@ -57,19 +58,21 @@ async def check_sync_status_table(project_name):
     await Postgres.execute(f"CREATE INDEX IF NOT EXISTS file_status_idx ON project_{project_name}.sitesync_files_status(status);")
     await Postgres.execute(f"CREATE INDEX IF NOT EXISTS file_priority_idx ON project_{project_name}.sitesync_files_status(priority desc);")
 
+
 #
 # GET SITE SYNC PARAMS
 #
 
 
+@router.get(
+    "/projects/{project_name}/sitesync/params",
+    response_model=SiteSyncParamsModel,
+)
 async def get_site_sync_params(
     project_name: str = Depends(dep_project_name),
     user: UserEntity = Depends(dep_current_user),
 ) -> SiteSyncParamsModel:
-    """Counts how many representations are in project.
 
-    Used for SiteSyncSummary table to paginate correctly.
-    """
     access_list = await folder_access_list(user, project_name, "read")
     conditions = []
     if access_list is not None:
@@ -97,12 +100,30 @@ async def get_site_sync_params(
 
     return SiteSyncParamsModel(count=total_count, names=names)
 
+#
+# GET USER SYNC SITES
+#
+
+async def get_user_sites(
+    project_name: str = Depends(dep_project_name),
+    user: UserEntity = Depends(dep_current_user)
+) -> UserSyncSites:
+    # TODO
+    localSite = "beige-mackerel-from-ganymede"
+    remoteSite = "studio"
+
+    return UserSyncSites(localSite=localSite, remoteSite=remoteSite)
+
 
 #
 # GET SITE SYNC OVERAL STATE
 #
 
 
+# @router.get(
+#     "/addons/{addon_name}/{addon_version}/projects/{project_name}/sitesync/state",
+#     response_model=SiteSyncSummaryModel,
+# )
 async def get_site_sync_state(
     project_name: str = Depends(dep_project_name),
     user: UserEntity = Depends(dep_current_user),
@@ -353,6 +374,11 @@ async def get_site_sync_state(
 #
 
 
+@router.post(
+    "/projects/{project_name}/sitesync/state/{representation_id}/{site_name}",
+    response_class=Response,
+    status_code=204,
+)
 async def set_site_sync_representation_state(
     post_data: RepresentationStateModel,
     project_name: str = Depends(dep_project_name),
@@ -456,6 +482,11 @@ async def set_site_sync_representation_state(
     return Response(status_code=204)
 
 
+@router.delete(
+    "/projects/{project_name}/sitesync/state/{representation_id}/{site_name}",
+    response_class=Response,
+    status_code=204,
+)
 async def remove_site_sync_representation_state(
     project_name: str = Depends(dep_project_name),
     user: UserEntity = Depends(dep_current_user),
