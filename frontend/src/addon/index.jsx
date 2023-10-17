@@ -5,10 +5,9 @@ import SiteSyncSummary from './summary'
 
 
 const SiteSyncPage = ({projectName, addonName, addonVersion}) => {
-  const localSite = 'local'
-  const remoteSite = 'remote'
-
   const [loading, setLoading] = useState(false)
+  const [localSite, setLocalSite] = useState("studio")
+  const [remoteSite, setRemoteSite] = useState("studio")
   const [totalCount, setTotalCount] = useState(0)
   const [repreNames, setRepreNames] = useState([])
 
@@ -17,6 +16,14 @@ const SiteSyncPage = ({projectName, addonName, addonVersion}) => {
       return
 
     setLoading(true)
+
+    const user_url = `/api/addons/${addonName}/${addonVersion}/${projectName}/get_user_sites`
+    axios
+      .get(user_url)
+      .then((response) => {
+        setLocalSite(response.data.localSite)
+        setRemoteSite(response.data.remoteSite)
+      })
 
     const url = `/api/addons/${addonName}/${addonVersion}/${projectName}/params`
     axios
