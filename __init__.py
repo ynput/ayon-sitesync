@@ -3,7 +3,6 @@ from typing import Any, Type
 from nxtools import logging
 import os
 from fastapi import Depends, Path, Query, Response
-import pprint
 
 from ayon_server.addons import BaseServerAddon
 
@@ -125,13 +124,10 @@ class SiteSync(BaseServerAddon):
     ) -> {}:
         sites = {}
         site_infos = await Postgres.fetch("select id, data from sites")
-        # logging.info(pprint.pformat(site_infos, indent=4))
         for site_info in site_infos:
-            logging.info(pprint.pformat(site_info, indent=4))
             settings = await self.get_project_site_settings(project_name,
                                                             user.name, 
                                                             site_info["id"])
-            logging.info(pprint.pformat(settings.dict().keys(), indent=4))
             for site_type in ["active_site", "remote_site"]:
                 used_site = settings.dict()["local_setting"][site_type]
                 sites[site_type] = []
@@ -140,7 +136,7 @@ class SiteSync(BaseServerAddon):
                     sites[site_type].append(site_info["id"])
                 else:
                     sites[site_type].append(used_site)        
-        logging.info(pprint.pformat(sites, indent=4))
+
         return sites
 
 
@@ -223,11 +219,6 @@ class SiteSync(BaseServerAddon):
         """
         await check_sync_status_table(project_name)
         conditions = []
-        versionIdFilter=["f6f530d369df11eea7722cfda1e07401"]
-        logging.debug(f"localSite:: {localSite}")
-        logging.debug(f"remoteSite:: {remoteSite}")
-        localSite = "beige-mackerel-from-ganymede"
-        remoteSite = "studio"
 
         if representationId is not None:
             conditions.append(f"r.id = '{representationId}'")
@@ -309,14 +300,11 @@ class SiteSync(BaseServerAddon):
         repres = []
 
         async for row in Postgres.iterate(query):
-            import pprint
-            # logging.debug(f"row::{pprint.pformat(row, indent=4)}")
             files = row["representation_files"]
             file_count = len(files)
             total_size = sum([f.get("size") for f in files])
 
             ldata = row["local_data"] or {}
-            # logging.debug(f"local_data::{pprint.pformat(ldata, indent=4)}")
             lfiles = ldata.get("files", {})
             lsize = sum([f.get("size") for f in lfiles.values()] or [0])
             ltime = max([f.get("timestamp") for f in lfiles.values()] or [0])
@@ -325,9 +313,6 @@ class SiteSync(BaseServerAddon):
             rfiles = rdata.get("files", {})
             rsize = sum([f.get("size") for f in rfiles.values()] or [0])
             rtime = max([f.get("timestamp") for f in rfiles.values()] or [0])
-
-            # logging.debug(f"lfiles::{pprint.pformat(lfiles, indent=4)}")
-            # logging.debug(f"rfiles::{pprint.pformat(rfiles, indent=4)}")
 
             local_status = SyncStatusModel(
                 status=StatusEnum.NOT_AVAILABLE
