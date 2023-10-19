@@ -6,8 +6,9 @@ import SiteSyncSummary from './summary'
 
 const SiteSyncPage = ({projectName, addonName, addonVersion}) => {
   const [loading, setLoading] = useState(false)
-  const [localSite, setLocalSite] = useState("studio")
-  const [remoteSite, setRemoteSite] = useState("studio")
+  const [loadingUserSites, setLoadingUserSites] = useState(false)
+  const [localSites, setLocalSites] = useState()
+  const [remoteSites, setRemoteSites] = useState()
   const [totalCount, setTotalCount] = useState(0)
   const [repreNames, setRepreNames] = useState([])
 
@@ -16,13 +17,26 @@ const SiteSyncPage = ({projectName, addonName, addonVersion}) => {
       return
 
     setLoading(true)
+    setLoadingUserSites(true)
 
     const user_url = `/api/addons/${addonName}/${addonVersion}/${projectName}/get_user_sites`
     axios
       .get(user_url)
       .then((response) => {
-        setLocalSite(response.data.localSite)
-        setRemoteSite(response.data.remoteSite)
+        let local_sites = []
+        for (const site_name of response.data["active_site"]){
+            local_sites.push({ name: site_name, value: site_name })
+        }
+        setLocalSites(local_sites)
+        
+        let remote_sites = []
+        for (const site_name of response.data["remote_site"]){
+            remote_sites.push({ name: site_name, value: site_name })
+        }
+        setRemoteSites(remote_sites)
+      })
+      .finally(() => {
+        setLoadingUserSites(false)
       })
 
     const url = `/api/addons/${addonName}/${addonVersion}/${projectName}/params`
@@ -41,7 +55,10 @@ const SiteSyncPage = ({projectName, addonName, addonVersion}) => {
       })
   }, [projectName])
 
-  if (loading)
+  if (loading || loadingUserSites)
+    return null
+
+  if (!localSites || !remoteSites)
     return null
 
   return (
@@ -49,8 +66,8 @@ const SiteSyncPage = ({projectName, addonName, addonVersion}) => {
         addonName={addonName}
         addonVersion={addonVersion}
         projectName={projectName}
-        localSite={localSite}
-        remoteSite={remoteSite}
+        localSites={localSites}
+        remoteSites={remoteSites}
         names={repreNames}
         totalCount={totalCount}
       />

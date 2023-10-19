@@ -6,6 +6,7 @@ import { DataTable } from 'primereact/datatable'
 import { Column } from 'primereact/column'
 import { MultiSelect } from 'primereact/multiselect'
 import { FilterMatchMode } from 'primereact/api'
+import { Dropdown } from 'primereact/dropdown';
 
 import { formatStatus, SYNC_STATES } from './common'
 import SiteSyncDetail from './detail'
@@ -73,8 +74,8 @@ const SiteSyncSummary = ({
   addonName,
   addonVersion,
   projectName,
-  localSite,
-  remoteSite,
+  localSites,
+  remoteSites,
   names,
   totalCount,
 }) => {
@@ -82,12 +83,16 @@ const SiteSyncSummary = ({
   const [loading, setLoading] = useState(false)
   const [representations, setRepresentations] = useState([])
   const [selectedRepresentation, setSelectedRepresentation] = useState(null)
+  const [selectedLocalSite, setSelectedLocalSite] = useState(localSites && localSites[0]["value"])
+  const [selectedRemoteSite, setSelectedRemoteSite] = useState(remoteSites && remoteSites[0]["value"])
   const [lazyParams, setLazyParams] = useState(defaultParams)
 
   useEffect(() => {
     setLoading(true)
     axios
-      .get(baseUrl + buildQueryString(localSite, remoteSite, lazyParams))
+      .get(baseUrl + buildQueryString(selectedLocalSite,
+                                      selectedRemoteSite,
+                                      lazyParams))
       .then((response) => {
         setRepresentations(response.data.representations)
       })
@@ -96,6 +101,20 @@ const SiteSyncSummary = ({
       })
     // eslint-disable-next-line
   }, [lazyParams])
+
+  const updateSite = (event, site_type) => {
+    /* Updates site after selection change, triggers refresh.*/
+    if (site_type == "local"){
+        setSelectedLocalSite(event.value)
+    }else{
+        setSelectedRemoteSite(event.value)
+    }
+
+    let new_event = defaultParams
+    new_event['first'] = 0
+    new_event['page'] = 0
+    setLazyParams(new_event)
+}
 
   const onPage = (event) => {
     setLazyParams(event)
@@ -154,6 +173,16 @@ const SiteSyncSummary = ({
           }}
         />
       )}
+      <Dropdown
+            value={selectedLocalSite}
+            onChange={(e) => updateSite(e, "local")}
+            options={localSites} optionLabel="name"
+            placeholder="Local site" className="w-full md:w-14rem" />
+      <Dropdown
+            value={selectedRemoteSite}
+            onChange={(e) => updateSite(e, "remote")}
+            options={remoteSites} optionLabel="name"
+            placeholder="Remote site" className="w-full md:w-14rem" />
         <TablePanel loading={loading}>
           <DataTable
             scrollable
