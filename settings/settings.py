@@ -39,6 +39,28 @@ def provider_resolver():
             for key, label in provider_dict.items()]
 
 
+async def defined_sited_enum_resolver(
+    addon: "BaseServerAddon",
+    settings_variant: str = "production",
+    project_name: str | None = None,
+) -> list[str]:
+    """Provides list of names of configured syncable sites."""
+    if addon is None:
+        return []
+
+    if project_name:
+        settings = await addon.get_project_settings(project_name=project_name,
+                                                    variant=settings_variant)
+    else:
+        settings =  await addon.get_studio_settings(variant=settings_variant)
+
+    sites = ["local", "studio"]
+    for site_model in settings.sites:
+        sites.append(site_model.name)
+
+    return sites
+
+
 provider_enum = provider_resolver()
 
 
@@ -49,6 +71,7 @@ class SitesSubmodel(BaseSettingsModel):
     alternative_sites: list[str] = Field(
         default_factory=list,
         title="Alternative sites",
+        scope=["studio", "project"],
         description="Files on this site are/should physically present on these"
                     " sites. Example sftp site exposes files from 'studio' "
                     " site"
@@ -62,13 +85,25 @@ class SitesSubmodel(BaseSettingsModel):
         conditionalEnum=True
     )
 
-    local_drive: LocalDriveSubmodel = Field(default_factory=LocalDriveSubmodel)
+    local_drive: LocalDriveSubmodel = Field(
+        default_factory=LocalDriveSubmodel,
+        scope=["studio", "project", "site"]
+    )
     gdrive: GoogleDriveSubmodel = Field(
-        default_factory=GoogleDriveSubmodel)
-    dropbox: DropboxSubmodel = Field(default_factory=DropboxSubmodel)
-    sftp: SFTPSubmodel = Field(default_factory=SFTPSubmodel)
+        default_factory=GoogleDriveSubmodel,
+        scope=["studio", "project", "site"]
+    )
+    dropbox: DropboxSubmodel = Field(
+        default_factory=DropboxSubmodel,
+        scope=["studio", "project", "site"]
+    )
+    sftp: SFTPSubmodel = Field(
+        default_factory=SFTPSubmodel,
+        scope=["studio", "project", "site"]
+    )
 
-    name: str = Field(..., title="Site name")
+    name: str = Field(..., title="Site name",
+                      scope=["studio", "project", "site"])
 
     @validator("name")
     def validate_name(cls, value):
@@ -81,14 +116,12 @@ class LocalSubmodel(BaseSettingsModel):
     active_site: str = Field("",
                              title="My Active Site",
                              scope=["site"],
-                             enum_resolver=lambda: ["local", "studio"])
-    active_site_root: str = Field("", title="Root", scope=["site"])  # TODO show only for local_drive sites
+                             enum_resolver=defined_sited_enum_resolver)
 
     remote_site: str = Field("",
                              title="My Remote Site",
                              scope=["site"],
-                             enum_resolver=lambda: ["local", "studio"])  # TODO should query configured sites for project
-    remote_site_root: str = Field("", title="Root", scope=["site"])  # TODO show only for local_drive sites
+                             enum_resolver=defined_sited_enum_resolver)
 
 
 class SiteSyncSettings(BaseSettingsModel):
@@ -100,16 +133,17 @@ class SiteSyncSettings(BaseSettingsModel):
         title="Config"
     )
 
-    sites: list[SitesSubmodel] = Field(
-        default_factory=list,
-        title="Sites",
-    )
-
     local_setting: LocalSubmodel = Field(
         default_factory=LocalSubmodel,
         title="Local setting",
         scope=["site"],
         description="This setting is only applicable for artist's site",
+    )
+
+    sites: list[SitesSubmodel] = Field(
+        default_factory=list,
+        scope=["studio", "project", "site"],
+        title="Sites",
     )
 
     @validator("sites")

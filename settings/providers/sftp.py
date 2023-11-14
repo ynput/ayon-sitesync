@@ -4,9 +4,12 @@ from ayon_server.settings import BaseSettingsModel
 from ayon_server.settings.anatomy.roots import Root, default_roots
 
 class ListPerPlatform(BaseSettingsModel):
-    windows: list[str] = Field(default_factory=list)
-    linux: list[str] = Field(default_factory=list)
-    darwin: list[str] = Field(default_factory=list)
+    windows: list[str] = Field(default_factory=list,
+                               scope=["studio", "project", "site"])
+    linux: list[str] = Field(default_factory=list,
+                             scope=["studio", "project", "site"])
+    darwin: list[str] = Field(default_factory=list,
+                              scope=["studio", "project", "site"])
 
 
 class SFTPSubmodel(BaseSettingsModel):
@@ -17,31 +20,36 @@ class SFTPSubmodel(BaseSettingsModel):
     accessible on shared drive for all artists, use sftp_pass if no shared
     drive present on artist's machines.
     """
-    _layout = "compact"
+    _layout = "expanded"
     sftp_host: str = Field(
         "",
         title="SFTP host name",
+        scope=["studio", "project"],
         description="Domain name or IP of sftp server",
     )
 
     sftp_port: int = Field(
         0,
         title="SFTP port",
+        scope=["studio", "project"],
     )
 
     sftp_user: str = Field(
         "",
-        title="SFTP user name"
+        title="SFTP user name",
+        scope=["studio", "project", "site"],
     )
 
     sftp_pass: str = Field(
         "",
         title="SFTP password",
+        scope=["studio", "project", "site"],
         description="Use password or ssh key to authenticate",
     )
 
     sftp_key: ListPerPlatform = Field(
         title="SFTP key path",
+        scope=["studio", "project", "site"],
         default_factory=ListPerPlatform,
         description="Use password or ssh key to authenticate",
     )
@@ -49,11 +57,13 @@ class SFTPSubmodel(BaseSettingsModel):
     sftp_key_pass: str = Field(
         "",
         title="SFTP user ssh key password",
+        scope=["studio", "project", "site"],
         description="Password for ssh key",
     )
 
     roots: list[Root] = Field(
         default=default_roots,
         title="Roots",
+        scope=["studio", "project"],
         description="Setup root paths for the project",
     )

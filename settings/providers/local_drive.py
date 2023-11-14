@@ -9,6 +9,7 @@ class LocalDriveSubmodel(BaseSettingsModel):
     _layout = "compact"
     roots: list[Root] = Field(
         default=default_roots,
+        scope=["studio", "project", "site"],
         title="Roots",
         description="Setup root paths for the project",
     )
