@@ -1204,7 +1204,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         Returns:
             (list) of dictionaries
         """
-        self.log.debug("Check representations for : {}".format(project_name))
+        self.log.debug("Check representations for: {}-{}".format(active_site,
+                                                                 remote_site))
         self.connection.Session["AVALON_PROJECT"] = project_name
 
         endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name) # noqa
