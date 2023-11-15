@@ -623,46 +623,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         """ Is server paused """
         return self._paused
 
-    def get_active_sites(self, project_name):
-        """
-            Returns list of active sites for 'project_name'.
-
-            By default it returns ['studio'], this site is default
-            and always present even if SyncServer is not enabled. (for publish)
-
-            Used mainly for Local settings for user override.
-
-            Args:
-                project_name (string):
-
-            Returns:
-                (list) of strings
-        """
-        return self.get_active_sites_from_settings(
-            ayon_api.get_addon_project_settings(self.v4_name, self.version,
-                                                project_name))
-
-    def get_active_sites_from_settings(self, sync_settings):
-        """
-            List available active sites from incoming 'settings'. Used for
-            returning 'default' values for Local Settings
-
-            Args:
-                settings (dict): full settings (global + project)
-            Returns:
-                (list) of strings
-        """
-        sites = [self.DEFAULT_SITE]
-        if self.enabled and sync_settings.get('enabled'):
-            sites.append(self.LOCAL_SITE)
-
-        active_site = sync_settings["config"]["active_site"]
-        # for Tray running background process
-        if active_site not in sites and active_site == get_local_site_id():
-            sites.append(active_site)
-
-        return sites
-
     def get_active_site(self, project_name):
         """
             Returns active (mine) site for 'project_name' from settings
@@ -757,38 +717,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         return roots
 
-    # remote sites
-    def get_remote_sites(self, project_name):
-        """
-            Returns all remote sites configured on 'project_name'.
-
-            If 'project_name' is not enabled for syncing returns [].
-
-            Used by Local setting to allow user choose remote site.
-
-            Args:
-                project_name (string):
-
-            Returns:
-                (list) of strings
-        """
-        return self.get_remote_sites_from_settings(
-            ayon_api.get_addon_project_settings(self.v4_name, self.version,
-                                                project_name))
-
-    def get_remote_sites_from_settings(self, sync_settings):
-        """
-            Get remote sites for returning 'default' values for Local Settings
-        """
-        if not self.enabled or not sync_settings.get('enabled'):
-            return []
-
-        remote_sites = [self.DEFAULT_SITE, self.LOCAL_SITE]
-        if sync_settings:
-            remote_sites.extend(sync_settings.get("sites").keys())
-
-        return list(set(remote_sites))
-
+    # remote site
     def get_remote_site(self, project_name):
         """
             Returns remote (theirs) site for 'project_name' from settings
@@ -813,49 +742,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             site_name = self.LOCAL_SITE
 
         return site_name
-
-    # Methods for Settings UI to draw appropriate forms
-    @classmethod
-    def get_system_settings_schema(cls):
-        """ Gets system level schema of  configurable items
-
-            Used for Setting UI to provide forms.
-        """
-        ret_dict = {}
-        for provider_code in lib.factory.providers:
-            ret_dict[provider_code] = \
-                lib.factory.get_provider_cls(provider_code). \
-                get_system_settings_schema()
-
-        return ret_dict
-
-    @classmethod
-    def get_project_settings_schema(cls):
-        """ Gets project level schema of configurable items.
-
-            It is not using Setting! Used for Setting UI to provide forms.
-        """
-        ret_dict = {}
-        for provider_code in lib.factory.providers:
-            ret_dict[provider_code] = \
-                lib.factory.get_provider_cls(provider_code). \
-                get_project_settings_schema()
-
-        return ret_dict
-
-    @classmethod
-    def get_local_settings_schema(cls):
-        """ Gets local level schema of configurable items.
-
-            It is not using Setting! Used for Setting UI to provide forms.
-        """
-        ret_dict = {}
-        for provider_code in lib.factory.providers:
-            ret_dict[provider_code] = \
-                lib.factory.get_provider_cls(provider_code). \
-                get_local_settings_schema()
-
-        return ret_dict
 
     def get_launch_hook_paths(self):
         """Implementation for applications launch hooks.
