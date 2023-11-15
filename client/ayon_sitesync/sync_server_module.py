@@ -132,6 +132,18 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         return {"publish": os.path.join(SYNC_MODULE_DIR, "plugins", "publish"),
                 "load": os.path.join(SYNC_MODULE_DIR, "plugins", "load")}
 
+    def get_launch_hook_paths(self):
+        """Implementation for applications launch hooks.
+
+        Returns:
+            (str): full absolut path to directory with hooks for the module
+        """
+
+        return os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "launch_hooks"
+        )
+
     """ Start of Public API """
     def add_site(self, project_name, representation_id, site_name=None,
                  file_id=None, force=False, status=SiteSyncStatus.QUEUED):
@@ -724,18 +736,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             site_name = self.LOCAL_SITE
 
         return site_name
-
-    def get_launch_hook_paths(self):
-        """Implementation for applications launch hooks.
-
-        Returns:
-            (str): full absolut path to directory with hooks for the module
-        """
-
-        return os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "launch_hooks"
-        )
 
     def reset_timer(self):
         """
