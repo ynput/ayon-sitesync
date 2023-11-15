@@ -1610,13 +1610,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         ld = self.sync_project_settings[project_name]["config"]["loop_delay"]
         return int(ld)
 
-    def _get_roots_config(self, presets, project_name, site_name):
-        """
-            Returns configured root(s) for 'project_name' and 'site_name' from
-            settings ('presets')
-        """
-        return presets[project_name]['sites'][site_name]['root']
-
     def cli(self, click_group):
         click_group.add_command(cli_main)
 
