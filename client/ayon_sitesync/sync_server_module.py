@@ -657,6 +657,20 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         return active_site
 
+    # remote site
+    def get_remote_site(self, project_name):
+        """
+            Returns remote (theirs) site for 'project_name' from settings
+        """
+        sync_project_settings = self.get_sync_project_setting(project_name)
+        remote_site = (
+                sync_project_settings["local_setting"].get("remote_site") or
+                sync_project_settings["config"]["remote_site"])
+        if remote_site == self.LOCAL_SITE:
+            return get_local_site_id()
+
+        return remote_site
+
     def get_site_root_overrides(
         self, project_name, site_name, local_settings=None
     ):
@@ -698,20 +712,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 roots[site_name] = local_project_settings.get(f"{site}_root")
 
         return roots
-
-    # remote site
-    def get_remote_site(self, project_name):
-        """
-            Returns remote (theirs) site for 'project_name' from settings
-        """
-        sync_project_settings = self.get_sync_project_setting(project_name)
-        remote_site = (
-                sync_project_settings["local_setting"].get("remote_site") or
-                sync_project_settings["config"]["remote_site"])
-        if remote_site == self.LOCAL_SITE:
-            return get_local_site_id()
-
-        return remote_site
 
     def get_local_normalized_site(self, site_name):
         """
