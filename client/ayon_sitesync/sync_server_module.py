@@ -407,30 +407,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         for repre in representations:
             self.remove_site(project_name, repre.get("_id"), site_name, True)
 
-    def create_validate_project_task(self, project_name, site_name):
-        """Adds metadata about project files validation on a queue.
-
-        This process will loop through all representation and check if
-        their files actually exist on an active site.
-
-        It also checks if site is set in DB, but file is physically not
-        present
-
-        This might be useful for edge cases when artists is switching
-        between sites, remote site is actually physically mounted and
-        active site has same file urls etc.
-
-        Task will run on a asyncio loop, shouldn't be blocking.
-        """
-        task = {
-            "type": "validate",
-            "project_name": project_name,
-            "func": lambda: self.validate_project(project_name, site_name,
-                                                  reset_missing=True)
-        }
-        self.projects_processed.add(project_name)
-        self.long_running_tasks.append(task)
-
     def validate_project(self, project_name, site_name, reset_missing=False):
         """Validate 'project_name' of 'site_name' and its local files
 
