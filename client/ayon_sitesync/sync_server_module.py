@@ -407,6 +407,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         for repre in representations:
             self.remove_site(project_name, repre.get("_id"), site_name, True)
 
+    # TODO hook to some trigger - no Sync Queue anymore
     def validate_project(self, project_name, site_name, reset_missing=False):
         """Validate 'project_name' of 'site_name' and its local files
 
@@ -477,6 +478,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         self.log.info("Sites added {}, sites reset {}".format(sites_added,
                                                               reset_missing))
 
+    # TODO hook to some trigger - no Sync Queue anymore
     def pause_representation(self, project_name, representation_id, site_name):
         """
             Sets 'representation_id' as paused, eg. no syncing should be
@@ -493,6 +495,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                                                   representation_id)
         self.update_db(project_name, representation, site_name, pause=True)
 
+    # TODO hook to some trigger - no Sync Queue anymore
     def unpause_representation(self, project_name,
                                representation_id, site_name):
         """
@@ -537,6 +540,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 self.is_paused()
         return condition
 
+    # TODO hook to some trigger - no Sync Queue anymore
     def pause_project(self, project_name):
         """
             Sets 'project_name' as paused, eg. no syncing should be
@@ -548,6 +552,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         self.log.info("Pausing SyncServer for {}".format(project_name))
         self._paused_projects.add(project_name)
 
+    # TODO hook to some trigger - no Sync Queue anymore
     def unpause_project(self, project_name):
         """
             Sets 'project_name' as unpaused
@@ -579,6 +584,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             condition = condition or self.is_paused()
         return condition
 
+    # TODO hook to some trigger - no Sync Queue anymore
     def pause_server(self):
         """
             Pause sync server
