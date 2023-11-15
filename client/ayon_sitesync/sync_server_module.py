@@ -737,21 +737,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         return site_name
 
-    def reset_timer(self):
-        """
-            Called when waiting for next loop should be skipped.
-
-            In case of user's involvement (reset site), start that right away.
-        """
-
-        if not self.enabled:
-            return
-
-        if self.sync_server_thread is None:
-            self._reset_timer_with_rest_api()
-        else:
-            self.sync_server_thread.reset_timer()
-
     def is_representation_on_site(
         self, project_name, representation_id, site_name, max_retries=None
     ):
@@ -1596,6 +1581,21 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 msg = "folder {} cannot be removed".format(folder)
                 self.log.warning(msg)
                 raise ValueError(msg)
+
+    def reset_timer(self):
+        """
+            Called when waiting for next loop should be skipped.
+
+            In case of user's involvement (reset site), start that right away.
+        """
+
+        if not self.enabled:
+            return
+
+        if self.sync_server_thread is None:
+            self._reset_timer_with_rest_api()
+        else:
+            self.sync_server_thread.reset_timer()
 
     def get_loop_delay(self, project_name):
         """
