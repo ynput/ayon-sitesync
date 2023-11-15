@@ -280,8 +280,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 metadata["created_dt"] = datetime.now()
             return metadata
 
-        if (
-                not self.sync_system_settings["enabled"] or
+        if (not self.sync_studio_settings["enabled"] or
                 not self.sync_project_settings[project_name]["enabled"]):
             return [create_metadata(self.DEFAULT_SITE)]
 
@@ -331,7 +330,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         file is only in studio, sftp server has this location mounted.
         """
         additional_sites = self._transform_sites_from_settings(
-            self.sync_system_settings)
+            self.sync_studio_settings)
 
         alt_site_pairs = self._get_alt_site_pairs(additional_sites)
 
@@ -853,7 +852,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 processed_site (str): real site_name of published/uploaded file
                 file_id (uuid): DB id of file handled
         """
-        sites = self._transform_sites_from_settings(self.sync_system_settings)
+        sites = self._transform_sites_from_settings(self.sync_studio_settings)
         sites[self.DEFAULT_SITE] = {"provider": "local_drive",
                                     "alternative_sites": []}
 
@@ -1036,7 +1035,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         return self._connection
 
     @property
-    def sync_system_settings(self):
+    def sync_studio_settings(self):
         if self._sync_system_settings is None:
             self._sync_system_settings = get_system_settings()["modules"].\
                 get(self.v4_name)
@@ -1064,12 +1063,13 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
     def _prepare_sync_project_settings(self, exclude_locals):
         sync_project_settings = {}
-        system_sites = self._transform_sites_from_settings(
-            self.sync_system_settings)
+        studio_sites = self._transform_sites_from_settings(
+            self.sync_studio_settings)
+
         project_docs = get_projects(fields=["name"])
         for project_doc in project_docs:
             project_name = project_doc["name"]
-            sites = copy.deepcopy(system_sites)
+            sites = copy.deepcopy(studio_sites)
 
             proj_settings = ayon_api.get_addon_project_settings(
                 self.v4_name, self.version, project_name)
@@ -1177,7 +1177,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             if provider:
                 return provider
 
-        sync_sett = self.sync_system_settings
+        sync_sett = self.sync_studio_settings
         for conf_site, detail in sync_sett.get("sites", {}).items():
             sites[conf_site] = detail.get("provider")
 
