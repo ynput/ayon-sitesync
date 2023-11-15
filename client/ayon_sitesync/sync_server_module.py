@@ -1063,14 +1063,13 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
     def _prepare_sync_project_settings(self, exclude_locals):
         sync_project_settings = {}
-        studio_sites = self._transform_sites_from_settings(
+
+        sites = self._transform_sites_from_settings(
             self.sync_studio_settings)
 
         project_docs = get_projects(fields=["name"])
         for project_doc in project_docs:
             project_name = project_doc["name"]
-            sites = copy.deepcopy(studio_sites)
-
             proj_settings = ayon_api.get_addon_project_settings(
                 self.v4_name, self.version, project_name)
 
