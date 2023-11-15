@@ -1148,14 +1148,15 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         }
         all_sites = {self.DEFAULT_SITE: studio_config}
         if sync_enabled:
-            all_sites[get_local_site_id()] = {'enabled': True,
-                                              'provider': 'local_drive',
-                                              "root": roots}
+            local_site_id = get_local_site_id()
+            roots = ayon_api.get_project_roots_for_site(project_name,
+                                                        local_site_id)
+            local_site_dict = {"enabled": True,
+                               "provider": "local_drive",
+                               "root": roots}
+            all_sites[local_site_id] = local_site_dict
             # duplicate values for normalized local name
-            all_sites["local"] = {
-                'enabled': True,
-                'provider': 'local_drive',
-                "root": roots}
+            all_sites["local"] = local_site_dict
         return all_sites
 
     def get_provider_for_site(self, project_name=None, site=None):
