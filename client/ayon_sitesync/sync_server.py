@@ -3,7 +3,7 @@ import os
 import asyncio
 import threading
 import concurrent.futures
-from concurrent.futures._base import CancelledError
+import traceback
 
 from .providers import lib
 from openpype.lib import Logger
@@ -448,8 +448,9 @@ class SyncServerThread(threading.Thread):
                         error = None
                         if isinstance(file_result, BaseException):
                             error = str(file_result)
-                            file_result = None
-                            self.log.debug(f"Exc:{file_result.__traceback__}")
+                            self.log.warning(f"{traceback.format_tb(file_result.__traceback__)}")
+                            file_result = None  # it is exception >> no id >> reset
+
                         self.module.update_db(project_name=project_name,
                                               new_file_id=file_result,
                                               file=file,
