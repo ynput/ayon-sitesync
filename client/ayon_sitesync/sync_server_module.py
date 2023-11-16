@@ -1178,8 +1178,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 return provider
 
         sync_sett = self.sync_studio_settings
-        for conf_site, detail in sync_sett.get("sites", {}).items():
-            sites[conf_site] = detail.get("provider")
+        for site_config in sync_sett.get("sites"):
+            sites[site_config["name"]] = site_config["provider"]
 
         return sites.get(site, 'N/A')
 
