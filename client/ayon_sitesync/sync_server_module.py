@@ -1119,11 +1119,17 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         """
         sites = {}
         if self.enabled:
-            for site_info in settings.get("sites", []):
-                site_name = site_info["name"]
-                site_info["enabled"] = True
-                site_info["root"] = site_info.get(site_info["provider"])
-                sites[site_name] = site_info
+            for whole_site_info in settings.get("sites", []):
+                configured_site = {}
+                site_name = whole_site_info["name"]
+                configured_site["enabled"] = True
+
+                provider_specific = whole_site_info[whole_site_info["provider"]]
+                configured_site["root"] = provider_specific.pop("roots",
+                                                                None)
+                configured_site.update(provider_specific)
+
+                sites[site_name] = configured_site
         return sites
 
     def _get_default_site_configs(self, sync_enabled=True, project_name=None):
