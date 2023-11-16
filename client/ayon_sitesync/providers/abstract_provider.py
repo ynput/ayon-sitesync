@@ -194,8 +194,8 @@ class AbstractProvider:
         if not root_config:
             root_config = self.get_roots_config(anatomy)
 
-        if root_config and not root_config.get("root"):
-            root_config = {"root": root_config}
+        if root_config:
+            root_config = {"root": root_config.get("root") or root_config}
 
         try:
             if not root_config:
