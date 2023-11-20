@@ -61,9 +61,9 @@ class SFTPSubmodel(BaseSettingsModel):
         description="Password for ssh key",
     )
 
-    roots: list[Root] = Field(
-        default=default_roots,
-        title="Roots",
+    root: str = Field(
+        "",
+        title="SFTP root folder",
         scope=["studio", "project"],
-        description="Setup root paths for the project",
+        description="Root folder on SFTP",
     )
