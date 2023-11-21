@@ -1127,8 +1127,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 provider_specific = whole_site_info[whole_site_info["provider"]]
                 configured_site["root"] = provider_specific.pop("roots",
                                                                 None)
-                if isinstance(configured_site["root"], list):
-                    configured_site["root"] = configured_site["root"][0]
                 configured_site.update(provider_specific)
 
                 sites[site_name] = configured_site
