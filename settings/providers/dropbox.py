@@ -31,7 +31,7 @@ class DropboxSubmodel(BaseSettingsModel):
         scope=["studio", "project", "site"],
     )
 
-    root: str = Field(
+    roots: str = Field(
         "",
         title="Roots",
         scope=["studio", "project", "site"],

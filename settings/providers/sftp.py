@@ -61,7 +61,7 @@ class SFTPSubmodel(BaseSettingsModel):
         description="Password for ssh key",
     )
 
-    root: str = Field(
+    roots: str = Field(
         "",
         title="SFTP root folder",
         scope=["studio", "project"],

@@ -24,9 +24,9 @@ class GoogleDriveSubmodel(BaseSettingsModel):
         description="""Path to credentials .json available on shared disk."""
     )
 
-    root: str = Field(
+    roots: str = Field(
         "",
-        title="Roots",
+        title="GDrive root folder",
         scope=["studio", "project"],
         description="Root folder on Google Drive",
     )
