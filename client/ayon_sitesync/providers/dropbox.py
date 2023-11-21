@@ -418,7 +418,8 @@ class DropboxHandler(AbstractProvider):
                      {"root": {"root_ONE": "value", "root_TWO":"value}}
             Format is importing for usage of python's format ** approach
         """
-        return self.presets['root']
+        # TODO implement multiple roots
+        return {"root": {"work": self.presets['root']}}
 
     def resolve_path(self, path, root_config=None, anatomy=None):
         """

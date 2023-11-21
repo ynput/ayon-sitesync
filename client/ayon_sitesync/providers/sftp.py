@@ -193,7 +193,7 @@ class SFTPHandler(AbstractProvider):
             Format is importing for usage of python's format ** approach
         """
         # TODO implement multiple roots
-        return {"work": self.presets['root']}
+        return {"root": {"work": self.presets['root']}}
 
     def get_tree(self):
         """
