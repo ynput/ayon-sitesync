@@ -192,8 +192,8 @@ class SFTPHandler(AbstractProvider):
                      {"root": {"root_ONE": "value", "root_TWO":"value}}
             Format is importing for usage of python's format ** approach
         """
-        # roots cannot be locally overridden
-        return self.presets['root']
+        # TODO implement multiple roots
+        return {"work": self.presets['root']}
 
     def get_tree(self):
         """
@@ -414,9 +414,17 @@ class SFTPHandler(AbstractProvider):
         }
         if self.sftp_pass and self.sftp_pass.strip():
             conn_params['password'] = self.sftp_pass
-        if self.sftp_key:  # expects .pem format, not .ppk!
-            conn_params['private_key'] = \
-                self.sftp_key[platform.system().lower()]
+        if self.sftp_key:
+            no_configured_file_exist = False   # expects .pem format, not .ppk!
+            key_paths = self.sftp_key[platform.system().lower()]
+            for key_path in key_paths:
+                no_configured_file_exist = True
+                if os.path.exists(key_path):
+                    no_configured_file_exist = False
+                    conn_params['private_key'] = key_path
+                    break
+            if no_configured_file_exist:
+                raise ValueError(f"Certificate at '{key_paths}' doesn't exist.")
         if self.sftp_key_pass:
             conn_params['private_key_pass'] = self.sftp_key_pass
 
