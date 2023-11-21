@@ -29,7 +29,8 @@ from .utils import (
     time_function,
     SyncStatus,
     SiteAlreadyPresentError,
-    SiteSyncStatus
+    SiteSyncStatus,
+    SITE_SYNC_ROOT
 )
 
 from openpype.client import (
@@ -132,6 +133,27 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         return {"publish": os.path.join(SYNC_MODULE_DIR, "plugins", "publish"),
                 "load": os.path.join(SYNC_MODULE_DIR, "plugins", "load")}
 
+    def get_site_icons(self):
+        """Icons for sites.
+
+        Returns:
+            dict[str, str]: Path to icon by site.
+        """
+
+        resource_path = os.path.join(
+            SITE_SYNC_ROOT, "providers", "resources"
+        )
+        icons = {}
+        for file_path in os.listdir(resource_path):
+            if not file_path.endswith(".png"):
+                continue
+            provider_name, _ = os.path.splitext(os.path.basename(file_path))
+            icons[provider_name] = {
+                "type": "path",
+                "path": file_path
+            }
+        return icons
+
     def get_launch_hook_paths(self):
         """Implementation for applications launch hooks.
 
@@ -187,7 +209,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         if not force:
             existing = self.get_sync_state(project_name,
-                                           representation_id,
+                                           [representation_id],
                                            site_name)
             if existing:
                 failure = True
@@ -236,7 +258,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         if not self.get_sync_project_setting(project_name):
             raise ValueError("Project not configured")
 
-        sync_info = self.get_sync_state(project_name, representation_id,
+        sync_info = self.get_sync_state(project_name, [representation_id],
                                         site_name)
         if not sync_info:
             msg = "Site {} not found".format(site_name)
@@ -867,7 +889,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 continue
 
         sync_state = self.get_sync_state(project_name,
-                                         representation_id,
+                                         [representation_id],
                                          processed_site)
         if not sync_state:
             raise RuntimeError("Cannot find repre with '{}".format(representation_id))  # noqa
@@ -1436,8 +1458,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             Removes 'site_name' for 'representation' if present.
         """
         representation_id = representation["_id"]
-        sync_info = self.get_sync_state(project_name, representation_id,
-                                               site_name)
+        sync_info = self.get_sync_state(project_name, [representation_id],
+                                        site_name)
         if not sync_info:
             msg = "Site {} not found".format(site_name)
             self.log.warning(msg)
@@ -1466,7 +1488,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         """
         project_name = representation["context"]["project"]["name"]
         representation_id = representation["_id"]
-        sync_status = self.get_sync_state(project_name, representation_id,
+        sync_status = self.get_sync_state(project_name, [representation_id],
                                           local_site_name, remote_site_name)
 
         progress = {local_site_name: -1,
@@ -1509,16 +1531,27 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
-    def get_sync_state(self, project_name, representation_id, local_site_name,
-                       remote_site_name=None):
-        """Use server endpoint to get synchronization info for repre_id."""
+    def get_sync_state(self, project_name, representation_ids, local_site_name,
+                       remote_site_name=None, **kwargs):
+        """Use server endpoint to get synchronization info for repre_id(s).
+
+        Args:
+            project_name (str):
+            representation_ids (list): even single repre should be in []
+            local_site_name (str)
+            remote_site_name (str)
+            all other parameters for `Get Site Sync State` endpoint if
+                necessary
+        """
         if not remote_site_name:
             remote_site_name = local_site_name
         payload_dict = {
             "localSite": local_site_name,
             "remoteSite": remote_site_name,
-            "representationId": representation_id
+            "representationIds": representation_ids
         }
+        if kwargs:
+            payload_dict.update(kwargs)
 
         endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name)  # noqa
 

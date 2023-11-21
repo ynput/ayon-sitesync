@@ -143,11 +143,17 @@ class SiteSync(BaseServerAddon):
     #
     # GET SITE SYNC OVERAL STATE
     #
-
     async def get_site_sync_state(
         self,
         project_name: str = Depends(dep_project_name),
         user: UserEntity = Depends(dep_current_user),
+        representationIds: list[str] | None = Query(
+            None,
+            description="Filter by representation ids",
+            example="['57cf375c749611ed89de0242ac140004']",
+        ),
+        repreNameFilter: list[str] | None = Query(None,
+            description="Filter by representation name"),
         localSite: str = Query(
             ...,
             description="Name of the local site",
@@ -157,6 +163,36 @@ class SiteSync(BaseServerAddon):
             ...,
             description="Name of the remote site",
             example="GDrive",
+        ),
+        foldersFilter: list[str] | None = Query(
+            None,
+            description="Filter folders by name",
+            example="['sh042']",
+        ),
+        folderIdsFilter: list[str] | None = Query(
+            None,
+            description="Filter folders by id, eg filtering by asset ids",
+            example="['57cf375c749611ed89de0242ac140004']",
+        ),
+        productsFilter: list[str] | None = Query(
+            None,
+            description="Filter products by name",
+            example="['animation']",
+        ),
+        versionIdsFilter: list[str] | None = Query(
+            None,
+            description="Filter versions by ids",
+            example="['57cf375c749611ed89de0242ac140004']",
+        ),
+        localStatusFilter: list[StatusEnum] | None = Query(
+            None,
+            description=f"List of states to show. Available options: {StatusEnum.__doc__}",
+            example=[StatusEnum.QUEUED, StatusEnum.IN_PROGRESS],
+        ),
+        remoteStatusFilter: list[StatusEnum] | None = Query(
+            None,
+            description=f"List of states to show. Available options: {StatusEnum.__doc__}",
+            example=[StatusEnum.QUEUED, StatusEnum.IN_PROGRESS],
         ),
         sortBy: SortByEnum = Query(
             SortByEnum.folder,
@@ -168,90 +204,47 @@ class SiteSync(BaseServerAddon):
             name="Sort descending",
             description="Sort the result in descending order",
         ),
-        folderFilter: str
-        | None = Query(
-            None,
-            description="Filter folders by name",
-            example="sh042",
-        ),
-        folderIdFilter: list[str]
-            | None = Query(
-            None,
-            description="Filter folders by id, eg filtering by asset id",
-            example="57cf375c749611ed89de0242ac140004",
-        ),
-        productFilter: str
-        | None = Query(
-            None,
-            description="Filter products by name",
-            example="animation",
-        ),
-        versionIdFilter: list[str]
-            | None = Query(
-            None,
-            description="Filter versions by id",
-            example="57cf375c749611ed89de0242ac140004",
-        ),
-        localStatusFilter: list[StatusEnum]
-        | None = Query(
-            None,
-            description=f"List of states to show. Available options: {StatusEnum.__doc__}",
-            example=[StatusEnum.QUEUED, StatusEnum.IN_PROGRESS],
-        ),
-        remoteStatusFilter: list[StatusEnum]
-        | None = Query(
-            None,
-            description=f"List of states to show. Available options: {StatusEnum.__doc__}",
-            example=[StatusEnum.QUEUED, StatusEnum.IN_PROGRESS],
-        ),
-        nameFilter: list[str] | None = Query(None),
-        representationId: str
-        | None = Query(None, description="Select only the given representation."),
         # Pagination
         page: int = Query(1, ge=1),
         pageLength: int = Query(50, ge=1),
     ) -> SiteSyncSummaryModel:
         """Return a site sync state.
 
-        When a representationId is provided,
-        the result will contain only one representation,
-        along with the information on individual files.
+        Used for querying representations to be synchronized and state of
+        versions and representations to show in Loader UI.
         """
         await check_sync_status_table(project_name)
         conditions = []
 
-        if representationId is not None:
-            conditions.append(f"r.id = '{representationId}'")
+        if representationIds is not None:
+            conditions.append(f"r.id IN {SQLTool.array(representationIds)}")
 
-        else:
-            # When a single representation is requested
-            # We ignore the rest of the filter
-            if folderFilter:
-                conditions.append(f"f.name ILIKE '%{folderFilter}%'")
+        if foldersFilter:
+            conditions.append(f"f.name ILIKE '%{foldersFilter}%'")
 
-            if folderIdFilter:
-                conditions.append(f"f.id IN {SQLTool.array(folderIdFilter)}")
+        if folderIdsFilter:
+            conditions.append(f"f.id IN {SQLTool.array(folderIdsFilter)}")
 
-            if productFilter:
-                conditions.append(f"s.name ILIKE '%{productFilter}%'")
+        if productsFilter:
+            conditions.append(f"s.name ILIKE '%{productsFilter}%'")
 
-            if versionIdFilter:
-                conditions.append(f"v.id IN {SQLTool.array(versionIdFilter)}")
+        if versionIdsFilter:
+            conditions.append(f"v.id IN {SQLTool.array(versionIdsFilter)}")
 
-            if localStatusFilter:
-                statusFilter = [str(s.value) for s in localStatusFilter]
-                conditions.append(f"local.status IN ({','.join(statusFilter)})")
+        if localStatusFilter:
+            statusFilter = [str(s.value) for s in localStatusFilter]
+            conditions.append(f"local.status IN ({','.join(statusFilter)})")
 
-            if remoteStatusFilter:
-                statusFilter = [str(s.value) for s in remoteStatusFilter]
-                conditions.append(f"remote.status IN ({','.join(statusFilter)})")
+        if remoteStatusFilter:
+            statusFilter = [str(s.value) for s in remoteStatusFilter]
+            conditions.append(f"remote.status IN ({','.join(statusFilter)})")
 
-            if nameFilter:
-                conditions.append(f"r.name IN {SQLTool.array(nameFilter)}")
+        if repreNameFilter:
+            conditions.append(f"r.name IN {SQLTool.array(repreNameFilter)}")
 
-            access_list = await folder_access_list(user, project_name, "read")
-            if access_list is not None:
-                conditions.append(f"path like ANY ('{{ {','.join(access_list)} }}')")
+        access_list = await folder_access_list(user, project_name, "read")
+        if access_list is not None:
+            conditions.append(f"path like ANY ('{{ {','.join(access_list)} }}')")
 
         query = f"""
             SELECT

@@ -1,8 +1,11 @@
 import time
+import os
 
 from openpype.lib import Logger
 
-log = Logger.get_logger("SyncServer")
+log = Logger.get_logger("SiteSync")
+
+SITE_SYNC_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
 class ResumableError(Exception):
