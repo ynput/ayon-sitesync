@@ -208,7 +208,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             return
 
         if not force:
-            existing = self.get_sync_state(project_name,
+            existing = self.get_repre_sync_state(project_name,
                                            [representation_id],
                                            site_name)
             if existing:
@@ -258,8 +258,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         if not self.get_sync_project_setting(project_name):
             raise ValueError("Project not configured")
 
-        sync_info = self.get_sync_state(project_name, [representation_id],
-                                        site_name)
+        sync_info = self.get_repre_sync_state(project_name, [representation_id],
+                                              site_name)
         if not sync_info:
             msg = "Site {} not found".format(site_name)
             self.log.warning(msg)
@@ -888,9 +888,9 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 alternate_sites.extend(conf_alternative_sites)
                 continue
 
-        sync_state = self.get_sync_state(project_name,
-                                         [representation_id],
-                                         processed_site)
+        sync_state = self.get_repre_sync_state(project_name,
+                                               [representation_id],
+                                               processed_site)
         if not sync_state:
             raise RuntimeError("Cannot find repre with '{}".format(representation_id))  # noqa
         payload_dict = {"files": sync_state["files"]}
@@ -1458,8 +1458,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             Removes 'site_name' for 'representation' if present.
         """
         representation_id = representation["_id"]
-        sync_info = self.get_sync_state(project_name, [representation_id],
-                                        site_name)
+        sync_info = self.get_repre_sync_state(project_name, [representation_id],
+                                              site_name)
         if not sync_info:
             msg = "Site {} not found".format(site_name)
             self.log.warning(msg)
@@ -1488,8 +1488,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         """
         project_name = representation["context"]["project"]["name"]
         representation_id = representation["_id"]
-        sync_status = self.get_sync_state(project_name, [representation_id],
-                                          local_site_name, remote_site_name)
+        sync_status = self.get_repre_sync_state(project_name, [representation_id],
+                                                local_site_name, remote_site_name)
 
         progress = {local_site_name: -1,
                     remote_site_name: -1}
@@ -1531,8 +1531,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
-    def get_sync_state(self, project_name, representation_ids, local_site_name,
-                       remote_site_name=None, **kwargs):
+    def get_repre_sync_state(self, project_name, representation_ids, local_site_name,
+                             remote_site_name=None, **kwargs):
         """Use server endpoint to get synchronization info for repre_id(s).
 
         Args:
@@ -1543,24 +1543,11 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             all other parameters for `Get Site Sync State` endpoint if
                 necessary
         """
-        if not remote_site_name:
-            remote_site_name = local_site_name
-        payload_dict = {
-            "localSite": local_site_name,
-            "remoteSite": remote_site_name,
-            "representationIds": representation_ids
-        }
-        if kwargs:
-            payload_dict.update(kwargs)
-
-        endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name)  # noqa
-
-        response = ayon_api.get(endpoint, **payload_dict)
-        if response.status_code != 200:
-            msg = "Cannot get sync state for representation ".format(representation_id)  # noqa
-            raise RuntimeError(msg)
-
-        representations = response.data["representations"]
+        representations = self._get_repres_state(project_name,
+                                                 representation_ids,
+                                                 local_site_name,
+                                                 remote_site_name,
+                                                 kwargs)
         if representations:
             representation = representations[0]
             if representation["localStatus"]["status"] != -1:
