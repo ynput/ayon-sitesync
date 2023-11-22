@@ -1553,6 +1553,125 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             if representation["localStatus"]["status"] != -1:
                 return representation
 
+    def get_representations_sync_state(self, project_name, representation_ids,
+                                       local_site_name,remote_site_name=None,
+                                       **kwargs):
+        """Use server endpoint to get synchronization info for representations.
+
+        Calculates float progress based on progress of all files for repre.
+        If repre is fully synchronized it returns 1, 0 for any other state.
+
+        Args:
+            project_name (str):
+            representation_ids (list): even single repre should be in []
+            local_site_name (str)
+            remote_site_name (str)
+            all other parameters for `Get Site Sync State` endpoint if
+                necessary
+        Returns:
+            (dict) {repre_id: (float, float)}
+        """
+        representations = self._get_repres_state(project_name,
+                                                 representation_ids,
+                                                 local_site_name,
+                                                 remote_site_name,
+                                                 **kwargs)
+        states = {}
+        repre_local_progress = repre_remote_progress = 0
+        no_of_files = 0
+        for repre in representations:
+            for file_info in repre["files"]:
+                no_of_files += 1
+                repre_local_progress += file_info["localStatus"].get("progress", 0)
+                repre_remote_progress += file_info["remoteStatus"].get("progress", 0)
+
+            repre_local_status = repre["localStatus"]["status"]
+            if repre_local_status == SiteSyncStatus.OK:
+                repre_local_progress = 1
+            elif repre_local_status == SiteSyncStatus.IN_PROGRESS:
+                repre_local_progress = repre_local_progress / no_of_files
+            else:
+                repre_local_progress = 0
+
+            repre_remote_status = repre["remoteStatus"]["status"]
+            if repre_remote_status == SiteSyncStatus.OK:
+                repre_remote_progress = 1
+            elif repre_remote_status == SiteSyncStatus.IN_PROGRESS:
+                repre_remote_progress = repre_remote_progress / no_of_files
+            else:
+                repre_remote_progress = 0
+
+            states[repre["representationId"]] = (repre_local_progress,
+                                                 repre_remote_progress)
+
+        return states
+            
+    def _get_repres_state(self, project_name, representation_ids, local_site_name,
+                          remote_site_name=None, **kwargs):
+        """Use server endpoint to get synchronization info for representations.
+
+        Args:
+            project_name (str):
+            representation_ids (list): even single repre should be in []
+            local_site_name (str)
+            remote_site_name (str)
+            all other parameters for `Get Site Sync State` endpoint if
+                necessary
+        """
+        if not remote_site_name:
+            remote_site_name = local_site_name
+        payload_dict = {
+            "localSite": local_site_name,
+            "remoteSite": remote_site_name,
+            "representationIds": representation_ids
+        }
+        if kwargs:
+            payload_dict.update(kwargs)
+
+        endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name)  # noqa
+
+        response = ayon_api.get(endpoint, **payload_dict)
+        if response.status_code != 200:
+            msg = "Cannot get sync state for representation ".format(representation_id)  # noqa
+            raise RuntimeError(msg)
+
+        return response.data["representations"]
+    
+    def get_version_availability(self, project_name, version_ids, local_site_name,
+                                 remote_site_name, **kwargs):
+        """Returns aggregate state for version_ids
+
+        Returns:
+            (dict): {version_id: (local_status, remote_status)}
+        """
+        payload_dict = {
+            "localSite": local_site_name,
+            "remoteSite": remote_site_name,
+            "versionIdsFilter": version_ids
+        }
+        if kwargs:
+            payload_dict.update(kwargs)
+
+        endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name)  # noqa
+
+        response = ayon_api.get(endpoint, **payload_dict)
+        if response.status_code != 200:
+            msg = "Cannot get sync state for representation ".format(representation_id)  # noqa
+            raise RuntimeError(msg)
+
+        version_statuses = defaultdict(tuple)
+        dummy_tuple = (0, 0)
+        for repre in response.data["representations"]:
+            version_id = repre["versionId"]
+            avail_local = repre["localStatus"]["status"] == SiteSyncStatus.OK
+            avail_remote = repre["remoteStatus"]["status"] == SiteSyncStatus.OK
+            version_statuses[version_id] = (
+                version_statuses.get(version_id, dummy_tuple)[0] + int(avail_local),
+                version_statuses.get(version_id, dummy_tuple)[1] + int(avail_remote)
+            )
+
+        return version_statuses
+
     def _remove_local_file(self, project_name, representation_id, site_name):
         """
             Removes all local files for 'site_name' of 'representation_id'
