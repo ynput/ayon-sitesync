@@ -150,7 +150,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             provider_name, _ = os.path.splitext(os.path.basename(file_path))
             icons[provider_name] = {
                 "type": "path",
-                "path": file_path
+                "path": os.path.join(resource_path, file_path)
             }
         return icons
 
