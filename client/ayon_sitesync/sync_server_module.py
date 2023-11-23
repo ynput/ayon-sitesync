@@ -130,8 +130,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         return "addons/{}/{}".format(self.v4_name, self.version)
 
     def get_plugin_paths(self):
-        return {"publish": os.path.join(SYNC_MODULE_DIR, "plugins", "publish"),
-                "load": os.path.join(SYNC_MODULE_DIR, "plugins", "load")}
+        return {"publish": os.path.join(SYNC_MODULE_DIR, "plugins", "publish")}
 
     def get_site_icons(self):
         """Icons for sites.
