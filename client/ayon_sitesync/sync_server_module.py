@@ -1543,7 +1543,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                                                  representation_ids,
                                                  local_site_name,
                                                  remote_site_name,
-                                                 kwargs)
+                                                 **kwargs)
         if representations:
             representation = representations[0]
             if representation["localStatus"]["status"] != -1:
