@@ -848,8 +848,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                     self.v4_name, self.version, project_name)
             else:
                 project_settings = self.get_sync_project_setting(project_name)
-            if project_name == "demo_Commercial":
-                return True
             if project_settings and project_settings.get("enabled"):
                 return True
         return False
