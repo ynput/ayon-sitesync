@@ -1299,7 +1299,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         if (local_status != SiteSyncStatus.OK and
                 remote_status == SiteSyncStatus.OK):
-            retries = file["local_status"]["retries"]
+            retries = file["localStatus"]["retries"]
             if retries < int(config_preset["retry_cnt"]):
                 return SyncStatus.DO_DOWNLOAD
 
