@@ -1344,7 +1344,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 status_doc["id"] = file_info["id"]
                 if new_file_id:
                     status_doc["status"] = SiteSyncStatus.OK
-                    status_doc["id"] = new_file_id
                     status_doc.pop("message")
                     status_doc.pop("retries")
                 elif progress is not None:
