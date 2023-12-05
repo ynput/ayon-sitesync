@@ -11,25 +11,29 @@ class ListPerPlatform(BaseSettingsModel):
 
 class DropboxSubmodel(BaseSettingsModel):
     """Specific settings for Dropbox sites."""
-    _layout = "compact"
+    _layout = "expanded"
     token: str = Field(
         "",
         title="Access token",
+        scope=["studio", "project", "site"],
         description="API access token",
     )
 
     team_folder_name: str = Field(
         "",
         title="Team Folder Name",
+        scope=["studio", "project"],
     )
 
     acting_as_member: str = Field(
         "",
         title="Acting As Member",
+        scope=["studio", "project", "site"],
     )
 
-    root: str = Field(
+    roots: str = Field(
         "",
         title="Roots",
+        scope=["studio", "project", "site"],
         description="Root folder on Dropbox",
     )

@@ -85,3 +85,8 @@ class SiteSyncParamsModel(OPModel):
 class RepresentationStateModel(OPModel):
     files: list[SyncStatusPostModel]
     priority: int | None = Field(None)
+
+
+class UserSyncSites(OPModel):
+    localSite: str = Field(...)
+    remoteSite: str = Field(...)

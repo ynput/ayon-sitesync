@@ -3,7 +3,7 @@ import os
 import asyncio
 import threading
 import concurrent.futures
-from concurrent.futures._base import CancelledError
+import traceback
 
 from .providers import lib
 from openpype.lib import Logger
@@ -51,13 +51,11 @@ async def upload(module, project_name, file, representation, provider_name,
                                                   presets=preset)
 
         file_path = file.get("path", "")
-        try:
-            local_file_path, remote_file_path = resolve_paths(
-                module, file_path, project_name,
-                remote_site_name, remote_handler
-            )
-        except Exception as exp:
-            print(exp)
+
+        local_file_path, remote_file_path = resolve_paths(
+            module, file_path, project_name,
+            remote_site_name, remote_handler
+        )
 
         target_folder = os.path.dirname(remote_file_path)
         folder_id = remote_handler.create_folder(target_folder)
@@ -343,6 +341,7 @@ class SyncServerThread(threading.Thread):
                 project_name = None
                 enabled_projects = self.module.get_enabled_projects()
                 for project_name in enabled_projects:
+                    self.log.info(f"Processing '{project_name}'")
                     preset = self.module.sync_project_settings[project_name]
 
                     local_site, remote_site = self._working_sites(project_name,
@@ -440,16 +439,18 @@ class SyncServerThread(threading.Thread):
                     files_created = await asyncio.gather(
                         *task_files_to_process,
                         return_exceptions=True)
-                    for file_id, info in zip(files_created,
-                                             files_processed_info):
+                    for file_result, info in zip(files_created,
+                                                 files_processed_info):
                         file, representation, site_name, side, project_name = \
                             info
                         error = None
-                        if isinstance(file_id, BaseException):
-                            error = str(file_id)
-                            file_id = None
+                        if isinstance(file_result, BaseException):
+                            error = str(file_result)
+                            self.log.warning(f"{traceback.format_tb(file_result.__traceback__)}")
+                            file_result = None  # it is exception >> no id >> reset
+
                         self.module.update_db(project_name=project_name,
-                                              new_file_id=file_id,
+                                              new_file_id=file_result,
                                               file=file,
                                               representation=representation,
                                               site_name=site_name,

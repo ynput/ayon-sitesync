@@ -29,7 +29,8 @@ from .utils import (
     time_function,
     SyncStatus,
     SiteAlreadyPresentError,
-    SiteSyncStatus
+    SiteSyncStatus,
+    SITE_SYNC_ROOT
 )
 
 from openpype.client import (
@@ -102,7 +103,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             Sets 'enabled' according to global settings for the module.
             Shouldnt be doing any initialization, thats a job for 'tray_init'
         """
-        self.enabled = module_settings[self.name]["enabled"]
+        self.enabled = True
 
         # some parts of code need to run sequentially, not in async
         self.lock = None
@@ -129,8 +130,40 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         return "addons/{}/{}".format(self.v4_name, self.version)
 
     def get_plugin_paths(self):
-        return {"publish": os.path.join(SYNC_MODULE_DIR, "plugins", "publish"),
-                "load": os.path.join(SYNC_MODULE_DIR, "plugins", "load")}
+        return {"publish": os.path.join(SYNC_MODULE_DIR, "plugins", "publish")}
+
+    def get_site_icons(self):
+        """Icons for sites.
+
+        Returns:
+            dict[str, str]: Path to icon by site.
+        """
+
+        resource_path = os.path.join(
+            SITE_SYNC_ROOT, "providers", "resources"
+        )
+        icons = {}
+        for file_path in os.listdir(resource_path):
+            if not file_path.endswith(".png"):
+                continue
+            provider_name, _ = os.path.splitext(os.path.basename(file_path))
+            icons[provider_name] = {
+                "type": "path",
+                "path": os.path.join(resource_path, file_path)
+            }
+        return icons
+
+    def get_launch_hook_paths(self):
+        """Implementation for applications launch hooks.
+
+        Returns:
+            (str): full absolut path to directory with hooks for the module
+        """
+
+        return os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "launch_hooks"
+        )
 
     """ Start of Public API """
     def add_site(self, project_name, representation_id, site_name=None,
@@ -174,8 +207,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             return
 
         if not force:
-            existing = self.get_sync_state(project_name,
-                                           representation_id,
+            existing = self.get_repre_sync_state(project_name,
+                                           [representation_id],
                                            site_name)
             if existing:
                 failure = True
@@ -224,14 +257,14 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         if not self.get_sync_project_setting(project_name):
             raise ValueError("Project not configured")
 
-        sync_info = self.get_sync_state(project_name, representation_id,
-                                        site_name)
+        sync_info = self.get_repre_sync_state(project_name, [representation_id],
+                                              site_name)
         if not sync_info:
             msg = "Site {} not found".format(site_name)
             self.log.warning(msg)
             return
 
-        endpoint = "{}/projects/{}/sitesync/state/{}/{site_name}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
+        endpoint = "{}/{}/state/{}/{site_name}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
 
         response = ayon_api.delete(endpoint)
         if response.status_code not in [200, 204]:
@@ -268,8 +301,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 metadata["created_dt"] = datetime.now()
             return metadata
 
-        if (
-                not self.sync_system_settings["enabled"] or
+        if (not self.sync_studio_settings["enabled"] or
                 not self.sync_project_settings[project_name]["enabled"]):
             return [create_metadata(self.DEFAULT_SITE)]
 
@@ -318,7 +350,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         Example is sftp site serving studio files via sftp protocol, physically
         file is only in studio, sftp server has this location mounted.
         """
-        additional_sites = self.sync_system_settings.get("sites", {})
+        additional_sites = self._transform_sites_from_settings(
+            self.sync_studio_settings)
 
         alt_site_pairs = self._get_alt_site_pairs(additional_sites)
 
@@ -406,30 +439,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         for repre in representations:
             self.remove_site(project_name, repre.get("_id"), site_name, True)
 
-    def create_validate_project_task(self, project_name, site_name):
-        """Adds metadata about project files validation on a queue.
-
-        This process will loop through all representation and check if
-        their files actually exist on an active site.
-
-        It also checks if site is set in DB, but file is physically not
-        present
-
-        This might be useful for edge cases when artists is switching
-        between sites, remote site is actually physically mounted and
-        active site has same file urls etc.
-
-        Task will run on a asyncio loop, shouldn't be blocking.
-        """
-        task = {
-            "type": "validate",
-            "project_name": project_name,
-            "func": lambda: self.validate_project(project_name, site_name,
-                                                  reset_missing=True)
-        }
-        self.projects_processed.add(project_name)
-        self.long_running_tasks.append(task)
-
+    # TODO hook to some trigger - no Sync Queue anymore
     def validate_project(self, project_name, site_name, reset_missing=False):
         """Validate 'project_name' of 'site_name' and its local files
 
@@ -500,6 +510,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         self.log.info("Sites added {}, sites reset {}".format(sites_added,
                                                               reset_missing))
 
+    # TODO hook to some trigger - no Sync Queue anymore
     def pause_representation(self, project_name, representation_id, site_name):
         """
             Sets 'representation_id' as paused, eg. no syncing should be
@@ -516,6 +527,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                                                   representation_id)
         self.update_db(project_name, representation, site_name, pause=True)
 
+    # TODO hook to some trigger - no Sync Queue anymore
     def unpause_representation(self, project_name,
                                representation_id, site_name):
         """
@@ -560,6 +572,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 self.is_paused()
         return condition
 
+    # TODO hook to some trigger - no Sync Queue anymore
     def pause_project(self, project_name):
         """
             Sets 'project_name' as paused, eg. no syncing should be
@@ -571,6 +584,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         self.log.info("Pausing SyncServer for {}".format(project_name))
         self._paused_projects.add(project_name)
 
+    # TODO hook to some trigger - no Sync Queue anymore
     def unpause_project(self, project_name):
         """
             Sets 'project_name' as unpaused
@@ -602,6 +616,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             condition = condition or self.is_paused()
         return condition
 
+    # TODO hook to some trigger - no Sync Queue anymore
     def pause_server(self):
         """
             Pause sync server
@@ -621,46 +636,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
     def is_paused(self):
         """ Is server paused """
         return self._paused
-
-    def get_active_sites(self, project_name):
-        """
-            Returns list of active sites for 'project_name'.
-
-            By default it returns ['studio'], this site is default
-            and always present even if SyncServer is not enabled. (for publish)
-
-            Used mainly for Local settings for user override.
-
-            Args:
-                project_name (string):
-
-            Returns:
-                (list) of strings
-        """
-        return self.get_active_sites_from_settings(
-            ayon_api.get_addon_project_settings(self.v4_name, self.version,
-                                                project_name))
-
-    def get_active_sites_from_settings(self, sync_settings):
-        """
-            List available active sites from incoming 'settings'. Used for
-            returning 'default' values for Local Settings
-
-            Args:
-                settings (dict): full settings (global + project)
-            Returns:
-                (list) of strings
-        """
-        sites = [self.DEFAULT_SITE]
-        if self.enabled and sync_settings.get('enabled'):
-            sites.append(self.LOCAL_SITE)
-
-        active_site = sync_settings["config"]["active_site"]
-        # for Tray running background process
-        if active_site not in sites and active_site == get_local_site_id():
-            sites.append(active_site)
-
-        return sites
 
     def get_active_site(self, project_name):
         """
@@ -714,6 +689,20 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         return active_site
 
+    # remote site
+    def get_remote_site(self, project_name):
+        """
+            Returns remote (theirs) site for 'project_name' from settings
+        """
+        sync_project_settings = self.get_sync_project_setting(project_name)
+        remote_site = (
+                sync_project_settings["local_setting"].get("remote_site") or
+                sync_project_settings["config"]["remote_site"])
+        if remote_site == self.LOCAL_SITE:
+            return get_local_site_id()
+
+        return remote_site
+
     def get_site_root_overrides(
         self, project_name, site_name, local_settings=None
     ):
@@ -756,51 +745,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         return roots
 
-    # remote sites
-    def get_remote_sites(self, project_name):
-        """
-            Returns all remote sites configured on 'project_name'.
-
-            If 'project_name' is not enabled for syncing returns [].
-
-            Used by Local setting to allow user choose remote site.
-
-            Args:
-                project_name (string):
-
-            Returns:
-                (list) of strings
-        """
-        return self.get_remote_sites_from_settings(
-            ayon_api.get_addon_project_settings(self.v4_name, self.version,
-                                                project_name))
-
-    def get_remote_sites_from_settings(self, sync_settings):
-        """
-            Get remote sites for returning 'default' values for Local Settings
-        """
-        if not self.enabled or not sync_settings.get('enabled'):
-            return []
-
-        remote_sites = [self.DEFAULT_SITE, self.LOCAL_SITE]
-        if sync_settings:
-            remote_sites.extend(sync_settings.get("sites").keys())
-
-        return list(set(remote_sites))
-
-    def get_remote_site(self, project_name):
-        """
-            Returns remote (theirs) site for 'project_name' from settings
-        """
-        sync_project_settings = self.get_sync_project_setting(project_name)
-        remote_site = (
-                sync_project_settings["local_setting"].get("remote_site") or
-                sync_project_settings["config"]["remote_site"])
-        if remote_site == self.LOCAL_SITE:
-            return get_local_site_id()
-
-        return remote_site
-
     def get_local_normalized_site(self, site_name):
         """
             Return 'site_name' or 'local' if 'site_name' is local id.
@@ -812,267 +756,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             site_name = self.LOCAL_SITE
 
         return site_name
-
-    # Methods for Settings UI to draw appropriate forms
-    @classmethod
-    def get_system_settings_schema(cls):
-        """ Gets system level schema of  configurable items
-
-            Used for Setting UI to provide forms.
-        """
-        ret_dict = {}
-        for provider_code in lib.factory.providers:
-            ret_dict[provider_code] = \
-                lib.factory.get_provider_cls(provider_code). \
-                get_system_settings_schema()
-
-        return ret_dict
-
-    @classmethod
-    def get_project_settings_schema(cls):
-        """ Gets project level schema of configurable items.
-
-            It is not using Setting! Used for Setting UI to provide forms.
-        """
-        ret_dict = {}
-        for provider_code in lib.factory.providers:
-            ret_dict[provider_code] = \
-                lib.factory.get_provider_cls(provider_code). \
-                get_project_settings_schema()
-
-        return ret_dict
-
-    @classmethod
-    def get_local_settings_schema(cls):
-        """ Gets local level schema of configurable items.
-
-            It is not using Setting! Used for Setting UI to provide forms.
-        """
-        ret_dict = {}
-        for provider_code in lib.factory.providers:
-            ret_dict[provider_code] = \
-                lib.factory.get_provider_cls(provider_code). \
-                get_local_settings_schema()
-
-        return ret_dict
-
-    def get_launch_hook_paths(self):
-        """Implementation for applications launch hooks.
-
-        Returns:
-            (str): full absolut path to directory with hooks for the module
-        """
-
-        return os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "launch_hooks"
-        )
-
-    # Needs to be refactored after Settings are updated
-    # # Methods for Settings to get appriate values to fill forms
-    # def get_configurable_items(self, scope=None):
-    #     """
-    #         Returns list of sites that could be configurable for all projects
-    #
-    #         Could be filtered by 'scope' argument (list)
-    #
-    #         Args:
-    #             scope (list of utils.EditableScope)
-    #
-    #         Returns:
-    #             (dict of list of dict)
-    #             {
-    #                 siteA : [
-    #                     {
-    #                         key:"root", label:"root",
-    #                         "value":"{'work': 'c:/projects'}",
-    #                         "type": "dict",
-    #                         "children":[
-    #                             { "key": "work",
-    #                               "type": "text",
-    #                               "value": "c:/projects"}
-    #                         ]
-    #                     },
-    #                     {
-    #                         key:"credentials_url", label:"Credentials url",
-    #                         "value":"'c:/projects/cred.json'", "type": "text",  # noqa: E501
-    #                         "namespace": "{project_setting}/global/sync_server/  # noqa: E501
-    #                                  sites"
-    #                     }
-    #                 ]
-    #             }
-    #     """
-    #     editable = {}
-    #     applicable_projects = list(self.connection.projects())
-    #     applicable_projects.append(None)
-    #     for project in applicable_projects:
-    #         project_name = None
-    #         if project:
-    #             project_name = project["name"]
-    #
-    #         items = self.get_configurable_items_for_project(project_name,
-    #                                                         scope)
-    #         editable.update(items)
-    #
-    #     return editable
-    #
-    # def get_local_settings_schema_for_project(self, project_name):
-    #     """Wrapper for Local settings - for specific 'project_name'"""
-    #     return self.get_configurable_items_for_project(project_name,
-    #                                                    EditableScopes.LOCAL)
-    #
-    # def get_configurable_items_for_project(self, project_name=None,
-    #                                        scope=None):
-    #     """
-    #         Returns list of items that could be configurable for specific
-    #         'project_name'
-    #
-    #         Args:
-    #             project_name (str) - None > default project,
-    #             scope (list of utils.EditableScope)
-    #                 (optional, None is all scopes, default is LOCAL)
-    #
-    #         Returns:
-    #             (dict of list of dict)
-    #         {
-    #             siteA : [
-    #                 {
-    #                     key:"root", label:"root",
-    #                     "type": "dict",
-    #                     "children":[
-    #                         { "key": "work",
-    #                           "type": "text",
-    #                           "value": "c:/projects"}
-    #                     ]
-    #                 },
-    #                 {
-    #                     key:"credentials_url", label:"Credentials url",
-    #                     "value":"'c:/projects/cred.json'", "type": "text",
-    #                     "namespace": "{project_setting}/global/sync_server/
-    #                                  sites"
-    #                 }
-    #             ]
-    #         }
-    #     """
-    #     allowed_sites = set()
-    #     sites = self.get_all_site_configs(project_name)
-    #     if project_name:
-    #         # Local Settings can select only from allowed sites for project
-    #         allowed_sites.update(set(self.get_active_sites(project_name)))
-    #         allowed_sites.update(set(self.get_remote_sites(project_name)))
-    #
-    #     editable = {}
-    #     for site_name in sites.keys():
-    #         if allowed_sites and site_name not in allowed_sites:
-    #             continue
-    #
-    #         items = self.get_configurable_items_for_site(project_name,
-    #                                                      site_name,
-    #                                                      scope)
-    #         # Local Settings need 'local' instead of real value
-    #         site_name = site_name.replace(get_local_site_id(), 'local')
-    #         editable[site_name] = items
-    #
-    #     return editable
-    #
-    # def get_configurable_items_for_site(self, project_name=None,
-    #                                     site_name=None,
-    #                                     scope=None):
-    #     """
-    #         Returns list of items that could be configurable.
-    #
-    #         Args:
-    #             project_name (str) - None > default project
-    #             site_name (str)
-    #             scope (list of utils.EditableScope)
-    #                 (optional, None is all scopes)
-    #
-    #         Returns:
-    #             (list)
-    #             [
-    #                 {
-    #                     key:"root", label:"root", type:"dict",
-    #                     "children":[
-    #                         { "key": "work",
-    #                           "type": "text",
-    #                           "value": "c:/projects"}
-    #                     ]
-    #                 }, ...
-    #             ]
-    #     """
-    #     provider_name = self.get_provider_for_site(site=site_name)
-    #     items = lib.factory.get_provider_configurable_items(provider_name)
-    #
-    #     if project_name:
-    #         sync_s = self.get_sync_project_setting(project_name,
-    #                                                exclude_locals=True,
-    #                                                cached=False)
-    #     else:
-    #         sync_s = get_default_project_settings(exclude_locals=True)
-    #         sync_s = sync_s["global"]["sync_server"]
-    #         sync_s["sites"].update(
-    #             self._get_default_site_configs(self.enabled))
-    #
-    #     editable = []
-    #     if type(scope) is not list:
-    #         scope = [scope]
-    #     scope = set(scope)
-    #     for key, properties in items.items():
-    #         if scope is None or scope.intersection(set(properties["scope"])):
-    #             val = sync_s.get("sites", {}).get(site_name, {}).get(key)
-    #
-    #             item = {
-    #                 "key": key,
-    #                 "label": properties["label"],
-    #                 "type": properties["type"]
-    #             }
-    #
-    #             if properties.get("namespace"):
-    #                 item["namespace"] = properties.get("namespace")
-    #                 if "platform" in item["namespace"]:
-    #                     try:
-    #                         if val:
-    #                             val = val[platform.system().lower()]
-    #                     except KeyError:
-    #                         st = "{}'s field value {} should be".format(key, val)  # noqa: E501
-    #                         self.log.error(st + " multiplatform dict")
-    #
-    #                 item["namespace"] = item["namespace"].replace('{site}',
-    #                                                               site_name)
-    #             children = []
-    #             if properties["type"] == "dict":
-    #                 if val:
-    #                     for val_key, val_val in val.items():
-    #                         child = {
-    #                             "type": "text",
-    #                             "key": val_key,
-    #                             "value": val_val
-    #                         }
-    #                         children.append(child)
-    #
-    #             if properties["type"] == "dict":
-    #                 item["children"] = children
-    #             else:
-    #                 item["value"] = val
-    #
-    #             editable.append(item)
-    #
-    #     return editable
-
-    def reset_timer(self):
-        """
-            Called when waiting for next loop should be skipped.
-
-            In case of user's involvement (reset site), start that right away.
-        """
-
-        if not self.enabled:
-            return
-
-        if self.sync_server_thread is None:
-            self._reset_timer_with_rest_api()
-        else:
-            self.sync_server_thread.reset_timer()
 
     def is_representation_on_site(
         self, project_name, representation_id, site_name, max_retries=None
@@ -1165,8 +848,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                     self.v4_name, self.version, project_name)
             else:
                 project_settings = self.get_sync_project_setting(project_name)
-            if project_name == "demo_Commercial":
-                return True
             if project_settings and project_settings.get("enabled"):
                 return True
         return False
@@ -1190,7 +871,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 processed_site (str): real site_name of published/uploaded file
                 file_id (uuid): DB id of file handled
         """
-        sites = self.sync_system_settings.get("sites", {})
+        sites = self._transform_sites_from_settings(self.sync_studio_settings)
         sites[self.DEFAULT_SITE] = {"provider": "local_drive",
                                     "alternative_sites": []}
 
@@ -1204,9 +885,9 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 alternate_sites.extend(conf_alternative_sites)
                 continue
 
-        sync_state = self.get_sync_state(project_name,
-                                         representation_id,
-                                         processed_site)
+        sync_state = self.get_repre_sync_state(project_name,
+                                               [representation_id],
+                                               processed_site)
         if not sync_state:
             raise RuntimeError("Cannot find repre with '{}".format(representation_id))  # noqa
         payload_dict = {"files": sync_state["files"]}
@@ -1373,10 +1054,10 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         return self._connection
 
     @property
-    def sync_system_settings(self):
+    def sync_studio_settings(self):
         if self._sync_system_settings is None:
             self._sync_system_settings = get_system_settings()["modules"].\
-                get("sync_server")
+                get(self.v4_name)
 
         return self._sync_system_settings
 
@@ -1401,12 +1082,13 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
     def _prepare_sync_project_settings(self, exclude_locals):
         sync_project_settings = {}
-        system_sites = self.get_all_site_configs()
+
+        sites = self._transform_sites_from_settings(
+            self.sync_studio_settings)
+
         project_docs = get_projects(fields=["name"])
         for project_doc in project_docs:
             project_name = project_doc["name"]
-            sites = copy.deepcopy(system_sites)
-
             proj_settings = ayon_api.get_addon_project_settings(
                 self.v4_name, self.version, project_name)
 
@@ -1414,7 +1096,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 proj_settings["enabled"], project_name
             ))
 
-            sites.update(proj_settings['sites'])
+            sites.update(self._transform_sites_from_settings(proj_settings))
 
             proj_settings["sites"] = sites
 
@@ -1449,38 +1131,25 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         return self.sync_project_settings.get(project_name)
 
-    def get_all_site_configs(self, project_name=None):
+    def _transform_sites_from_settings(self, settings):
+        """Transforms list of 'sites' from Setting to dict.
+
+        It processes both System and Project Settings as they have same format.
         """
-            Returns (dict) with all sites configured system wide.
+        sites = {}
+        if self.enabled:
+            for whole_site_info in settings.get("sites", []):
+                configured_site = {}
+                site_name = whole_site_info["name"]
+                configured_site["enabled"] = True
 
-            Args:
-                project_name (str)(optional): if present, check if not disabled
+                provider_specific = whole_site_info[whole_site_info["provider"]]
+                configured_site["root"] = provider_specific.pop("roots",
+                                                                None)
+                configured_site.update(provider_specific)
 
-            Returns:
-                (dict): {'studio': {'provider':'local_drive'...},
-                         'MY_LOCAL': {'provider':....}}
-        """
-        sync_sett = self.sync_system_settings
-        project_enabled = True
-        project_settings = None
-        if project_name:
-            project_enabled = project_name in self.get_enabled_projects()
-            project_settings = self.get_sync_project_setting(project_name)
-        sync_enabled = self.enabled and project_enabled
-
-        system_sites = {}
-        if sync_enabled:
-            for site, detail in sync_sett.get("sites", {}).items():
-                if project_settings:
-                    site_settings = project_settings["sites"].get(site)
-                    if site_settings:
-                        detail.update(site_settings)
-                system_sites[site] = detail
-
-        system_sites.update(self._get_default_site_configs(sync_enabled,
-                                                           project_name))
-
-        return system_sites
+                sites[site_name] = configured_site
+        return sites
 
     def _get_default_site_configs(self, sync_enabled=True, project_name=None):
         """
@@ -1504,14 +1173,15 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         }
         all_sites = {self.DEFAULT_SITE: studio_config}
         if sync_enabled:
-            all_sites[get_local_site_id()] = {'enabled': True,
-                                              'provider': 'local_drive',
-                                              "root": roots}
+            local_site_id = get_local_site_id()
+            roots = ayon_api.get_project_roots_for_site(project_name,
+                                                        local_site_id)
+            local_site_dict = {"enabled": True,
+                               "provider": "local_drive",
+                               "root": roots}
+            all_sites[local_site_id] = local_site_dict
             # duplicate values for normalized local name
-            all_sites["local"] = {
-                'enabled': True,
-                'provider': 'local_drive',
-                "root": roots}
+            all_sites["local"] = local_site_dict
         return all_sites
 
     def get_provider_for_site(self, project_name=None, site=None):
@@ -1532,9 +1202,9 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             if provider:
                 return provider
 
-        sync_sett = self.sync_system_settings
-        for conf_site, detail in sync_sett.get("sites", {}).items():
-            sites[conf_site] = detail.get("provider")
+        sync_sett = self.sync_studio_settings
+        for site_config in sync_sett.get("sites"):
+            sites[site_config["name"]] = site_config["provider"]
 
         return sites.get(site, 'N/A')
 
@@ -1560,10 +1230,11 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         Returns:
             (list) of dictionaries
         """
-        self.log.debug("Check representations for : {}".format(project_name))
+        self.log.debug("Check representations for: {}-{}".format(active_site,
+                                                                 remote_site))
         self.connection.Session["AVALON_PROJECT"] = project_name
 
-        endpoint = "{}/projects/{}/sitesync/state".format(self.endpoint_prefix, project_name) # noqa
+        endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name) # noqa
 
         # get to upload
         kwargs = {"localSite": active_site,
@@ -1628,7 +1299,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         if (local_status != SiteSyncStatus.OK and
                 remote_status == SiteSyncStatus.OK):
-            retries = file["local_status"]["retries"]
+            retries = file["localStatus"]["retries"]
             if retries < int(config_preset["retry_cnt"]):
                 return SyncStatus.DO_DOWNLOAD
 
@@ -1673,7 +1344,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 status_doc["id"] = file_info["id"]
                 if new_file_id:
                     status_doc["status"] = SiteSyncStatus.OK
-                    status_doc["id"] = new_file_id
                     status_doc.pop("message")
                     status_doc.pop("retries")
                 elif progress is not None:
@@ -1694,7 +1364,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         representation_id = representation["representationId"]
 
-        endpoint = "{}/projects/{}/sitesync/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
+        endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
 
         # get to upload
         kwargs = {
@@ -1784,14 +1454,14 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             Removes 'site_name' for 'representation' if present.
         """
         representation_id = representation["_id"]
-        sync_info = self.get_sync_state(project_name, representation_id,
-                                               site_name)
+        sync_info = self.get_repre_sync_state(project_name, [representation_id],
+                                              site_name)
         if not sync_info:
             msg = "Site {} not found".format(site_name)
             self.log.warning(msg)
             return
 
-        endpoint = "{}/projects/{}/sitesync/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
+        endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
 
         response = ayon_api.delete(endpoint)
         if response.status_code not in [200, 204]:
@@ -1814,8 +1484,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         """
         project_name = representation["context"]["project"]["name"]
         representation_id = representation["_id"]
-        sync_status = self.get_sync_state(project_name, representation_id,
-                                          local_site_name, remote_site_name)
+        sync_status = self.get_repre_sync_state(project_name, [representation_id],
+                                                local_site_name, remote_site_name)
 
         progress = {local_site_name: -1,
                     remote_site_name: -1}
@@ -1851,35 +1521,152 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
     def _set_state_sync_state(self, project_name, representation_id, site_name,
                               payload_dict):
         """Calls server endpoint to store sync info for 'representation_id'."""
-        endpoint = "{}/projects/{}/sitesync/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
+        endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
 
         response = ayon_api.post(endpoint, **payload_dict)
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
-    def get_sync_state(self, project_name, representation_id, local_site_name,
-                       remote_site_name=None):
-        """Use server endpoint to get synchronization info for repre_id."""
+    def get_repre_sync_state(self, project_name, representation_ids, local_site_name,
+                             remote_site_name=None, **kwargs):
+        """Use server endpoint to get synchronization info for repre_id(s).
+
+        Args:
+            project_name (str):
+            representation_ids (list): even single repre should be in []
+            local_site_name (str)
+            remote_site_name (str)
+            all other parameters for `Get Site Sync State` endpoint if
+                necessary
+        """
+        representations = self._get_repres_state(project_name,
+                                                 representation_ids,
+                                                 local_site_name,
+                                                 remote_site_name,
+                                                 **kwargs)
+        if representations:
+            representation = representations[0]
+            if representation["localStatus"]["status"] != -1:
+                return representation
+
+    def get_representations_sync_state(self, project_name, representation_ids,
+                                       local_site_name,remote_site_name=None,
+                                       **kwargs):
+        """Use server endpoint to get synchronization info for representations.
+
+        Calculates float progress based on progress of all files for repre.
+        If repre is fully synchronized it returns 1, 0 for any other state.
+
+        Args:
+            project_name (str):
+            representation_ids (list): even single repre should be in []
+            local_site_name (str)
+            remote_site_name (str)
+            all other parameters for `Get Site Sync State` endpoint if
+                necessary
+        Returns:
+            (dict) {repre_id: (float, float)}
+        """
+        representations = self._get_repres_state(project_name,
+                                                 representation_ids,
+                                                 local_site_name,
+                                                 remote_site_name,
+                                                 **kwargs)
+        states = {}
+        repre_local_progress = repre_remote_progress = 0
+        no_of_files = 0
+        for repre in representations:
+            for file_info in repre["files"]:
+                no_of_files += 1
+                repre_local_progress += file_info["localStatus"].get("progress", 0)
+                repre_remote_progress += file_info["remoteStatus"].get("progress", 0)
+
+            repre_local_status = repre["localStatus"]["status"]
+            if repre_local_status == SiteSyncStatus.OK:
+                repre_local_progress = 1
+            elif repre_local_status == SiteSyncStatus.IN_PROGRESS:
+                repre_local_progress = repre_local_progress / no_of_files
+            else:
+                repre_local_progress = 0
+
+            repre_remote_status = repre["remoteStatus"]["status"]
+            if repre_remote_status == SiteSyncStatus.OK:
+                repre_remote_progress = 1
+            elif repre_remote_status == SiteSyncStatus.IN_PROGRESS:
+                repre_remote_progress = repre_remote_progress / no_of_files
+            else:
+                repre_remote_progress = 0
+
+            states[repre["representationId"]] = (repre_local_progress,
+                                                 repre_remote_progress)
+
+        return states
+            
+    def _get_repres_state(self, project_name, representation_ids, local_site_name,
+                          remote_site_name=None, **kwargs):
+        """Use server endpoint to get synchronization info for representations.
+
+        Args:
+            project_name (str):
+            representation_ids (list): even single repre should be in []
+            local_site_name (str)
+            remote_site_name (str)
+            all other parameters for `Get Site Sync State` endpoint if
+                necessary
+        """
         if not remote_site_name:
             remote_site_name = local_site_name
         payload_dict = {
             "localSite": local_site_name,
             "remoteSite": remote_site_name,
-            "representationId": representation_id
+            "representationIds": representation_ids
         }
+        if kwargs:
+            payload_dict.update(kwargs)
 
-        endpoint = "{}/projects/{}/sitesync/state".format(self.endpoint_prefix, project_name)  # noqa
+        endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name)  # noqa
 
         response = ayon_api.get(endpoint, **payload_dict)
         if response.status_code != 200:
             msg = "Cannot get sync state for representation ".format(representation_id)  # noqa
             raise RuntimeError(msg)
 
-        representations = response.data["representations"]
-        if representations:
-            representation = representations[0]
-            if representation["localStatus"]["status"] != -1:
-                return representation
+        return response.data["representations"]
+    
+    def get_version_availability(self, project_name, version_ids, local_site_name,
+                                 remote_site_name, **kwargs):
+        """Returns aggregate state for version_ids
+
+        Returns:
+            (dict): {version_id: (local_status, remote_status)}
+        """
+        payload_dict = {
+            "localSite": local_site_name,
+            "remoteSite": remote_site_name,
+            "versionIdsFilter": version_ids
+        }
+        if kwargs:
+            payload_dict.update(kwargs)
+
+        endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name)  # noqa
+
+        response = ayon_api.get(endpoint, **payload_dict)
+        if response.status_code != 200:
+            msg = "Cannot get sync state for representation ".format(representation_id)  # noqa
+            raise RuntimeError(msg)
+
+        version_statuses = defaultdict(tuple)
+        dummy_tuple = (0, 0)
+        for repre in response.data["representations"]:
+            version_id = repre["versionId"]
+            avail_local = repre["localStatus"]["status"] == SiteSyncStatus.OK
+            avail_remote = repre["remoteStatus"]["status"] == SiteSyncStatus.OK
+            version_statuses[version_id] = (
+                version_statuses.get(version_id, dummy_tuple)[0] + int(avail_local),
+                version_statuses.get(version_id, dummy_tuple)[1] + int(avail_remote)
+            )
+
+        return version_statuses
 
     def _remove_local_file(self, project_name, representation_id, site_name):
         """
@@ -1937,6 +1724,21 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 self.log.warning(msg)
                 raise ValueError(msg)
 
+    def reset_timer(self):
+        """
+            Called when waiting for next loop should be skipped.
+
+            In case of user's involvement (reset site), start that right away.
+        """
+
+        if not self.enabled:
+            return
+
+        if self.sync_server_thread is None:
+            self._reset_timer_with_rest_api()
+        else:
+            self.sync_server_thread.reset_timer()
+
     def get_loop_delay(self, project_name):
         """
             Return count of seconds before next synchronization loop starts
@@ -1949,13 +1751,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         ld = self.sync_project_settings[project_name]["config"]["loop_delay"]
         return int(ld)
-
-    def _get_roots_config(self, presets, project_name, site_name):
-        """
-            Returns configured root(s) for 'project_name' and 'site_name' from
-            settings ('presets')
-        """
-        return presets[project_name]['sites'][site_name]['root']
 
     def cli(self, click_group):
         click_group.add_command(cli_main)

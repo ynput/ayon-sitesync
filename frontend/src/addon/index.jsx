@@ -5,10 +5,10 @@ import SiteSyncSummary from './summary'
 
 
 const SiteSyncPage = ({projectName, addonName, addonVersion}) => {
-  const localSite = 'local'
-  const remoteSite = 'remote'
-
   const [loading, setLoading] = useState(false)
+  const [loadingUserSites, setLoadingUserSites] = useState(false)
+  const [localSites, setLocalSites] = useState()
+  const [remoteSites, setRemoteSites] = useState()
   const [totalCount, setTotalCount] = useState(0)
   const [repreNames, setRepreNames] = useState([])
 
@@ -17,13 +17,29 @@ const SiteSyncPage = ({projectName, addonName, addonVersion}) => {
       return
 
     setLoading(true)
+    setLoadingUserSites(true)
 
-    // TODO: Use addon's own endpoint instead the deprecated one
-    // so the url would be:
-    //
-    // `/api/addons/${addonName}/${addonVersion}/ .... `
+    const user_url = `/api/addons/${addonName}/${addonVersion}/${projectName}/get_user_sites`
+    axios
+      .get(user_url)
+      .then((response) => {
+        let local_sites = []
+        for (const site_name of response.data["active_site"]){
+            local_sites.push({ name: site_name, value: site_name })
+        }
+        setLocalSites(local_sites)
+        
+        let remote_sites = []
+        for (const site_name of response.data["remote_site"]){
+            remote_sites.push({ name: site_name, value: site_name })
+        }
+        setRemoteSites(remote_sites)
+      })
+      .finally(() => {
+        setLoadingUserSites(false)
+      })
 
-    const url = `/api/projects/${projectName}/sitesync/params`
+    const url = `/api/addons/${addonName}/${addonVersion}/${projectName}/params`
     axios
       .get(url)
       .then((response) => {
@@ -39,14 +55,19 @@ const SiteSyncPage = ({projectName, addonName, addonVersion}) => {
       })
   }, [projectName])
 
-  if (loading)
+  if (loading || loadingUserSites)
+    return null
+
+  if (!localSites || !remoteSites)
     return null
 
   return (
       <SiteSyncSummary
+        addonName={addonName}
+        addonVersion={addonVersion}
         projectName={projectName}
-        localSite={localSite}
-        remoteSite={remoteSite}
+        localSites={localSites}
+        remoteSites={remoteSites}
         names={repreNames}
         totalCount={totalCount}
       />

@@ -199,7 +199,8 @@ class GDriveHandler(AbstractProvider):
             Format is importing for usage of python's format ** approach
         """
         # GDrive roots cannot be locally overridden
-        return self.presets['root']
+        # TODO implement multiple roots
+        return {"root": {"work": self.presets['root']}}
 
     def get_tree(self):
         """
