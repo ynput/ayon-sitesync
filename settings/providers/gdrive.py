@@ -2,10 +2,14 @@ from pydantic import Field
 
 from ayon_server.settings import BaseSettingsModel
 
+
 class ListPerPlatform(BaseSettingsModel):
-    windows: list[str] = Field(default_factory=list)
-    linux: list[str] = Field(default_factory=list)
-    darwin: list[str] = Field(default_factory=list)
+    windows: list[str] = Field(default_factory=list,
+                               scope=["studio", "project", "site"],)
+    linux: list[str] = Field(default_factory=list,
+                             scope=["studio", "project", "site"],)
+    darwin: list[str] = Field(default_factory=list,
+                              scope=["studio", "project", "site"],)
 
 
 class GoogleDriveSubmodel(BaseSettingsModel):
