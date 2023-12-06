@@ -258,7 +258,7 @@ class GDriveHandler(AbstractProvider):
                 return folder_id
 
     def upload_file(self, source_path, path,
-                    server, project_name, file, representation, site,
+                    server, project_name, file, representation, site_name,
                     overwrite=False):
         """
             Uploads single file from 'source_path' to destination 'path'.
@@ -274,7 +274,7 @@ class GDriveHandler(AbstractProvider):
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
             representation (dict): complete repre containing 'file'
-            site (str): site name
+            site_name (str): site name
 
         Returns:
             (string) file_id of created/modified file ,
@@ -329,22 +329,23 @@ class GDriveHandler(AbstractProvider):
             last_tick = status = response = None
             status_val = 0
             while response is None:
-                if server.is_representation_paused(representation['_id'],
-                                                   check_parents=True,
-                                                   project_name=project_name):
+                if server.is_representation_paused(
+                        representation["representationId"],
+                        check_parents=True,
+                        project_name=project_name):
                     raise ValueError("Paused during process, please redo.")
                 if status:
                     status_val = float(status.progress())
                 if not last_tick or \
                         time.time() - last_tick >= server.LOG_PROGRESS_SEC:
                     last_tick = time.time()
-                    self.log.debug("Uploaded %d%%." %
-                              int(status_val * 100))
+                    self.log.debug("Uploaded %d%%." % int(status_val * 100))
                     server.update_db(project_name=project_name,
                                      new_file_id=None,
                                      file=file,
                                      representation=representation,
-                                     site=site,
+                                     site_name=site_name,
+                                     side="remote",
                                      progress=status_val
                                      )
                 status, response = request.next_chunk()
@@ -366,7 +367,7 @@ class GDriveHandler(AbstractProvider):
         return response['id']
 
     def download_file(self, source_path, local_path,
-                      server, project_name, file, representation, site,
+                      server, project_name, file, representation, site_name,
                       overwrite=False):
         """
             Downloads single file from 'source_path' (remote) to 'local_path'.
@@ -383,7 +384,7 @@ class GDriveHandler(AbstractProvider):
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
             representation (dict): complete repre containing 'file'
-            site (str): site name
+            site_name (str): site name
 
         Returns:
             (string) file_id of created/modified file ,
@@ -431,7 +432,8 @@ class GDriveHandler(AbstractProvider):
                                      new_file_id=None,
                                      file=file,
                                      representation=representation,
-                                     site=site,
+                                     site_name=site_name,
+                                     side="local",
                                      progress=status_val
                                      )
                 status, response = downloader.next_chunk()
@@ -678,7 +680,7 @@ class GDriveHandler(AbstractProvider):
             throws ResumableError in case of errors.HttpError
         """
         roots = {}
-        config_roots = self.get_roots_config()
+        config_roots = self.get_roots_config()["root"]
         try:
             for path in config_roots.values():
                 if self.MY_DRIVE_STR in path:
