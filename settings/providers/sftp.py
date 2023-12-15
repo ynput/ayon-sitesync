@@ -1,15 +1,15 @@
 from pydantic import Field
 
 from ayon_server.settings import BaseSettingsModel
-from ayon_server.settings.anatomy.roots import Root, default_roots
 
-class ListPerPlatform(BaseSettingsModel):
-    windows: list[str] = Field(default_factory=list,
-                               scope=["studio", "project", "site"])
-    linux: list[str] = Field(default_factory=list,
-                             scope=["studio", "project", "site"])
-    darwin: list[str] = Field(default_factory=list,
-                              scope=["studio", "project", "site"])
+
+class CredPathPerPlatform(BaseSettingsModel):
+    windows: str = Field(default_factory=list,
+                         scope=["studio", "project", "site"],)
+    linux: str = Field(default_factory=list,
+                       scope=["studio", "project", "site"],)
+    darwin: str = Field(default_factory=list,
+                        scope=["studio", "project", "site"],)
 
 
 class SFTPSubmodel(BaseSettingsModel):
@@ -47,11 +47,11 @@ class SFTPSubmodel(BaseSettingsModel):
         description="Use password or ssh key to authenticate",
     )
 
-    sftp_key: ListPerPlatform = Field(
+    sftp_key: CredPathPerPlatform = Field(
         title="SFTP key path",
         scope=["studio", "project", "site"],
-        default_factory=ListPerPlatform,
-        description="Use password or ssh key to authenticate",
+        default_factory=CredPathPerPlatform,
+        description="Pah to certificate file",
     )
 
     sftp_key_pass: str = Field(

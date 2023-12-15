@@ -28,6 +28,12 @@ const formatFileSize = (bytes, si = false, dp = 1) => {
   return bytes.toFixed(dp) + ' ' + units[u]
 }
 
+const buildQueryString = (representationId, localSite, remoteSite) => {
+  let url = `?localSite=${localSite}&remoteSite=${remoteSite}`
+  url += `&representationIds=${representationId}`
+  return url
+}
+
 const SiteSyncDetailTable = ({ data, localSite, remoteSite }) => (
   <DataTable
     value={data}
@@ -64,41 +70,16 @@ const SiteSyncDetailTable = ({ data, localSite, remoteSite }) => (
   </DataTable>
 )
 
-const FILES_QUERY = `
-query Files($projectName: String!, $representationId: String!) {
-  project(name: $projectName) {
-    representations(ids: [$representationId], localSite:"local", remoteSite:"remote") {
-      edges {
-        node {
-          files {
-            hash
-            size
-            baseName
-            localStatus {
-              status
-              size
-              totalSize
-            }
-            remoteStatus {
-              status
-              size
-              totalSize
-            }
-          }
-        }
-      }
-    }
-  }
-}
-`
-
 const SiteSyncDetail = ({
   projectName,
+  addonName,
+  addonVersion,
   representationId,
   localSite,
   remoteSite,
   onHide,
 }) => {
+  const baseUrl = `/api/addons/${addonName}/${addonVersion}/${projectName}/state`
   const [files, setFiles] = useState([])
   const [loading, setLoading] = useState(false)
 
@@ -106,30 +87,29 @@ const SiteSyncDetail = ({
     setLoading(true)
 
     axios
-      .post('/graphql', {
-        query: FILES_QUERY,
-        variables: { projectName, representationId },
-      })
+      .get(baseUrl + buildQueryString(representationId,
+                                      localSite,
+                                      remoteSite))
       .then((response) => {
         if (
-          !(response.data && response.data.data && response.data.data.project)
+          !(response.data)
         ) {
           console.log('ERROR GETTING FILES')
           setFiles([])
         }
 
         let result = []
-        for (const edge of response.data.data.project.representations.edges) {
-          const node = edge.node
-          for (const file of node.files) {
-            result.push({
-              hash: file.fileHash,
-              size: file.size,
-              baseName: file.baseName,
-              localStatus: file.localStatus,
-              remoteStatus: file.remoteStatus,
-            })
-          }
+        let representation = response.data.representations
+        for (const repre of response.data.representations) {
+            for (const file of repre.files){
+                result.push({
+                    hash: file.fileHash,
+                    size: file.size,
+                    baseName: file.baseName,
+                    localStatus: file.localStatus,
+                    remoteStatus: file.remoteStatus,
+                })
+            }
         }
         setFiles(result)
       })

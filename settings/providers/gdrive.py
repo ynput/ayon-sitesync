@@ -2,10 +2,14 @@ from pydantic import Field
 
 from ayon_server.settings import BaseSettingsModel
 
-class ListPerPlatform(BaseSettingsModel):
-    windows: list[str] = Field(default_factory=list)
-    linux: list[str] = Field(default_factory=list)
-    darwin: list[str] = Field(default_factory=list)
+
+class CredPathPerPlatform(BaseSettingsModel):
+    windows: str = Field(default_factory=list,
+                         scope=["studio", "project", "site"],)
+    linux: str = Field(default_factory=list,
+                       scope=["studio", "project", "site"],)
+    darwin: str = Field(default_factory=list,
+                        scope=["studio", "project", "site"],)
 
 
 class GoogleDriveSubmodel(BaseSettingsModel):
@@ -17,10 +21,10 @@ class GoogleDriveSubmodel(BaseSettingsModel):
         GDrive, shared disks don't need that
     """
     _layout = "expanded"
-    credentials_url: ListPerPlatform = Field(
+    credentials_url: CredPathPerPlatform = Field(
         title="Credentials url",
         scope=["studio", "project", "site"],
-        default_factory=ListPerPlatform,
+        default_factory=CredPathPerPlatform,
         description="""Path to credentials .json available on shared disk."""
     )
 

@@ -165,8 +165,10 @@ const SiteSyncSummary = ({
       {selectedRepresentation && (
         <SiteSyncDetail
           projectName={projectName}
-          localSite={localSite}
-          remoteSite={remoteSite}
+          addonName={addonName}
+          addonVersion={addonVersion}
+          localSite={selectedLocalSite}
+          remoteSite={selectedRemoteSite}
           representationId={selectedRepresentation.representationId}
           onHide={() => {
             setSelectedRepresentation(null)
