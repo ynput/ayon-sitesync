@@ -1,0 +1,4 @@
+[ayon.runtimeDependencies]
+pysftp = "^0.2.9"
+dropbox = "^11.20.0"
+google-api-python-client = "^1.12.8"
