@@ -164,20 +164,20 @@ class SiteSync(BaseServerAddon):
             description="Name of the remote site",
             example="GDrive",
         ),
-        foldersFilter: list[str] | None = Query(
+        folderFilter: str | None = Query(
             None,
             description="Filter folders by name",
-            example="['sh042']",
+            example="sh042",
         ),
         folderIdsFilter: list[str] | None = Query(
             None,
             description="Filter folders by id, eg filtering by asset ids",
             example="['57cf375c749611ed89de0242ac140004']",
         ),
-        productsFilter: list[str] | None = Query(
+        productFilter: str | None = Query(
             None,
             description="Filter products by name",
-            example="['animation']",
+            example="animation",
         ),
         versionIdsFilter: list[str] | None = Query(
             None,
@@ -219,14 +219,14 @@ class SiteSync(BaseServerAddon):
         if representationIds is not None:
             conditions.append(f"r.id IN {SQLTool.array(representationIds)}")
 
-        if foldersFilter:
-            conditions.append(f"f.name ILIKE '%{foldersFilter}%'")
+        if folderFilter:
+            conditions.append(f"f.name ILIKE '%{folderFilter}%'")
 
         if folderIdsFilter:
             conditions.append(f"f.id IN {SQLTool.array(folderIdsFilter)}")
 
-        if productsFilter:
-            conditions.append(f"s.name ILIKE '%{productsFilter}%'")
+        if productFilter:
+            conditions.append(f"p.name ILIKE '%{productFilter}%'")
 
         if versionIdsFilter:
             conditions.append(f"v.id IN {SQLTool.array(versionIdsFilter)}")

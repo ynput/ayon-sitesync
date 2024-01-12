@@ -44,13 +44,13 @@ const buildQueryString = (localSite, remoteSite, lazyParams) => {
   if (lazyParams.filters.folder && lazyParams.filters.folder.value)
     url += `&folderFilter=${lazyParams.filters.folder.value}`
   if (lazyParams.filters.product && lazyParams.filters.product.value)
-    url += `&subsetFilter=${lazyParams.filters.product.value}`
+    url += `&productFilter=${lazyParams.filters.product.value}`
   if (
     lazyParams.filters.representation &&
     lazyParams.filters.representation.value
   ) {
     for (const val of lazyParams.filters.representation.value)
-      url += `&nameFilter=${val}`
+      url += `&repreNameFilter=${val}`
   }
   if (lazyParams.filters.localStatus && lazyParams.filters.localStatus.value) {
     for (const val of lazyParams.filters.localStatus.value)
