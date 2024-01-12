@@ -179,6 +179,11 @@ class SiteSync(BaseServerAddon):
             description="Filter products by name",
             example="animation",
         ),
+        versionFilter: int | None = Query(
+            None,
+            description="Filter products by version",
+            example="1",
+        ),
         versionIdsFilter: list[str] | None = Query(
             None,
             description="Filter versions by ids",
@@ -227,6 +232,9 @@ class SiteSync(BaseServerAddon):
 
         if productFilter:
             conditions.append(f"p.name ILIKE '%{productFilter}%'")
+
+        if versionFilter:
+            conditions.append(f"v.version = {versionFilter}")
 
         if versionIdsFilter:
             conditions.append(f"v.id IN {SQLTool.array(versionIdsFilter)}")

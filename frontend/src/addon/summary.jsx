@@ -24,6 +24,7 @@ const defaultParams = {
   filters: {
     folder: { value: '', matchMode: 'contains' },
     product: { value: '', matchMode: 'contains' },
+    version: { value: '', matchMode: 'contains' },
     representation: { value: null, matchMode: FilterMatchMode.IN },
     localStatus: { value: null, matchMode: FilterMatchMode.IN },
     remoteStatus: { value: null, matchMode: FilterMatchMode.IN },
@@ -45,6 +46,8 @@ const buildQueryString = (localSite, remoteSite, lazyParams) => {
     url += `&folderFilter=${lazyParams.filters.folder.value}`
   if (lazyParams.filters.product && lazyParams.filters.product.value)
     url += `&productFilter=${lazyParams.filters.product.value}`
+  if (lazyParams.filters.version && lazyParams.filters.version.value)
+    url += `&versionFilter=${lazyParams.filters.version.value}`
   if (
     lazyParams.filters.representation &&
     lazyParams.filters.representation.value
@@ -227,6 +230,9 @@ const SiteSyncSummary = ({
             <Column
               field="version"
               header="Version"
+              sortable
+              filter
+              filterMatchModeOptions={textMatchModes}
               style={{ maxWidth: 150 }}
             />
             <Column
