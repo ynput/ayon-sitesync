@@ -27,15 +27,36 @@ import json
 import platform
 import zipfile
 import argparse
+import collections
+from typing import Optional, Iterable, Pattern
 
-ADDON_NAME = "sitesync"
-ADDON_CLIENT_DIR = "ayon_sitesync"
-# skip non server side folders
-IGNORE_DIR_PATTERNS = ["package", "__pycache__", "client", r"^\.", "frontend"]
-# skip files from addon root
-IGNORE_FILES_PATTERNS = ["create_package.py", r"^\.", "pyc$"]
+ADDON_NAME: str = "sitesync"
+ADDON_CLIENT_DIR: str = "ayon_sitesync"
 
-log = logging.getLogger("create_package")
+# Patterns of directories to be skipped for server part of addon
+IGNORE_DIR_PATTERNS: list[Pattern] = [
+    re.compile(pattern)
+    for pattern in [
+        # Skip directories starting with '.'
+        r"^\.",
+        # Skip any pycache folders
+        "^__pycache__$"
+    ]
+]
+
+# Patterns of files to be skipped for server part of addon
+IGNORE_FILE_PATTERNS: list[Pattern] = [
+    re.compile(pattern)
+    for pattern in {
+        # Skip files starting with '.'
+        # NOTE this could be an issue in some cases
+        r"^\.",
+        # Skip '.pyc' files
+        r"\.pyc$"
+    }
+]
+
+log: logging.Logger = logging.getLogger("create_package")
 
 
 class ZipFileLongPaths(zipfile.ZipFile):
@@ -61,11 +82,70 @@ class ZipFileLongPaths(zipfile.ZipFile):
         )
 
 
+def _value_match_regexes(value: str, regexes: Iterable[Pattern]) -> bool:
+    return any(
+        regex.search(value)
+        for regex in regexes
+    )
+
+
+def find_files_in_subdir(
+    src_path: str,
+    ignore_file_patterns: Optional[list[Pattern]]=None,
+    ignore_dir_patterns: Optional[list[Pattern]]=None
+) -> list[tuple[str, str]]:
+    """Find all files to copy in subdirectories of given path.
+
+    All files that match any of the patterns in 'ignore_file_patterns' will
+        be skipped and any directories that match any of the patterns in
+        'ignore_dir_patterns' will be skipped with all subfiles.
+
+    Args:
+        src_path (str): Path to directory to search in.
+        ignore_file_patterns (Optional[list[Pattern]]): List of regexes
+            to match files to ignore.
+        ignore_dir_patterns (Optional[list[Pattern]]): List of regexes
+            to match directories to ignore.
+
+    Returns:
+        list[tuple[str, str]]: List of tuples with path to file and parent
+            directories relative to 'src_path'.
+    """
+
+    if ignore_file_patterns is None:
+        ignore_file_patterns = IGNORE_FILE_PATTERNS
+
+    if ignore_dir_patterns is None:
+        ignore_dir_patterns = IGNORE_DIR_PATTERNS
+    output: list[tuple[str, str]] = []
+
+    hierarchy_queue: collections.deque = collections.deque()
+    hierarchy_queue.append((src_path, []))
+    while hierarchy_queue:
+        item: tuple[str, str] = hierarchy_queue.popleft()
+        dirpath, parents = item
+        for name in os.listdir(dirpath):
+            path: str = os.path.join(dirpath, name)
+            if os.path.isfile(path):
+                if not _value_match_regexes(name, ignore_file_patterns):
+                    items: list[str] = list(parents)
+                    items.append(name)
+                    output.append((path, os.path.sep.join(items)))
+                continue
+
+            if not _value_match_regexes(name, ignore_dir_patterns):
+                items: list[str] = list(parents)
+                items.append(name)
+                hierarchy_queue.append((path, items))
+
+    return output
+
+
 def create_server_package(
-    output_dir,
-    addon_output_dir,
-    addon_version,
-    log
+    output_dir: str,
+    addon_output_dir: str,
+    addon_version: str,
+    log: logging.Logger
 ):
     """Create server package zip file.
 
@@ -109,6 +189,100 @@ def create_server_package(
     log.info(f"Output package can be found: {output_path}")
 
 
+def _get_client_zip_content(current_dir: str, log: logging.Logger):
+    """
+
+    Args:
+        current_dir (str): Directory path of addon source.
+        log (logging.Logger): Logger object.
+
+    Returns:
+        list[tuple[str, str]]: List of path mappings to copy. The destination
+            path is relative to expected output directory.
+    """
+
+    client_dir: str = os.path.join(current_dir, "client")
+    if not os.path.isdir(client_dir):
+        raise RuntimeError("Client directory was not found.")
+
+    log.info("Preparing client code zip")
+
+    output: list[tuple[str, str]] = []
+
+    src_version_path: str = os.path.join(current_dir, "version.py")
+    dst_version_path: str = os.path.join(ADDON_CLIENT_DIR, "version.py")
+    output.append((src_version_path, dst_version_path))
+
+    # Add client code content to zip
+    client_code_dir: str = os.path.join(client_dir, ADDON_CLIENT_DIR)
+    for path, sub_path in find_files_in_subdir(client_code_dir):
+        output.append((path, os.path.join(ADDON_CLIENT_DIR, sub_path)))
+    return output
+
+
+def zip_client_side(addon_package_dir, current_dir, log):
+    """Copies and zip `client` subfolder into `addon_package_dir'.
+
+    Args:
+        addon_package_dir (str): package dir in addon repo dir
+        current_dir (str): addon repo dir
+        log (logging.Logger)
+    """
+
+    client_dir: str = os.path.join(current_dir, "client")
+    if not os.path.isdir(client_dir):
+        log.info("Client directory was not found. Skipping")
+        return
+
+    log.info("Preparing client code zip")
+    private_dir: str = os.path.join(addon_package_dir, "private")
+    os.makedirs(private_dir, exist_ok=True)
+
+    mapping = _get_client_zip_content(current_dir, log)
+
+    zip_filepath: str = os.path.join(os.path.join(private_dir, "client.zip"))
+    with ZipFileLongPaths(zip_filepath, "w", zipfile.ZIP_DEFLATED) as zipf:
+        # Add client code content to zip
+        for path, sub_path in mapping:
+            zipf.write(path, sub_path)
+
+    shutil.copy(os.path.join(client_dir, "pyproject.toml"), private_dir)
+
+
+def copy_server_content(
+    addon_package_dir: str, current_dir: str, log: logging.Logger
+):
+    # Build frontend first - nothing else make sense without valid frontend
+    frontend_dir: str = os.path.join(current_dir, "frontend")
+    frontend_dist_dirpath: str = os.path.join(frontend_dir, "dist")
+
+    log.info("Copying server content")
+    # Frontend
+    shutil.copytree(
+        os.path.join(frontend_dir, "dist"),
+        frontend_dist_dirpath,
+        dirs_exist_ok=True
+    )
+
+    for folder_name in {"settings", "private"}:
+        folder_path = os.path.join(current_dir, folder_name)
+        shutil.copytree(
+            folder_path,
+            os.path.join(addon_package_dir, folder_name),
+            dirs_exist_ok=True
+        )
+
+    for filename in {
+        "__init__.py",
+        "version.py",
+        "models.py",
+    }:
+        shutil.copy(
+            os.path.join(current_dir, filename),
+            addon_package_dir
+        )
+
+
 def main(output_dir=None, skip_zip=False, keep_sources=False):
     log.info("Start creating package")
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -130,15 +304,7 @@ def main(output_dir=None, skip_zip=False, keep_sources=False):
     addon_package_dir = os.path.join(addon_package_root, addon_version)
     os.makedirs(addon_package_dir)
 
-    copy_non_client_folders(
-        addon_package_dir, current_dir, IGNORE_DIR_PATTERNS, log)
-
-    frontend_dir = os.path.join(current_dir, "frontend")
-    copy_frontend_folders(
-        addon_package_dir, frontend_dir, log)
-
-    copy_root_files(
-        addon_package_dir, current_dir, IGNORE_FILES_PATTERNS, log)
+    copy_server_content(addon_package_dir, current_dir, log)
 
     zip_client_side(addon_package_dir, current_dir, log)
 
@@ -152,143 +318,6 @@ def main(output_dir=None, skip_zip=False, keep_sources=False):
             log.info("Removing source files for server package")
             shutil.rmtree(addon_package_root)
     log.info("Package creation finished")
-
-
-def zip_client_side(addon_package_dir, current_dir, log):
-    """Copies and zip `client` subfolder into `addon_package_dir'.
-
-    Args:
-        addon_package_dir (str): package dir in addon repo dir
-        current_dir (str): addon repo dir
-        zip_file_name (str): file name in format {ADDON_NAME}_{ADDON_VERSION}
-            (eg. 'sitesync_1.0.0')
-        log (logging.Logger)
-    """
-
-    log.info("Preparing client code zip")
-    client_dir = os.path.join(current_dir, "client")
-    private_dir = os.path.join(addon_package_dir, "private")
-
-    # Copy pyproject.toml
-    pyproject_path = os.path.join(client_dir, "pyproject.toml")
-    shutil.copy(pyproject_path, private_dir)
-
-    temp_dir_to_zip = os.path.join(private_dir, "temp")
-    # shutil.copytree expects glob-style patterns, not regex
-    ignore_patterns = ["*.pyc", "*__pycache__*"]
-    shutil.copytree(client_dir,
-                    temp_dir_to_zip,
-                    ignore=shutil.ignore_patterns(*ignore_patterns))
-
-    version_path = os.path.join(current_dir, "version.py")
-    # copy version.py to OP module know which version it is
-    shutil.copy(version_path, os.path.join(temp_dir_to_zip, ADDON_CLIENT_DIR))
-
-    zip_file_path = os.path.join(private_dir, "client.zip")
-    temp_dir_to_zip_s = temp_dir_to_zip.replace("\\", "/")
-    with ZipFileLongPaths(zip_file_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-        for root, dirnames, filenames in os.walk(temp_dir_to_zip):
-            root_s = root.replace("\\", "/")
-            zip_root = root_s.replace(temp_dir_to_zip_s, "").strip("/")
-            for name in sorted(dirnames):
-                path = os.path.normpath(os.path.join(root, name))
-                zip_path = name
-                if zip_root:
-                    zip_path = "/".join((zip_root, name))
-                zipf.write(path, zip_path)
-
-            for name in filenames:
-                path = os.path.normpath(os.path.join(root, name))
-                zip_path = name
-                if zip_root:
-                    zip_path = "/".join((zip_root, name))
-                if os.path.isfile(path):
-                    zipf.write(path, zip_path)
-
-    shutil.rmtree(temp_dir_to_zip)
-
-
-def copy_root_files(addon_package_dir, current_dir, ignore_patterns, log=None):
-    """Copies files in root of addon repo, skips ignored pattern.
-
-    Args:
-        addon_package_dir (str): package dir in addon repo dir
-        current_dir (str): addon repo dir
-        ignore_patterns (list): regex pattern of files to skip
-        log (logging.Logger)
-    """
-    if not log:
-        log = logging.getLogger("create_package")
-
-    log.info("Copying root files")
-    file_names = [f for f in os.listdir(current_dir)
-                  if os.path.isfile(os.path.join(current_dir, f))]
-    for file_name in file_names:
-        skip = False
-        for pattern in ignore_patterns:
-            if re.search(pattern, file_name):
-                skip = True
-                break
-
-        if skip:
-            continue
-
-        shutil.copy(os.path.join(current_dir, file_name),
-                    addon_package_dir)
-
-
-def copy_non_client_folders(addon_package_dir, current_dir, ignore_patterns,
-                            log=None):
-    """Copies server side folders to 'addon_package_dir'
-
-    Args:
-        addon_package_dir (str): package dir in addon repo dir
-        current_dir (str): addon repo dir
-        ignore_patterns (list): regex pattern of files to skip
-        log (logging.Logger)
-    """
-    if not log:
-        log = logging.getLogger("create_package")
-
-    log.info("Copying non client folders")
-    dir_names = [f for f in os.listdir(current_dir)
-                 if os.path.isdir(os.path.join(current_dir, f))]
-
-    for folder_name in dir_names:
-        skip = False
-        for pattern in ignore_patterns:
-            if re.search(pattern, folder_name):
-                skip = True
-                break
-
-        if skip:
-            continue
-
-        folder_path = os.path.join(current_dir, folder_name)
-
-        shutil.copytree(folder_path,
-                        os.path.join(addon_package_dir, folder_name),
-                        dirs_exist_ok=True)
-
-
-def copy_frontend_folders(addon_package_dir, fronted_dir,
-                          log=None):
-    """Copies frontend files to 'addon_package_dir'
-
-    Only 'dist' folder is necessary to copy over.
-
-    Args:
-        addon_package_dir (str): package dir in addon repo dir
-        fronted_dir (str): path to frontend dir
-        log (logging.Logger)
-    """
-    if not log:
-        log = logging.getLogger("create_package")
-
-    log.info("Copying frontend folders")
-    shutil.copytree(os.path.join(fronted_dir, "dist"),
-                    os.path.join(addon_package_dir, "frontend", "dist"),
-                    dirs_exist_ok=True)
 
 
 if __name__ == "__main__":
