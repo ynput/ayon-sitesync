@@ -1340,8 +1340,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         for file_info in representation["files"]:
             status_doc = copy.deepcopy(file_info["{}Status".format(side)])
             status_doc["fileHash"] = file_info["fileHash"]
+            status_doc["id"] = file_info["id"]
             if file_info["fileHash"] == file["fileHash"]:
-                status_doc["id"] = file_info["id"]
                 if new_file_id:
                     status_doc["status"] = SiteSyncStatus.OK
                     status_doc.pop("message")
