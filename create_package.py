@@ -142,8 +142,6 @@ def main(output_dir=None, skip_zip=False, keep_sources=False):
 
     zip_client_side(addon_package_dir, current_dir, log)
 
-    copy_pyproject(addon_package_dir, current_dir)
-
     # Skip server zipping
     if not skip_zip:
         create_server_package(
@@ -156,21 +154,7 @@ def main(output_dir=None, skip_zip=False, keep_sources=False):
     log.info("Package creation finished")
 
 
-def copy_pyproject(addon_package_dir, current_dir):
-    """Copies pyproject_toml from root of addon repo to package/../private
-
-    Args:
-        addon_package_dir (str): local package dir with addon version number
-        current_dir (str): addon repo root
-    """
-    pyproject_path = os.path.join(current_dir, "pyproject.toml")
-    if os.path.exists(pyproject_path):
-        private_dir = os.path.join(addon_package_dir, "private")
-        shutil.copy(pyproject_path,
-                    private_dir)
-
-
-def zip_client_side(addon_package_dir, current_dir, log=None):
+def zip_client_side(addon_package_dir, current_dir, log):
     """Copies and zip `client` subfolder into `addon_package_dir'.
 
     Args:
@@ -180,15 +164,15 @@ def zip_client_side(addon_package_dir, current_dir, log=None):
             (eg. 'sitesync_1.0.0')
         log (logging.Logger)
     """
-    if not log:
-        log = logging.getLogger("create_package")
 
     log.info("Preparing client code zip")
     client_dir = os.path.join(current_dir, "client")
-    if not os.path.isdir(client_dir):
-        return
-
     private_dir = os.path.join(addon_package_dir, "private")
+
+    # Copy pyproject.toml
+    pyproject_path = os.path.join(client_dir, "pyproject.toml")
+    shutil.copy(pyproject_path, private_dir)
+
     temp_dir_to_zip = os.path.join(private_dir, "temp")
     # shutil.copytree expects glob-style patterns, not regex
     ignore_patterns = ["*.pyc", "*__pycache__*"]
