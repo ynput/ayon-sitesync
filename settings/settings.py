@@ -23,6 +23,36 @@ class GeneralSubmodel(BaseSettingsModel):
     remote_site: str = Field("studio", title="User Default Remote Site")
 
 
+class RootSubmodel(BaseSettingsModel):
+    """Setup root paths for local site.
+
+    Studio roots overrides are in separate `Roots` tab outside of Site Sync.
+    """
+
+    _layout: str = "expanded"
+
+    name: str = Field(
+        "work",
+        title="Root name",
+        regex="^[a-zA-Z0-9_]{1,}$",
+        scope=["site"],
+    )
+
+    path: str = Field(
+        "c:/projects_local",
+        title="Path",
+        scope=["site"],
+    )
+
+
+default_roots = [
+    RootSubmodel(
+        name="work",
+        path="C:/projects_local",
+    )
+]
+
+
 def provider_resolver():
     """Return a list of value/label dicts for the enumerator.
 
@@ -122,6 +152,13 @@ class LocalSubmodel(BaseSettingsModel):
                              title="My Remote Site",
                              scope=["site"],
                              enum_resolver=defined_sited_enum_resolver)
+
+    local_roots: list[RootSubmodel] = Field(
+        default=default_roots,
+        title="Local roots overrides",
+        scope=["site"],
+        description="Overrides for local root(s)."
+    )
 
 
 class SiteSyncSettings(BaseSettingsModel):
