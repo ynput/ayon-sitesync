@@ -30,7 +30,7 @@ class IntegrateSiteSync(pyblish.api.InstancePlugin):
         modules_by_name = instance.context.data["openPypeModules"]
         sync_server_module = modules_by_name["sync_server"]
 
-        for repre_id, inst in instance.data["published_representations"].items():  # noqa
+        for repre_id, inst in instance.data.get("published_representations", {}).items():  # noqa
             new_site_files_status = {}
             self.log.info("repre_id {}".format(repre_id))
             for repre_file in inst["representation"]["files"]:
