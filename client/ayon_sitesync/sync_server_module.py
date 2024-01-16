@@ -725,7 +725,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         # Validate that site name is valid
         if site_name not in ("studio", "local"):
-            # Considure local site id as 'local'
+            # Consider local site id as 'local'
             if site_name != get_local_site_id():
                 raise ValueError((
                     "Root overrides are available only for"
@@ -737,11 +737,9 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
         roots = {}
         local_project_settings = sync_server_settings["local_setting"]
-        for site in ["active_site", "remote_site"]:
-            site_name = local_project_settings[site]
-            root_value = local_project_settings.get(f"{site}_root")
-            if root_value:
-                roots[site_name] = local_project_settings.get(f"{site}_root")
+        if site_name == "local":
+            for root_info in local_project_settings["local_roots"]:
+                roots[root_info["name"]] = root_info["path"]
 
         return roots
 
@@ -1093,7 +1091,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 self.v4_name, self.version, project_name)
 
             sites.update(self._get_default_site_configs(
-                proj_settings["enabled"], project_name
+                proj_settings["enabled"], project_name, proj_settings
             ))
 
             sites.update(self._transform_sites_from_settings(proj_settings))
@@ -1151,21 +1149,18 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
                 sites[site_name] = configured_site
         return sites
 
-    def _get_default_site_configs(self, sync_enabled=True, project_name=None):
+    def _get_default_site_configs(self, sync_enabled=True, project_name=None,
+                                  proj_settings=None):
         """
             Returns settings for 'studio' and user's local site
 
             Returns base values from setting, not overridden by Local Settings,
             eg. value used to push TO LS not to get actual value for syncing.
         """
-        roots = {}
-        if project_name:
-            project = ayon_api.get_project(project_name)
-            if project:
-                _roots = project["config"]["roots"]
-                for root, config in _roots.items():
-                    roots[root] = config
-
+        local_site_id = get_local_site_id()
+        # overrides for Studio site for particular user
+        roots = ayon_api.get_project_roots_for_site(project_name,
+                                                    local_site_id)
         studio_config = {
             'enabled': True,
             'provider': 'local_drive',
@@ -1173,9 +1168,7 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         }
         all_sites = {self.DEFAULT_SITE: studio_config}
         if sync_enabled:
-            local_site_id = get_local_site_id()
-            roots = ayon_api.get_project_roots_for_site(project_name,
-                                                        local_site_id)
+            roots = proj_settings["local_setting"]["local_roots"]
             local_site_dict = {"enabled": True,
                                "provider": "local_drive",
                                "root": roots}
@@ -1340,8 +1333,8 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         for file_info in representation["files"]:
             status_doc = copy.deepcopy(file_info["{}Status".format(side)])
             status_doc["fileHash"] = file_info["fileHash"]
+            status_doc["id"] = file_info["id"]
             if file_info["fileHash"] == file["fileHash"]:
-                status_doc["id"] = file_info["id"]
                 if new_file_id:
                     status_doc["status"] = SiteSyncStatus.OK
                     status_doc.pop("message")

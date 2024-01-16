@@ -31,7 +31,7 @@ import argparse
 ADDON_NAME = "sitesync"
 ADDON_CLIENT_DIR = "ayon_sitesync"
 # skip non server side folders
-IGNORE_DIR_PATTERNS = ["package", "__pycache__", "client", r"^\."]
+IGNORE_DIR_PATTERNS = ["package", "__pycache__", "client", r"^\.", "frontend"]
 # skip files from addon root
 IGNORE_FILES_PATTERNS = ["create_package.py", r"^\.", "pyc$"]
 
@@ -132,6 +132,10 @@ def main(output_dir=None, skip_zip=False, keep_sources=False):
 
     copy_non_client_folders(
         addon_package_dir, current_dir, IGNORE_DIR_PATTERNS, log)
+
+    frontend_dir = os.path.join(current_dir, "frontend")
+    copy_frontend_folders(
+        addon_package_dir, frontend_dir, log)
 
     copy_root_files(
         addon_package_dir, current_dir, IGNORE_FILES_PATTERNS, log)
@@ -281,6 +285,26 @@ def copy_non_client_folders(addon_package_dir, current_dir, ignore_patterns,
         shutil.copytree(folder_path,
                         os.path.join(addon_package_dir, folder_name),
                         dirs_exist_ok=True)
+
+
+def copy_frontend_folders(addon_package_dir, fronted_dir,
+                          log=None):
+    """Copies frontend files to 'addon_package_dir'
+
+    Only 'dist' folder is necessary to copy over.
+
+    Args:
+        addon_package_dir (str): package dir in addon repo dir
+        fronted_dir (str): path to frontend dir
+        log (logging.Logger)
+    """
+    if not log:
+        log = logging.getLogger("create_package")
+
+    log.info("Copying frontend folders")
+    shutil.copytree(os.path.join(fronted_dir, "dist"),
+                    os.path.join(addon_package_dir, "frontend", "dist"),
+                    dirs_exist_ok=True)
 
 
 if __name__ == "__main__":

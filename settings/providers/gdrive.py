@@ -4,12 +4,12 @@ from ayon_server.settings import BaseSettingsModel
 
 
 class CredPathPerPlatform(BaseSettingsModel):
-    windows: str = Field(default_factory=list,
-                         scope=["studio", "project", "site"],)
-    linux: str = Field(default_factory=list,
-                       scope=["studio", "project", "site"],)
-    darwin: str = Field(default_factory=list,
-                        scope=["studio", "project", "site"],)
+    windows: list[str] = Field(default_factory=list,
+                               scope=["studio", "project", "site"],)
+    linux: list[str] = Field(default_factory=list,
+                             scope=["studio", "project", "site"],)
+    darwin: list[str] = Field(default_factory=list,
+                              scope=["studio", "project", "site"],)
 
 
 class GoogleDriveSubmodel(BaseSettingsModel):

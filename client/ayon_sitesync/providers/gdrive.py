@@ -83,8 +83,14 @@ class GDriveHandler(AbstractProvider):
             return
 
         current_platform = platform.system().lower()
-        cred_path = self.presets.get("credentials_url", {}). \
-            get(current_platform) or ''
+        cred_paths = self.presets.get("credentials_url", {}). \
+            get(current_platform) or []
+        cred_path = None
+        for check_path in cred_paths:
+            if not os.path.exists(check_path):
+                continue
+            cred_path = check_path
+            break
 
         if not cred_path:
             msg = "Sync Server: Please, fill the credentials for gdrive "\
