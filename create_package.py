@@ -28,7 +28,8 @@ import platform
 import zipfile
 import argparse
 import collections
-from typing import Optional, Iterable, Pattern
+import subprocess
+from typing import Optional, Iterable, Pattern, Union
 
 ADDON_NAME: str = "sitesync"
 ADDON_CLIENT_DIR: str = "ayon_sitesync"
@@ -57,6 +58,24 @@ IGNORE_FILE_PATTERNS: list[Pattern] = [
 ]
 
 log: logging.Logger = logging.getLogger("create_package")
+
+
+def _get_yarn_executable() -> Union[str, None]:
+    cmd = "which"
+    if platform.system().lower() == "windows":
+        cmd = "where"
+
+    for line in subprocess.check_output(
+        [cmd, "yarn"], encoding="utf-8"
+    ).split():
+        if not line or not os.path.exists(line):
+            continue
+        try:
+            subprocess.call([line, "--version"])
+            return line
+        except OSError:
+            continue
+    return None
 
 
 class ZipFileLongPaths(zipfile.ZipFile):
@@ -251,12 +270,28 @@ def zip_client_side(addon_package_dir, current_dir, log):
     shutil.copy(os.path.join(client_dir, "pyproject.toml"), private_dir)
 
 
+def _build_frontend(frontend_dirpath: str, frontend_dist_dirpath: str):
+    yarn_executable = _get_yarn_executable()
+    if yarn_executable is None:
+        raise RuntimeError("Yarn executable was not found.")
+
+    subprocess.run([yarn_executable, "install"], cwd=frontend_dirpath)
+    subprocess.run([yarn_executable, "build"], cwd=frontend_dirpath)
+    if not os.path.exists(frontend_dirpath):
+        raise RuntimeError(
+            "Build frontend first with `yarn install && yarn build`"
+        )
+
+
 def copy_server_content(
     addon_package_dir: str, current_dir: str, log: logging.Logger
 ):
     # Build frontend first - nothing else make sense without valid frontend
     frontend_dir: str = os.path.join(current_dir, "frontend")
     frontend_dist_dirpath: str = os.path.join(frontend_dir, "dist")
+
+    log.info("Building frontend")
+    _build_frontend(frontend_dir, frontend_dist_dirpath)
 
     log.info("Copying server content")
     # Frontend
