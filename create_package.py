@@ -270,7 +270,9 @@ def copy_server_content(
         folder_path = os.path.join(current_dir, folder_name)
         mapping = find_files_in_subdir(folder_path)
         for src_path, dst_subpath in mapping:
-            dst_path = os.path.join(addon_package_dir, dst_subpath)
+            dst_path = os.path.join(
+                addon_package_dir, folder_name, dst_subpath
+            )
             dst_dir = os.path.dirname(dst_path)
             os.makedirs(dst_dir, exist_ok=True)
             shutil.copy(src_path, dst_path)
