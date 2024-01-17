@@ -216,6 +216,8 @@ def _get_client_zip_content(current_dir: str, log: logging.Logger):
     # Add client code content to zip
     client_code_dir: str = os.path.join(client_dir, ADDON_CLIENT_DIR)
     for path, sub_path in find_files_in_subdir(client_code_dir):
+        if sub_path == "version.py":
+            continue
         output.append((path, os.path.join(ADDON_CLIENT_DIR, sub_path)))
     return output
 
@@ -259,8 +261,8 @@ def copy_server_content(
     log.info("Copying server content")
     # Frontend
     shutil.copytree(
-        os.path.join(frontend_dir, "dist"),
         frontend_dist_dirpath,
+        os.path.join(addon_package_dir, "frontend", "dist"),
         dirs_exist_ok=True
     )
 
@@ -317,6 +319,7 @@ def main(output_dir=None, skip_zip=False, keep_sources=False):
         if not keep_sources:
             log.info("Removing source files for server package")
             shutil.rmtree(addon_package_root)
+
     log.info("Package creation finished")
 
 
