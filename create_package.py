@@ -67,7 +67,7 @@ def _get_yarn_executable() -> Union[str, None]:
 
     for line in subprocess.check_output(
         [cmd, "yarn"], encoding="utf-8"
-    ).split():
+    ).splitlines():
         if not line or not os.path.exists(line):
             continue
         try:
