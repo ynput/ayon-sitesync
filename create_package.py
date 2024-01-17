@@ -266,13 +266,14 @@ def copy_server_content(
         dirs_exist_ok=True
     )
 
-    for folder_name in {"settings", "private"}:
+    for folder_name in {"settings"}:
         folder_path = os.path.join(current_dir, folder_name)
-        shutil.copytree(
-            folder_path,
-            os.path.join(addon_package_dir, folder_name),
-            dirs_exist_ok=True
-        )
+        mapping = find_files_in_subdir(folder_path)
+        for src_path, dst_subpath in mapping:
+            dst_path = os.path.join(addon_package_dir, dst_subpath)
+            dst_dir = os.path.dirname(dst_path)
+            os.makedirs(dst_dir, exist_ok=True)
+            shutil.copy(src_path, dst_path)
 
     for filename in {
         "__init__.py",
