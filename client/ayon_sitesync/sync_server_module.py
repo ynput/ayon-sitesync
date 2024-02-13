@@ -1040,8 +1040,9 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
     @property
     def sync_studio_settings(self):
         if self._sync_system_settings is None:
-            self._sync_system_settings = get_system_settings()["modules"].\
-                get(self.v4_name)
+            self._sync_system_settings = (
+                get_system_settings().get(self.v4_name)
+            )
 
         return self._sync_system_settings
 
