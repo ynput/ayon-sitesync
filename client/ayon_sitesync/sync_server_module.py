@@ -11,15 +11,8 @@ import click
 from .version import __version__
 
 from openpype.client import get_projects
-from openpype.settings import (
-    get_system_settings,
-)
-from openpype.settings.lib import (
-    get_default_anatomy_settings,
-    get_anatomy_settings
-)
-
 from openpype.modules import AYONAddon, ITrayModule, IPluginPaths
+from openpype.settings import get_system_settings
 from openpype.lib import get_local_site_id
 from openpype.pipeline import Anatomy
 from .providers.local_drive import LocalDriveHandler
