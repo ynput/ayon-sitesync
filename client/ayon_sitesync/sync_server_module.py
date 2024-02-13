@@ -14,7 +14,6 @@ from openpype.client import get_projects
 from openpype.settings import (
     get_system_settings,
 )
-from openpype.lib import Logger, get_local_site_id
 from openpype.pipeline import AvalonMongoDB, Anatomy
 from openpype.settings.lib import (
     get_default_anatomy_settings,
@@ -22,6 +21,7 @@ from openpype.settings.lib import (
 )
 
 from openpype.modules import AYONAddon, ITrayModule, IPluginPaths
+from openpype.lib import get_local_site_id
 from .providers.local_drive import LocalDriveHandler
 from .providers import lib
 
@@ -42,7 +42,6 @@ from openpype.client import (
 
 import ayon_api
 
-log = Logger.get_logger("SyncServer")
 SYNC_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
