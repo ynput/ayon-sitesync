@@ -11,7 +11,6 @@ import click
 from .version import __version__
 
 from openpype.client import get_projects
-from openpype.modules import OpenPypeModule, ITrayModule, IPluginPaths
 from openpype.settings import (
     get_system_settings,
 )
@@ -22,6 +21,7 @@ from openpype.settings.lib import (
     get_anatomy_settings
 )
 
+from openpype.modules import AYONAddon, ITrayModule, IPluginPaths
 from .providers.local_drive import LocalDriveHandler
 from .providers import lib
 
@@ -46,7 +46,7 @@ log = Logger.get_logger("SyncServer")
 SYNC_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
+class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
     """
        Synchronization server that is syncing published files from local to
        any of implemented providers (like GDrive, S3 etc.)
@@ -103,7 +103,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             Sets 'enabled' according to global settings for the module.
             Shouldnt be doing any initialization, thats a job for 'tray_init'
         """
-        self.enabled = True
 
         # some parts of code need to run sequentially, not in async
         self.lock = None
