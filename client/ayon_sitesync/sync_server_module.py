@@ -11,17 +11,10 @@ import click
 from .version import __version__
 
 from openpype.client import get_projects
-from openpype.modules import OpenPypeModule, ITrayModule, IPluginPaths
-from openpype.settings import (
-    get_system_settings,
-)
-from openpype.lib import Logger, get_local_site_id
-from openpype.pipeline import AvalonMongoDB, Anatomy
-from openpype.settings.lib import (
-    get_default_anatomy_settings,
-    get_anatomy_settings
-)
-
+from openpype.modules import AYONAddon, ITrayModule, IPluginPaths
+from openpype.settings import get_system_settings
+from openpype.lib import get_local_site_id
+from openpype.pipeline import Anatomy
 from .providers.local_drive import LocalDriveHandler
 from .providers import lib
 
@@ -42,11 +35,10 @@ from openpype.client import (
 
 import ayon_api
 
-log = Logger.get_logger("SyncServer")
 SYNC_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
+class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
     """
        Synchronization server that is syncing published files from local to
        any of implemented providers (like GDrive, S3 etc.)
@@ -103,7 +95,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
             Sets 'enabled' according to global settings for the module.
             Shouldnt be doing any initialization, thats a job for 'tray_init'
         """
-        self.enabled = True
 
         # some parts of code need to run sequentially, not in async
         self.lock = None
@@ -116,8 +107,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         self._paused_projects = set()
         self._paused_representations = set()
         self._anatomies = {}
-
-        self._connection = None
 
         # list of long blocking tasks
         self.long_running_tasks = deque()
@@ -424,20 +413,24 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
 
             Works only on real local sites, not on 'studio'
         """
-        query = {
-            "type": "representation",
-            "files.sites.name": site_name
-        }
 
-        # TODO currently not possible to replace with get_representations
-        representations = list(
-            self.connection.database[project_name].find(query))
-        if not representations:
-            self.log.debug("No repre found")
-            return
+        # TODO implement
+        self.log.warning("Method 'clear_project' is not implemented.")
 
-        for repre in representations:
-            self.remove_site(project_name, repre.get("_id"), site_name, True)
+        # query = {
+        #     "type": "representation",
+        #     "files.sites.name": site_name
+        # }
+        #
+        # # TODO currently not possible to replace with get_representations
+        # representations = list(
+        #     self.connection.database[project_name].find(query))
+        # if not representations:
+        #     self.log.debug("No repre found")
+        #     return
+        #
+        # for repre in representations:
+        #     self.remove_site(project_name, repre.get("_id"), site_name, True)
 
     # TODO hook to some trigger - no Sync Queue anymore
     def validate_project(self, project_name, site_name, reset_missing=False):
@@ -1045,17 +1038,11 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         return self._anatomies.get('project_name') or Anatomy(project_name)
 
     @property
-    def connection(self):
-        if self._connection is None:
-            self._connection = AvalonMongoDB()
-
-        return self._connection
-
-    @property
     def sync_studio_settings(self):
         if self._sync_system_settings is None:
-            self._sync_system_settings = get_system_settings()["modules"].\
-                get(self.v4_name)
+            self._sync_system_settings = (
+                get_system_settings().get(self.v4_name)
+            )
 
         return self._sync_system_settings
 
@@ -1225,7 +1212,6 @@ class SyncServerModule(OpenPypeModule, ITrayModule, IPluginPaths):
         """
         self.log.debug("Check representations for: {}-{}".format(active_site,
                                                                  remote_site))
-        self.connection.Session["AVALON_PROJECT"] = project_name
 
         endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name) # noqa
 
