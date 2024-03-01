@@ -253,7 +253,13 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
             self.log.warning(msg)
             return
 
-        endpoint = "{}/{}/state/{}/{site_name}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
+        endpoint = "{}/{}/state/{}/{}".format(
+            self.endpoint_prefix,
+            project_name,
+            representation_id,
+            site_name
+        )
+
 
         response = ayon_api.delete(endpoint)
         if response.status_code not in [200, 204]:
