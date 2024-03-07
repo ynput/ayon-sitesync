@@ -221,7 +221,7 @@ def download_last_published_workfile(
         anatomy = Anatomy(project_name)
 
     # Get sync server module
-    sync_server = ModulesManager().modules_by_name.get("sync_server")
+    sync_server = ModulesManager().modules_by_name.get("sitesync")
     if not sync_server or not sync_server.enabled:
         print("Sync server module is disabled or unavailable.")
         return

@@ -82,9 +82,9 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
     LOG_PROGRESS_SEC = 5  # how often log progress to DB
     DEFAULT_PRIORITY = 50  # higher is better, allowed range 1 - 1000
 
-    name = "sync_server"
+    name = "sitesync"
     version = __version__
-    v4_name = "sitesync"  # temporary,sync_server should be cleaned in Settings
+    openpype_alias = "sync_server"  # temporary,sync_server should be cleaned in Settings
     label = "Sync Queue"
 
     def initialize(self, module_settings):
@@ -112,7 +112,6 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         self.long_running_tasks = deque()
         # projects that long tasks are running on
         self.projects_processed = set()
-
 
     @property
     def endpoint_prefix(self):
@@ -1772,7 +1771,7 @@ def syncservice(active_site):
     signal.signal(signal.SIGTERM, signal_handler)
 
     manager = ModulesManager()
-    sync_server_module = manager.modules_by_name["sync_server"]
+    sync_server_module = manager.modules_by_name["sitesync"]
 
     sync_server_module.server_init()
     sync_server_module.server_start()
