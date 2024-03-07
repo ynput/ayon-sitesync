@@ -1046,9 +1046,15 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
     @property
     def sync_studio_settings(self):
         if self._sync_system_settings is None:
-            self._sync_system_settings = (
-                get_system_settings().get(self.v4_name)
-            )
+            # Compatibility for openpype and ayon-core
+            system_settings = get_system_settings()
+            if "modules" not in system_settings:
+                self._sync_system_settings = system_settings.get(self.v4_name)
+
+            else:
+                self._sync_system_settings = (
+                    system_settings["modules"].get(self.v4_name)
+                )
 
         return self._sync_system_settings
 
