@@ -887,6 +887,10 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
                                                processed_site)
         if not sync_state:
             raise RuntimeError("Cannot find repre with '{}".format(representation_id))  # noqa
+        for file_info in sync_state["files"]:
+            #expose status of remote site, it is expected on the server
+            file_info["status"] = file_info["remoteStatus"]["status"]
+
         payload_dict = {"files": sync_state["files"]}
 
         alternate_sites = set(alternate_sites)
@@ -894,7 +898,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
             self.log.debug("Adding alternate {} to {}".format(
                 alt_site, representation_id))
             self._set_state_sync_state(project_name, representation_id,
-                                       site_name,
+                                       alt_site,
                                        payload_dict)
 
     # TODO - for Loaders
@@ -1139,6 +1143,9 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
                 configured_site = {}
                 site_name = whole_site_info["name"]
                 configured_site["enabled"] = True
+                configured_site["alternative_sites"] = (
+                    whole_site_info["alternative_sites"]
+                )
 
                 provider_specific = whole_site_info[whole_site_info["provider"]]
                 configured_site["root"] = provider_specific.pop("roots",

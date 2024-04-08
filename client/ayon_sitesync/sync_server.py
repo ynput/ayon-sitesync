@@ -78,11 +78,6 @@ async def upload(module, project_name, file, representation, provider_name,
                                          True
                                          )
 
-    module.handle_alternate_site(project_name,
-                                 representation["representationId"],
-                                 remote_site_name,
-                                 file["fileHash"])
-
     return file_id
 
 
@@ -134,11 +129,6 @@ async def download(module, project_name, file, representation, provider_name,
                                          local_site,
                                          True
                                          )
-
-    module.handle_alternate_site(project_name,
-                                 representation["representationId"],
-                                 local_site,
-                                 file["fileHash"])
 
     return file_id
 
@@ -456,6 +446,12 @@ class SyncServerThread(threading.Thread):
                                               site_name=site_name,
                                               side=side,
                                               error=error)
+
+                        repre_id = representation["representationId"]
+                        self.module.handle_alternate_site(project_name,
+                                                          repre_id,
+                                                          site_name,
+                                                          file["fileHash"])
 
                 duration = time.time() - start_time
                 self.log.debug("One loop took {:.2f}s".format(duration))
