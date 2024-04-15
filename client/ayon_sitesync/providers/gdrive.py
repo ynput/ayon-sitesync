@@ -5,8 +5,8 @@ import sys
 import six
 import platform
 
-from openpype.lib import Logger
-from openpype.settings import get_system_settings
+from ayon_core.lib import Logger
+from ayon_core.settings import get_studio_settings
 from .abstract_provider import AbstractProvider
 from ..utils import time_function, ResumableError
 
@@ -640,7 +640,7 @@ class GDriveHandler(AbstractProvider):
         provider_presets = None
         try:
             provider_presets = (
-                get_system_settings()["modules"]
+                get_studio_settings()["modules"]
                 ["sync_server"]
                 ["providers"]
                 ["gdrive"]

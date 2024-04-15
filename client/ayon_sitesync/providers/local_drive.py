@@ -4,8 +4,8 @@ import shutil
 import threading
 import time
 
-from openpype.lib import Logger
-from openpype.pipeline import Anatomy
+from ayon_core.lib import Logger
+from ayon_core.pipeline import Anatomy
 from .abstract_provider import AbstractProvider
 
 log = Logger.get_logger("SyncServer")

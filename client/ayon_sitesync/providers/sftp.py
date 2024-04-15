@@ -4,8 +4,8 @@ import time
 import threading
 import platform
 
-from openpype.lib import Logger
-from openpype.settings import get_system_settings
+from ayon_core.lib import Logger
+from ayon_core.settings import get_studio_settings
 from .abstract_provider import AbstractProvider
 log = Logger.get_logger("SyncServer-SFTPHandler")
 
@@ -378,8 +378,8 @@ class SFTPHandler(AbstractProvider):
         provider_presets = None
         try:
             provider_presets = (
-                get_system_settings()["modules"]
-                ["sync_server"]
+                get_studio_settings()["modules"]
+                ["sitesync"]
                 ["providers"]
                 ["sftp"]
             )
