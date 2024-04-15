@@ -12,15 +12,14 @@ from ayon_server.api import (
     dep_project_name, 
     dep_representation_id, 
 )
-from ayon_server.api.dependencies import dep_site_id, SiteID
+
 from ayon_server.entities.representation import RepresentationEntity
 from ayon_server.entities.user import UserEntity
 from ayon_server.lib.postgres import Postgres
 from ayon_server.utils import SQLTool
 
 from .settings.settings import SiteSyncSettings
-from .version import __version__
-from .models import (
+from .settings.models import (
     FileModel,
     RepresentationStateModel,
     SiteSyncParamsModel,
@@ -29,15 +28,10 @@ from .models import (
     SortByEnum,
     StatusEnum,
     SyncStatusModel,
-    UserSyncSites
 )
 
 
 class SiteSync(BaseServerAddon):
-    name = "sitesync"
-    title = "Site Sync"
-    version = __version__
-
     settings_model: Type[SiteSyncSettings] = SiteSyncSettings
 
     frontend_scopes: dict[str, Any] = {"project": {}}
