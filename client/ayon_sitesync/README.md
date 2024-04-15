@@ -17,7 +17,7 @@ Quick HOWTOs:
 I want to start syncing my newly published files:
 ------------------------------------------------
 
-- Check that Sync server is enabled globally in 
+- Check that Site Sync is enabled globally in 
     `pype/settings/defaults/system_settings/modules.json`
     
 - Get credentials for service account, share target folder on Gdrive with it
@@ -65,7 +65,7 @@ I want to create new custom provider:
 
 Needed configuration:
 --------------------
-`pype/settings/defaults/project_settings/global.json`.`sync_server`:
+`pype/settings/defaults/project_settings/global.json`.`sitesync`:
  - `"local_id": "local_0",` -- identifier of user pype
  - `"retry_cnt": 3,`        -- how many times try to synch file in case of error
  - `"loop_delay": 60,`      -- how many seconds between sync loops
@@ -81,9 +81,9 @@ Needed configuration:
   This is a general configuration, 'local_id', 'publish_site' and 'remote_site'
   will be set and changed by some GUI in the future.                           
   
-`pype/settings/defaults/project_settings/global.json`.`sync_server`.`sites`:
+`pype/settings/defaults/project_settings/global.json`.`sitesync`.`sites`:
  ```- "gdrive": {  - site name, must be unique
- -     "provider": "gdrive" -- type of provider, must be registered in 'sync_server\providers\lib.py'
+ -     "provider": "gdrive" -- type of provider, must be registered in 'sitesync\providers\lib.py'
  -     "credentials_url": "/my_secret_folder/credentials.json", 
             -- path to credentials for service account
  -     "root": {     -- "root": "/My Drive" in simple scenario, config here for
