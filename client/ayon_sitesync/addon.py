@@ -8,15 +8,16 @@ import signal
 from collections import deque, defaultdict
 import click
 
-from .version import __version__
+import ayon_api
 
-from openpype.client import get_projects
-from openpype.modules import AYONAddon, ITrayModule, IPluginPaths
-from openpype.settings import get_system_settings
-from openpype.lib import get_local_site_id
-from openpype.pipeline import Anatomy
+from ayon_core.settings import get_studio_settings
+from ayon_core.modules import AYONAddon, ITrayModule, IPluginPaths
+from ayon_common.utils import get_local_site_id
+from ayon_core.pipeline import Anatomy
+
+from ayon_sitesync.utils import SiteSyncStatus
+from .version import __version__
 from .providers.local_drive import LocalDriveHandler
-from .providers import lib
 
 from .utils import (
     time_function,
@@ -26,19 +27,15 @@ from .utils import (
     SITE_SYNC_ROOT
 )
 
-from openpype.client import (
+from ayon_api import (
     get_representations,
     get_representation_by_id,
-    get_versions,
-    get_representations_parents
 )
 
-import ayon_api
-
-SYNC_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+SYNC_ADDON_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
+class SiteSyncAddon(AYONAddon, ITrayModule, IPluginPaths):
     """
        Synchronization server that is syncing published files from local to
        any of implemented providers (like GDrive, S3 etc.)
@@ -84,8 +81,6 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
 
     name = "sitesync"
     version = __version__
-    openpype_alias = "sync_server"  # temporary,sync_server should be cleaned in Settings
-    label = "Sync Queue"
 
     def initialize(self, module_settings):
         """
@@ -98,10 +93,10 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
 
         # some parts of code need to run sequentially, not in async
         self.lock = None
-        self._sync_system_settings = None
+        self._sync_studio_settings = None
         # settings for all enabled projects for sync
         self._sync_project_settings = None
-        self.sync_server_thread = None  # asyncio requires new thread
+        self.sitesync_thread = None  # asyncio requires new thread
 
         self._paused = False
         self._paused_projects = set()
@@ -115,10 +110,10 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
 
     @property
     def endpoint_prefix(self):
-        return "addons/{}/{}".format(self.v4_name, self.version)
+        return "addons/{}/{}".format(self.name, self.version)
 
     def get_plugin_paths(self):
-        return {"publish": os.path.join(SYNC_MODULE_DIR, "plugins", "publish")}
+        return {"publish": os.path.join(SYNC_ADDON_DIR, "plugins", "publish")}
 
     def get_site_icons(self):
         """Icons for sites.
@@ -279,10 +274,10 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         [
             {
                 'name': '42abbc09-d62a-44a4-815c-a12cd679d2d7',
-                'created_dt': datetime.datetime(2022, 3, 30, 12, 16, 9, 778637)
+                'status': SiteSyncStatus.OK
             },
-            {'name': 'studio'},
-            {'name': 'SFTP'}
+            {'name': 'studio', 'status': SiteSyncStatus.QUEUED},
+            {'name': 'SFTP', 'status': SiteSyncStatus.QUEUED}
         ] -- representation is published locally, artist or Settings have set
         remote site as 'studio'. 'SFTP' is alternate site to 'studio'. Eg.
         whenever file is on 'studio', it is also on 'SFTP'.
@@ -292,7 +287,9 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
             """Create sync site metadata for site with `name`"""
             metadata = {"name": name}
             if created:
-                metadata["created_dt"] = datetime.now()
+                metadata["status"] = SiteSyncStatus.OK
+            else:
+                metadata["status"] = SiteSyncStatus.QUEUED
             return metadata
 
         if (not self.sync_studio_settings["enabled"] or
@@ -731,10 +728,10 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
                 ).format(site_name))
             site_name = "local"
 
-        sync_server_settings = self.get_sync_project_setting(project_name)
+        sitesync_settings = self.get_sync_project_setting(project_name)
 
         roots = {}
-        local_project_settings = sync_server_settings["local_setting"]
+        local_project_settings = sitesync_settings["local_setting"]
         if site_name == "local":
             for root_info in local_project_settings["local_roots"]:
                 roots[root_info["name"]] = root_info["path"]
@@ -802,7 +799,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
             self.log.warning("Couldn't find webserver url")
             return
 
-        rest_api_url = "{}/sync_server/reset_timer".format(
+        rest_api_url = "{}/sitesync/reset_timer".format(
             webserver_url
         )
 
@@ -822,7 +819,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         enabled_projects = []
 
         if self.enabled:
-            for project in get_projects(fields=["name"]):
+            for project in ayon_api.get_projects(fields=["name"]):
                 project_name = project["name"]
                 if self.is_project_enabled(project_name):
                     enabled_projects.append(project_name)
@@ -841,7 +838,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         if self.enabled:
             if single:
                 project_settings = ayon_api.get_addon_project_settings(
-                    self.v4_name, self.version, project_name)
+                    self.name, self.version, project_name)
             else:
                 project_settings = self.get_sync_project_setting(project_name)
             if project_settings and project_settings.get("enabled"):
@@ -972,11 +969,11 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         if not self.enabled:
             return
 
-        from .sync_server import SyncServerThread
+        from .sitesync import SiteSyncThread
 
         self.lock = threading.Lock()
 
-        self.sync_server_thread = SyncServerThread(self)
+        self.sitesync_thread = SiteSyncThread(self)
 
     def tray_start(self):
         """
@@ -993,7 +990,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
 
     def server_start(self):
         if self.enabled:
-            self.sync_server_thread.start()
+            self.sitesync_thread.start()
         else:
             self.log.info("No presets or active providers. " +
                      "Synchronization not possible.")
@@ -1007,15 +1004,15 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         self.server_exit()
 
     def server_exit(self):
-        if not self.sync_server_thread:
+        if not self.sitesync_thread:
             return
 
         if not self.is_running:
             return
         try:
             self.log.info("Stopping sync server server")
-            self.sync_server_thread.is_running = False
-            self.sync_server_thread.stop()
+            self.sitesync_thread.is_running = False
+            self.sitesync_thread.stop()
             self.log.info("Sync server stopped")
         except Exception:
             self.log.warning(
@@ -1028,7 +1025,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
 
     @property
     def is_running(self):
-        return self.sync_server_thread.is_running
+        return self.sitesync_thread.is_running
 
     def get_anatomy(self, project_name):
         """
@@ -1044,12 +1041,12 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
 
     @property
     def sync_studio_settings(self):
-        if self._sync_system_settings is None:
-            self._sync_system_settings = (
-                get_system_settings().get(self.v4_name)
+        if self._sync_studio_settings is None:
+            self._sync_studio_settings = (
+                get_studio_settings().get(self.name)
             )
 
-        return self._sync_system_settings
+        return self._sync_studio_settings
 
     @property
     def sync_project_settings(self):
@@ -1076,19 +1073,21 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         sites = self._transform_sites_from_settings(
             self.sync_studio_settings)
 
-        project_docs = get_projects(fields=["name"])
+        project_docs = ayon_api.get_projects(fields=["name"])
         for project_doc in project_docs:
+            project_sites = copy.deepcopy(sites)
             project_name = project_doc["name"]
             proj_settings = ayon_api.get_addon_project_settings(
-                self.v4_name, self.version, project_name)
+                self.name, self.version, project_name)
 
-            sites.update(self._get_default_site_configs(
+            project_sites.update(self._get_default_site_configs(
                 proj_settings["enabled"], project_name, proj_settings
             ))
 
-            sites.update(self._transform_sites_from_settings(proj_settings))
+            project_sites.update(
+                self._transform_sites_from_settings(proj_settings))
 
-            proj_settings["sites"] = sites
+            proj_settings["sites"] = project_sites
 
             sync_project_settings[project_name] = proj_settings
         if not sync_project_settings:
@@ -1097,7 +1096,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
 
     def get_sync_project_setting(self, project_name, exclude_locals=False,
                                  cached=True):
-        """ Handles pulling sync_server's settings for enabled 'project_name'
+        """ Handles pulling sitesync's settings for enabled 'project_name'
 
             Args:
                 project_name (str): used in project settings
@@ -1718,10 +1717,10 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         if not self.enabled:
             return
 
-        if self.sync_server_thread is None:
+        if self.sitesync_thread is None:
             self._reset_timer_with_rest_api()
         else:
-            self.sync_server_thread.reset_timer()
+            self.sitesync_thread.reset_timer()
 
     def get_loop_delay(self, project_name):
         """
@@ -1740,7 +1739,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         click_group.add_command(cli_main)
 
 
-@click.group(SyncServerModule.name, help="SyncServer module related commands.")
+@click.group(SiteSyncAddon.name, help="SyncServer module related commands.")
 def cli_main():
     pass
 
@@ -1758,23 +1757,23 @@ def syncservice(active_site):
     on linux and window service).
     """
 
-    from openpype.modules import ModulesManager
+    from ayon_core.modules import ModulesManager
 
-    os.environ["OPENPYPE_LOCAL_ID"] = active_site
+    os.environ["AYON_SITE_ID"] = active_site
 
     def signal_handler(sig, frame):
         print("You pressed Ctrl+C. Process ended.")
-        sync_server_module.server_exit()
+        sitesync_module.server_exit()
         sys.exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
     manager = ModulesManager()
-    sync_server_module = manager.modules_by_name["sitesync"]
+    sitesync_module = manager.modules_by_name["sitesync"]
 
-    sync_server_module.server_init()
-    sync_server_module.server_start()
+    sitesync_module.server_init()
+    sitesync_module.server_start()
 
     while True:
         time.sleep(1.0)
