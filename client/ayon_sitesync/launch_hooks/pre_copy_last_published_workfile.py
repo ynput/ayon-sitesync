@@ -1,19 +1,13 @@
 import os
 import shutil
 
-from openpype.client.entities import (
-    get_representations,
-    get_project
-)
-
-from openpype.lib import PreLaunchHook
-from openpype.lib.profiles_filtering import filter_profiles
-from ayon_sitesync.sync_server import download_last_published_workfile
-from openpype.pipeline.template_data import get_template_data
-from openpype.pipeline.workfile.path_resolving import (
-    get_workfile_template_key,
-)
-from openpype.settings.lib import get_project_settings
+from ayon_api import get_representations
+from ayon_applications import PreLaunchHook
+from ayon_core.lib.profiles_filtering import filter_profiles
+from ayon_sitesync.sitesync import download_last_published_workfile
+from ayon_core.pipeline.template_data import get_template_data
+from ayon_core.pipeline.workfile import get_workfile_template_key
+from ayon_core.settings import get_project_settings
 
 
 class CopyLastPublishedWorkfile(PreLaunchHook):
@@ -43,8 +37,8 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
         Returns:
             None: This is a void method.
         """
-        sync_server = self.modules_manager.get("sitesync")
-        if not sync_server or not sync_server.enabled:
+        sitesync_addon = self.modules_manager.get("sitesync")
+        if not sitesync_addon or not sitesync_addon.enabled:
             self.log.debug("Sync server module is not enabled or available")
             return
 
@@ -102,9 +96,9 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
             )
             return
 
-        max_retries = int((sync_server.sync_project_settings[project_name]
-                                                            ["config"]
-                                                            ["retry_cnt"]))
+        max_retries = int((sitesync_addon.sync_project_settings[project_name]
+                                                               ["config"]
+                                                               ["retry_cnt"]))
 
         self.log.info("Trying to fetch last published workfile...")
 
