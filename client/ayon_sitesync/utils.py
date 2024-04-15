@@ -1,7 +1,7 @@
 import time
 import os
 
-from openpype.lib import Logger
+from ayon_core.lib import Logger
 
 log = Logger.get_logger("SiteSync")
 
