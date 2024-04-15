@@ -4,10 +4,15 @@ import asyncio
 import threading
 import concurrent.futures
 import traceback
+import time
 
 from .providers import lib
-from openpype.lib import Logger
-from openpype.pipeline import Anatomy
+from ayon_common.utils import get_local_site_id
+from ayon_core.modules import ModulesManager
+from ayon_core.tools.loader.models.sitesync import SiteSyncModel
+from ayon_core.lib import Logger
+from ayon_core.pipeline import Anatomy
+from ayon_core.pipeline.load import get_representation_path_with_anatomy
 
 from .utils import SyncStatus, ResumableError
 
@@ -221,9 +226,9 @@ def download_last_published_workfile(
         anatomy = Anatomy(project_name)
 
     # Get sync server module
-    sync_server = ModulesManager().modules_by_name.get("sitesync")
-    if not sync_server or not sync_server.enabled:
-        print("Sync server module is disabled or unavailable.")
+    sitesync_addon = ModulesManager().modules_by_name.get("sitesync")
+    if not sitesync_addon or not sitesync_addon.enabled:
+        print("Site sync addon is disabled or unavailable.")
         return
 
     if not workfile_representation:
@@ -241,10 +246,10 @@ def download_last_published_workfile(
         return
 
     # If representation isn't available on remote site, then return.
-    if not sync_server.is_representation_on_site(
+    if not sitesync_addon.is_representation_on_site(
         project_name,
         workfile_representation["_id"],
-        sync_server.get_remote_site(project_name),
+        sitesync_addon.get_remote_site(project_name),
     ):
         print(
             "Representation for task '{}' and host '{}'".format(
@@ -259,40 +264,40 @@ def download_last_published_workfile(
     # Add workfile representation to local site
     representation_ids = {workfile_representation["_id"]}
     representation_ids.update(
-        get_linked_representation_id(
-            project_name, repre_id=workfile_representation["_id"]
+        SiteSyncModel()._get_linked_representation_id(
+            project_name, workfile_representation, "reference"
         )
     )
     for repre_id in representation_ids:
-        if not sync_server.is_representation_on_site(project_name, repre_id,
-                                                     local_site_id):
-            sync_server.add_site(
+        if not sitesync_addon.is_representation_on_site(project_name, repre_id,
+                                                        local_site_id):
+            sitesync_addon.add_site(
                 project_name,
                 repre_id,
                 local_site_id,
                 force=True,
                 priority=99
             )
-    sync_server.reset_timer()
+    sitesync_addon.reset_timer()
     print("Starting to download:{}".format(last_published_workfile_path))
     # While representation unavailable locally, wait.
-    while not sync_server.is_representation_on_site(
+    while not sitesync_addon.is_representation_on_site(
         project_name, workfile_representation["_id"], local_site_id,
         max_retries=max_retries
     ):
-        sleep(5)
+        time.sleep(5)
 
     return last_published_workfile_path
 
 
-class SyncServerThread(threading.Thread):
+class SiteSyncThread(threading.Thread):
     """
         Separate thread running synchronization server with asyncio loop.
         Stopped when tray is closed.
     """
     def __init__(self, module):
         self.log = Logger.get_logger(self.__class__.__name__)
-        super(SyncServerThread, self).__init__()
+        super(SiteSyncThread, self).__init__()
         self.module = module
         self.loop = None
         self.is_running = False
