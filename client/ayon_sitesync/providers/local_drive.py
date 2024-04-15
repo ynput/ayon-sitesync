@@ -28,59 +28,6 @@ class LocalDriveHandler(AbstractProvider):
     def is_active(self):
         return True
 
-    @classmethod
-    def get_system_settings_schema(cls):
-        """
-            Returns dict for editable properties on system settings level
-
-
-            Returns:
-                (list) of dict
-        """
-        return []
-
-    @classmethod
-    def get_project_settings_schema(cls):
-        """
-            Returns dict for editable properties on project settings level
-
-
-            Returns:
-                (list) of dict
-        """
-        # for non 'studio' sites, 'studio' is configured in Anatomy
-        editable = [
-            {
-                "key": "root",
-                "label": "Roots",
-                "type": "dict-roots",
-                "object_type": {
-                    "type": "path",
-                    "multiplatform": True,
-                    "multipath": False
-                }
-            }
-        ]
-        return editable
-
-    @classmethod
-    def get_local_settings_schema(cls):
-        """
-            Returns dict for editable properties on local settings level
-
-
-            Returns:
-                (dict)
-        """
-        editable = [
-            {
-                'key': "root",
-                'label': "Roots",
-                'type': 'dict'
-            }
-        ]
-        return editable
-
     def upload_file(self, source_path, target_path,
                     server, project_name, file, representation, site,
                     overwrite=False, direction="Upload"):
@@ -171,16 +118,6 @@ class LocalDriveHandler(AbstractProvider):
 
     def get_tree(self):
         return
-
-    def get_configurable_items_for_site(self):
-        """
-            Returns list of items that should be configurable by User
-
-            Returns:
-                (list of dict)
-                [{key:"root", label:"root", value:"valueFromSettings"}]
-        """
-        pass
 
     def _copy(self, source_path, target_path):
         print("copying {}->{}".format(source_path, target_path))

@@ -35,39 +35,6 @@ class AbstractProvider:
             (boolean)
         """
 
-    @classmethod
-    @abc.abstractmethod
-    def get_system_settings_schema(cls):
-        """
-            Returns dict for editable properties on system settings level
-
-
-            Returns:
-                (list) of dict
-        """
-
-    @classmethod
-    @abc.abstractmethod
-    def get_project_settings_schema(cls):
-        """
-            Returns dict for editable properties on project settings level
-
-
-            Returns:
-                (list) of dict
-        """
-
-    @classmethod
-    @abc.abstractmethod
-    def get_local_settings_schema(cls):
-        """
-            Returns dict for editable properties on local settings level
-
-
-            Returns:
-               (list) of dict
-        """
-
     @abc.abstractmethod
     def upload_file(self, source_path, path,
                     server, project_name, file, representation, site,

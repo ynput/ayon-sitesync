@@ -57,68 +57,6 @@ class DropboxHandler(AbstractProvider):
 
         super(AbstractProvider, self).__init__()
 
-    @classmethod
-    def get_system_settings_schema(cls):
-        """
-            Returns dict for editable properties on system settings level
-
-
-            Returns:
-                (list) of dict
-        """
-        return []
-
-    @classmethod
-    def get_project_settings_schema(cls):
-        """
-            Returns dict for editable properties on project settings level
-
-
-            Returns:
-                (list) of dict
-        """
-        # {platform} tells that value is multiplatform and only specific OS
-        # should be returned
-        return [
-            {
-                "type": "text",
-                "key": "token",
-                "label": "Access Token"
-            },
-            {
-                "type": "text",
-                "key": "team_folder_name",
-                "label": "Team Folder Name"
-            },
-            {
-                "type": "text",
-                "key": "acting_as_member",
-                "label": "Acting As Member"
-            },
-            # roots could be overridden only on Project level, User cannot
-            {
-                "key": "root",
-                "label": "Roots",
-                "type": "dict-roots",
-                "object_type": {
-                    "type": "path",
-                    "multiplatform": False,
-                    "multipath": False
-                }
-            }
-        ]
-
-    @classmethod
-    def get_local_settings_schema(cls):
-        """
-            Returns dict for editable properties on local settings level
-
-
-            Returns:
-                (dict)
-        """
-        return []
-
     def _get_service(self, token, acting_as_member, team_folder_name):
         dbx = dropbox.DropboxTeam(token)
 
@@ -166,45 +104,6 @@ class DropboxHandler(AbstractProvider):
             (boolean)
         """
         return self.presets.get("enabled") and self.dbx is not None
-
-    @classmethod
-    def get_configurable_items(cls):
-        """
-            Returns filtered dict of editable properties
-
-
-            Returns:
-                (dict)
-        """
-        editable = {
-            'token': {
-                'scope': [EditableScopes.PROJECT],
-                'label': "Access Token",
-                'type': 'text',
-                'namespace': (
-                    '{project_settings}/global/sync_server/sites/{site}/token'
-                )
-            },
-            'team_folder_name': {
-                'scope': [EditableScopes.PROJECT],
-                'label': "Team Folder Name",
-                'type': 'text',
-                'namespace': (
-                    '{project_settings}/global/sync_server/sites/{site}'
-                    '/team_folder_name'
-                )
-            },
-            'acting_as_member': {
-                'scope': [EditableScopes.PROJECT, EditableScopes.LOCAL],
-                'label': "Acting As Member",
-                'type': 'text',
-                'namespace': (
-                    '{project_settings}/global/sync_server/sites/{site}'
-                    '/acting_as_member'
-                )
-            }
-        }
-        return editable
 
     def _path_exists(self, path):
         try:
