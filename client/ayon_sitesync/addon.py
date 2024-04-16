@@ -15,7 +15,7 @@ from ayon_core.addon import AYONAddon, ITrayAddon, IPluginPaths
 from ayon_common.utils import get_local_site_id
 from ayon_core.pipeline import Anatomy
 
-from ayon_sitesync.utils import SiteSyncStatus
+from .utils import SiteSyncStatus
 from .version import __version__
 from .providers.local_drive import LocalDriveHandler
 
