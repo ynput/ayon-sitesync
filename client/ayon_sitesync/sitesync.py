@@ -9,12 +9,11 @@ import time
 from .providers import lib
 from ayon_core.lib import get_local_site_id
 from ayon_core.addon import AddonsManager
-from ayon_core.tools.loader.models.sitesync import SiteSyncModel
 from ayon_core.lib import Logger
 from ayon_core.pipeline import Anatomy
 from ayon_core.pipeline.load import get_representation_path_with_anatomy
 
-from .utils import SyncStatus, ResumableError
+from .utils import SyncStatus, ResumableError, get_linked_representation_id
 
 
 async def upload(addon, project_name, file, representation, provider_name,
@@ -236,14 +235,15 @@ def download_last_published_workfile(
         return
 
     # If representation isn't available on remote site, then return.
+    remote_site = sitesync_addon.get_remote_site(project_name)
     if not sitesync_addon.is_representation_on_site(
         project_name,
         workfile_representation["id"],
         remote_site,
     ):
         print(
-            "Representation for task '{}' and host '{}'".format(
-                task_name, host_name
+            "Representation not available for task '{}', site '{}'".format(
+                task_name, remote_site
             )
         )
         return
@@ -254,7 +254,7 @@ def download_last_published_workfile(
     # Add workfile representation to local site
     representation_ids = {workfile_representation["id"]}
     representation_ids.update(
-        SiteSyncModel()._get_linked_representation_id(
+        get_linked_representation_id(
             project_name, workfile_representation, "reference"
         )
     )

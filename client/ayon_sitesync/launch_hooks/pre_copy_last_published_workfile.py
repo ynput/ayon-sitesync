@@ -1,7 +1,7 @@
 import os
 import shutil
 
-from ayon_api import get_representations
+from ayon_api import get_repre_ids_by_context_filters, get_representations
 from ayon_applications import PreLaunchHook
 from ayon_core.lib.profiles_filtering import filter_profiles
 from ayon_sitesync.sitesync import download_last_published_workfile
@@ -54,14 +54,13 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
 
         # Get data
         project_name = self.data["project_name"]
-        asset_name = self.data["asset_name"]
         task_name = self.data["task_name"]
         task_type = self.data["task_type"]
         host_name = self.application.host_name
 
         # Check settings has enabled it
         project_settings = get_project_settings(project_name)
-        profiles = project_settings["global"]["tools"]["Workfiles"][
+        profiles = project_settings["core"]["tools"]["Workfiles"][
             "last_workfile_on_startup"
         ]
         filter_data = {
@@ -102,21 +101,23 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
 
         self.log.info("Trying to fetch last published workfile...")
 
-        asset_doc = self.data.get("asset_doc")
+        folder_entity = self.data.get("folder_entity")
         anatomy = self.data.get("anatomy")
-
+        hierarchy = "/".join(folder_entity["path"].split("/")[:-1]).lstrip("/")
         context_filters = {
-            "asset": asset_name,
-            "family": "workfile",
-            "task": {"name": task_name, "type": task_type}
+            "folder.name": [folder_entity["name"]],
+            "hierarchy": [hierarchy],
+            "product.type": ["workfile"],
+            "task.name": [task_name],
+            "task.type": [task_type]
         }
 
-        workfile_representations = list(get_representations(
+        workfile_representation_ids = list(get_repre_ids_by_context_filters(
             project_name,
             context_filters=context_filters
         ))
 
-        if not workfile_representations:
+        if not workfile_representation_ids:
             self.log.debug(
                 'No published workfile for task "{}" and host "{}".'.format(
                     task_name, host_name
@@ -124,12 +125,17 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
             )
             return
 
-        filtered_repres = filter(
-            lambda r: r["context"].get("version") is not None,
-            workfile_representations
-        )
+        workfile_representations = get_representations(
+            project_name, workfile_representation_ids)
+
+        if not workfile_representations:
+            self.log.debug(
+                f"Not found representations for '{workfile_representation_ids}"
+            )
+            return
+
         workfile_representation = max(
-            filtered_repres, key=lambda r: r["context"]["version"]
+            workfile_representations, key=lambda r: r["context"]["version"]
         )
 
         # Copy file and substitute path
@@ -147,7 +153,8 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
             )
             return
 
-        project_doc = self.data["project_doc"]
+        project_entity = self.data["project_entity"]
+        task_entity = self.data["task_entity"]
 
         project_settings = self.data["project_settings"]
         template_key = get_workfile_template_key(
@@ -156,7 +163,8 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
 
         # Get workfile data
         workfile_data = get_template_data(
-            project_doc, asset_doc, task_name, host_name
+            project_entity, folder_entity, task_entity, host_name,
+            project_settings
         )
 
         extension = last_published_workfile_path.split(".")[-1]
@@ -165,7 +173,7 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
         workfile_data["ext"] = extension
 
         anatomy_result = anatomy.format(workfile_data)
-        local_workfile_path = anatomy_result[template_key]["path"]
+        local_workfile_path = anatomy_result[template_key]["default"]["path"]
 
         # Copy last published workfile to local workfile directory
         shutil.copy(
