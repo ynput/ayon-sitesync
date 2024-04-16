@@ -575,8 +575,8 @@ class GDriveHandler(AbstractProvider):
         provider_presets = None
         try:
             provider_presets = (
-                get_studio_settings()["modules"]
-                ["sync_server"]
+                get_studio_settings()
+                ["sitesync"]
                 ["providers"]
                 ["gdrive"]
             )
