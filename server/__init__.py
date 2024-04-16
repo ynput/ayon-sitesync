@@ -165,7 +165,7 @@ class SiteSync(BaseServerAddon):
         ),
         folderIdsFilter: list[str] | None = Query(
             None,
-            description="Filter folders by id, eg filtering by asset ids",
+            description="Filter folders by id, eg filtering by folder ids",
             example="['57cf375c749611ed89de0242ac140004']",
         ),
         productFilter: str | None = Query(

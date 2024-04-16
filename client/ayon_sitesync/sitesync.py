@@ -7,7 +7,7 @@ import traceback
 import time
 
 from .providers import lib
-from ayon_common.utils import get_local_site_id
+from ayon_core.lib import get_local_site_id
 from ayon_core.addon import AddonsManager
 from ayon_core.tools.loader.models.sitesync import SiteSyncModel
 from ayon_core.lib import Logger
