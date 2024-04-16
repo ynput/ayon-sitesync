@@ -3,7 +3,6 @@ import os
 import dropbox
 
 from .abstract_provider import AbstractProvider
-from ..utils import EditableScopes
 
 
 class DropboxHandler(AbstractProvider):

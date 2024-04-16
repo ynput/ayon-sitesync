@@ -7,8 +7,10 @@ import platform
 
 from ayon_core.lib import Logger
 from ayon_core.settings import get_studio_settings
-from .abstract_provider import AbstractProvider
-from ..utils import time_function, ResumableError
+
+from ayon_sitesync.utils import time_function, ResumableError
+from ayon_sitesync.providers.abstract_provider import AbstractProvider
+
 
 log = Logger.get_logger("GDriveHandler")
 
