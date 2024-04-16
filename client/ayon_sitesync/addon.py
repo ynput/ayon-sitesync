@@ -35,7 +35,7 @@ from ayon_api import (
 SYNC_ADDON_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-class SiteSyncAddon(AYONAddon, ITrayModule, IPluginPaths):
+class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     """
        Synchronization server that is syncing published files from local to
        any of implemented providers (like GDrive, S3 etc.)
