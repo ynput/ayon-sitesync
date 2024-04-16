@@ -15,7 +15,6 @@ from ayon_core.addon import AYONAddon, ITrayAddon, IPluginPaths
 from ayon_common.utils import get_local_site_id
 from ayon_core.pipeline import Anatomy
 
-from .utils import SiteSyncStatus
 from .version import __version__
 from .providers.local_drive import LocalDriveHandler
 
@@ -25,11 +24,6 @@ from .utils import (
     SiteAlreadyPresentError,
     SiteSyncStatus,
     SITE_SYNC_ROOT
-)
-
-from ayon_api import (
-    get_representations,
-    get_representation_by_id,
 )
 
 SYNC_ADDON_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -181,8 +175,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if not site_name:
             site_name = self.DEFAULT_SITE
 
-        representation = get_representation_by_id(project_name,
-                                                  representation_id)
+        representation = ayon_api.get_representation_by_id(project_name,
+                                                           representation_id)
 
         files = representation.get("files", [])
         if not files:
@@ -820,7 +814,6 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         if self.enabled:
             for project_name in ayon_api.get_project_names():
-                project_name = project["name"]
                 if self.is_project_enabled(project_name):
                     enabled_projects.append(project_name)
 
@@ -1074,9 +1067,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             self.sync_studio_settings)
 
         project_names = ayon_api.get_project_names()
-        for project_doc in project_docs:
+        for project_name in project_names:
             project_sites = copy.deepcopy(sites)
-            project_name = project_doc["name"]
             proj_settings = ayon_api.get_addon_project_settings(
                 self.name, self.version, project_name)
 
