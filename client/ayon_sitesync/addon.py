@@ -8,12 +8,21 @@ import signal
 from collections import deque, defaultdict
 import click
 
-import ayon_api
-
 from ayon_core.settings import get_studio_settings
 from ayon_core.addon import AYONAddon, ITrayAddon, IPluginPaths
 from ayon_common.utils import get_local_site_id
 from ayon_core.pipeline import Anatomy
+
+from ayon_api import (
+    get,
+    post,
+    delete,
+    get_representation_by_id,
+    get_representations,
+    get_project_names,
+    get_addon_project_settings,
+    get_project_roots_for_site
+)
 
 from .version import __version__
 from .providers.local_drive import LocalDriveHandler
@@ -175,8 +184,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if not site_name:
             site_name = self.DEFAULT_SITE
 
-        representation = ayon_api.get_representation_by_id(project_name,
-                                                           representation_id)
+        representation = get_representation_by_id(project_name,
+                                                  representation_id)
 
         files = representation.get("files", [])
         if not files:
@@ -249,7 +258,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         )
 
 
-        response = ayon_api.delete(endpoint)
+        response = delete(endpoint)
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
@@ -762,9 +771,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
               (ValueError)  Only If 'max_retries' provided if upload/download
         failed too many times to limit infinite loop check.
         """
-        representation = get_representation_by_id(project_name,
-                                                  representation_id,
-                                                  fields=["_id", "files"])
+        representation = get_representation_by_id(
+            project_name, representation_id, fields=["_id", "files"])
         if not representation:
             return False
 
@@ -813,7 +821,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         enabled_projects = []
 
         if self.enabled:
-            for project_name in ayon_api.get_project_names():
+            for project_name in get_project_names():
                 if self.is_project_enabled(project_name):
                     enabled_projects.append(project_name)
 
@@ -830,8 +838,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """
         if self.enabled:
             if single:
-                project_settings = ayon_api.get_addon_project_settings(
-                    self.name, self.version, project_name)
+                project_settings = get_addon_project_settings(self.name,
+                                                              self.version,
+                                                              project_name)
             else:
                 project_settings = self.get_sync_project_setting(project_name)
             if project_settings and project_settings.get("enabled"):
@@ -909,7 +918,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         # kwargs["representationId"] = "94dca33a-7705-11ed-8c0a-34e12d91d510"
 
-        response = ayon_api.get(endpoint, **kwargs)
+        response = get(endpoint, **kwargs)
         representations = response.data.get("representations", [])
         repinfo_by_version_id = defaultdict(dict)
         for repre in representations:
@@ -1066,10 +1075,10 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         sites = self._transform_sites_from_settings(
             self.sync_studio_settings)
 
-        project_names = ayon_api.get_project_names()
+        project_names = get_project_names()
         for project_name in project_names:
             project_sites = copy.deepcopy(sites)
-            proj_settings = ayon_api.get_addon_project_settings(
+            proj_settings = get_addon_project_settings(
                 self.name, self.version, project_name)
 
             project_sites.update(self._get_default_site_configs(
@@ -1142,8 +1151,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """
         local_site_id = get_local_site_id()
         # overrides for Studio site for particular user
-        roots = ayon_api.get_project_roots_for_site(project_name,
-                                                    local_site_id)
+        roots = get_project_roots_for_site(project_name, local_site_id)
         studio_config = {
             'enabled': True,
             'provider': 'local_drive',
@@ -1218,7 +1226,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                   "remoteStatusFilter": [SiteSyncStatus.QUEUED,
                                          SiteSyncStatus.FAILED]}
 
-        response = ayon_api.get(endpoint, **kwargs)
+        response = get(endpoint, **kwargs)
         if response.status_code not in [200, 204]:
             raise RuntimeError(
                 "Cannot get representations for sync with code {}"
@@ -1231,7 +1239,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                                            SiteSyncStatus.FAILED]
             kwargs["remoteStatusFilter"] = [SiteSyncStatus.OK]
 
-            response = ayon_api.get(endpoint, **kwargs)
+            response = get(endpoint, **kwargs)
             representations.extend(response.data["representations"])
 
         return representations
@@ -1349,7 +1357,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if priority:
             kwargs["priority"] = priority
 
-        response = ayon_api.post(endpoint, **kwargs)
+        response = post(endpoint, **kwargs)
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
@@ -1438,7 +1446,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
 
-        response = ayon_api.delete(endpoint)
+        response = delete(endpoint)
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
@@ -1498,7 +1506,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """Calls server endpoint to store sync info for 'representation_id'."""
         endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
 
-        response = ayon_api.post(endpoint, **payload_dict)
+        response = post(endpoint, **payload_dict)
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
@@ -1601,7 +1609,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name)  # noqa
 
-        response = ayon_api.get(endpoint, **payload_dict)
+        response = get(endpoint, **payload_dict)
         if response.status_code != 200:
             msg = "Cannot get sync state for representation ".format(representation_id)  # noqa
             raise RuntimeError(msg)
@@ -1625,7 +1633,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name)  # noqa
 
-        response = ayon_api.get(endpoint, **payload_dict)
+        response = get(endpoint, **payload_dict)
         if response.status_code != 200:
             msg = "Cannot get sync state for representation ".format(representation_id)  # noqa
             raise RuntimeError(msg)
@@ -1664,9 +1672,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         provider_name = self.get_provider_for_site(site=site_name)
 
         if provider_name == 'local_drive':
-            representation = get_representation_by_id(project_name,
-                                                      representation_id,
-                                                      fields=["files"])
+            representation = get_representation_by_id(
+                project_name, representation_id, fields=["files"])
             if not representation:
                 self.log.debug("No repre {} found".format(
                     representation_id))
