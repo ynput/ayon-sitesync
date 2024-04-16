@@ -11,7 +11,6 @@ import click
 from ayon_core.settings import get_studio_settings
 from ayon_core.addon import AYONAddon, ITrayAddon, IPluginPaths
 from ayon_common.utils import get_local_site_id
-from ayon_core.pipeline import Anatomy
 
 from ayon_api import (
     get,
@@ -1039,6 +1038,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             Return:
                 (Anatomy)
         """
+        from ayon_core.pipeline import Anatomy
+
         return self._anatomies.get('project_name') or Anatomy(project_name)
 
     @property
