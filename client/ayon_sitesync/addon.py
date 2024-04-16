@@ -899,7 +899,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         Args:
             project_name (str)
-            version_ids (list): of version[_id]
+            version_ids (list): of version[id]
             active_site (string): 'local', 'studio' etc
             remote_site (string): dtto
         Returns:
@@ -929,7 +929,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                     self._is_available(repre, "remoteStatus")
             else:
                 repinfo_by_version_id[version_id] = {
-                    "_id": version_id,
+                    "id": version_id,
                     "repre_count": 1,
                     "avail_repre_local": self._is_available(repre,
                                                             "localStatus"),
@@ -1399,8 +1399,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         Args:
             project_name (string): name of project (eg. collection) in DB
-            representation_id(string): _id of representation
-            file_id (string):  file _id in representation
+            representation_id(string): id of representation
+            file_id (string):  file id in representation
             side (string): local or remote side
             site_name (string): for adding new site
 
@@ -1435,7 +1435,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """
             Removes 'site_name' for 'representation' if present.
         """
-        representation_id = representation["_id"]
+        representation_id = representation["id"]
         sync_info = self.get_repre_sync_state(project_name, [representation_id],
                                               site_name)
         if not sync_info:
@@ -1465,7 +1465,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 uploaded yet
         """
         project_name = representation["context"]["project"]["name"]
-        representation_id = representation["_id"]
+        representation_id = representation["id"]
         sync_status = self.get_repre_sync_state(project_name, [representation_id],
                                                 local_site_name, remote_site_name)
 
@@ -1656,7 +1656,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
             Args:
                 project_name (string): project name (must match DB)
-                representation_id (string): MongoDB _id value
+                representation_id (string): uuid value
                 site_name (string): name of configured and active site
 
             Returns:

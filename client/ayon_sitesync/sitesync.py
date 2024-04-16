@@ -238,8 +238,8 @@ def download_last_published_workfile(
     # If representation isn't available on remote site, then return.
     if not sitesync_addon.is_representation_on_site(
         project_name,
-        workfile_representation["_id"],
-        sitesync_addon.get_remote_site(project_name),
+        workfile_representation["id"],
+        remote_site,
     ):
         print(
             "Representation for task '{}' and host '{}'".format(
@@ -252,7 +252,7 @@ def download_last_published_workfile(
     local_site_id = get_local_site_id()
 
     # Add workfile representation to local site
-    representation_ids = {workfile_representation["_id"]}
+    representation_ids = {workfile_representation["id"]}
     representation_ids.update(
         SiteSyncModel()._get_linked_representation_id(
             project_name, workfile_representation, "reference"
@@ -272,7 +272,7 @@ def download_last_published_workfile(
     print("Starting to download:{}".format(last_published_workfile_path))
     # While representation unavailable locally, wait.
     while not sitesync_addon.is_representation_on_site(
-        project_name, workfile_representation["_id"], local_site_id,
+        project_name, workfile_representation["id"], local_site_id,
         max_retries=max_retries
     ):
         time.sleep(5)
