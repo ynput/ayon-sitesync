@@ -82,12 +82,12 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     name = "sitesync"
     version = __version__
 
-    def initialize(self, module_settings):
+    def initialize(self, addon_settings):
         """
-            Called during Module Manager creation.
+            Called during Addon Manager creation.
 
             Collects needed data, checks asyncio presence.
-            Sets 'enabled' according to global settings for the module.
+            Sets 'enabled' according to global settings for the addon.
             Shouldnt be doing any initialization, thats a job for 'tray_init'
         """
 
@@ -140,7 +140,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """Implementation for applications launch hooks.
 
         Returns:
-            (str): full absolut path to directory with hooks for the module
+            (str): full absolut path to directory with hooks for the addon
         """
 
         return os.path.join(
@@ -957,7 +957,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """
             Actual initialization of Sync Server for Tray.
 
-            Called when tray is initialized, it checks if module should be
+            Called when tray is initialized, it checks if addon should be
             enabled. If not, no initialization necessary.
         """
         self.server_init()
@@ -998,7 +998,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """
             Stops sync thread if running.
 
-            Called from Module Manager
+            Called from Addon Manager
         """
         self.server_exit()
 
@@ -1737,7 +1737,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         click_group.add_command(cli_main)
 
 
-@click.group(SiteSyncAddon.name, help="SyncServer module related commands.")
+@click.group(SiteSyncAddon.name, help="SiteSync addon related commands.")
 def cli_main():
     pass
 
@@ -1755,23 +1755,23 @@ def syncservice(active_site):
     on linux and window service).
     """
 
-    from ayon_core.modules import ModulesManager
+    from ayon_core.addon import AddonsManager
 
     os.environ["AYON_SITE_ID"] = active_site
 
     def signal_handler(sig, frame):
         print("You pressed Ctrl+C. Process ended.")
-        sitesync_module.server_exit()
+        sitesync_addon.server_exit()
         sys.exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    manager = ModulesManager()
-    sitesync_module = manager.modules_by_name["sitesync"]
+    manager = AddonsManager()
+    sitesync_addon = manager.addons_by_name["sitesync"]
 
-    sitesync_module.server_init()
-    sitesync_module.server_start()
+    sitesync_addon.server_init()
+    sitesync_addon.server_start()
 
     while True:
         time.sleep(1.0)

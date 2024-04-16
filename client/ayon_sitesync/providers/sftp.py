@@ -272,7 +272,7 @@ class SFTPHandler(AbstractProvider):
         provider_presets = None
         try:
             provider_presets = (
-                get_studio_settings()["modules"]
+                get_studio_settings()["addons"]
                 ["sitesync"]
                 ["providers"]
                 ["sftp"]

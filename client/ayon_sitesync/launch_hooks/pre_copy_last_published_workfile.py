@@ -37,7 +37,7 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
         Returns:
             None: This is a void method.
         """
-        sitesync_addon = self.modules_manager.get("sitesync")
+        sitesync_addon = self.addons_manager.get("sitesync")
         if not sitesync_addon or not sitesync_addon.enabled:
             self.log.debug("Sync server module is not enabled or available")
             return
