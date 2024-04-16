@@ -819,7 +819,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         enabled_projects = []
 
         if self.enabled:
-            for project in ayon_api.get_projects(fields=["name"]):
+            for project_name in ayon_api.get_project_names():
                 project_name = project["name"]
                 if self.is_project_enabled(project_name):
                     enabled_projects.append(project_name)
