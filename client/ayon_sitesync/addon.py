@@ -1317,29 +1317,29 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """
         files_status = []
         for file_info in representation["files"]:
-            status_doc = copy.deepcopy(file_info["{}Status".format(side)])
-            status_doc["fileHash"] = file_info["fileHash"]
-            status_doc["id"] = file_info["id"]
+            status_entity = copy.deepcopy(file_info["{}Status".format(side)])
+            status_entity["fileHash"] = file_info["fileHash"]
+            status_entity["id"] = file_info["id"]
             if file_info["fileHash"] == file["fileHash"]:
                 if new_file_id:
-                    status_doc["status"] = SiteSyncStatus.OK
-                    status_doc.pop("message")
-                    status_doc.pop("retries")
+                    status_entity["status"] = SiteSyncStatus.OK
+                    status_entity.pop("message")
+                    status_entity.pop("retries")
                 elif progress is not None:
-                    status_doc["status"] = SiteSyncStatus.IN_PROGRESS
-                    status_doc["progress"] = progress
+                    status_entity["status"] = SiteSyncStatus.IN_PROGRESS
+                    status_entity["progress"] = progress
                 elif error:
-                    status_doc["status"] = SiteSyncStatus.FAILED
-                    tries = status_doc.get("retries", 0)
+                    status_entity["status"] = SiteSyncStatus.FAILED
+                    tries = status_entity.get("retries", 0)
                     tries += 1
-                    status_doc["retries"] = tries
-                    status_doc["message"] = error
+                    status_entity["retries"] = tries
+                    status_entity["message"] = error
                 elif pause is not None:
                     if pause:
-                        status_doc["pause"] = True
+                        status_entity["pause"] = True
                     else:
-                        status_doc.remove("pause")
-            files_status.append(status_doc)
+                        status_entity.remove("pause")
+            files_status.append(status_entity)
 
         representation_id = representation["representationId"]
 
