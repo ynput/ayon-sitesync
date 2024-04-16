@@ -12,10 +12,8 @@ from ayon_core.settings import get_studio_settings
 from ayon_core.addon import AYONAddon, ITrayAddon, IPluginPaths
 from ayon_core.lib import get_local_site_id
 
+import ayon_api
 from ayon_api import (
-    get,
-    post,
-    delete,
     get_representation_by_id,
     get_representations,
     get_project_names,
@@ -257,7 +255,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         )
 
 
-        response = delete(endpoint)
+        response = ayon_api.delete(endpoint)
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
@@ -917,7 +915,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         # kwargs["representationId"] = "94dca33a-7705-11ed-8c0a-34e12d91d510"
 
-        response = get(endpoint, **kwargs)
+        response = ayon_api.get(endpoint, **kwargs)
         representations = response.data.get("representations", [])
         repinfo_by_version_id = defaultdict(dict)
         for repre in representations:
@@ -1227,7 +1225,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                   "remoteStatusFilter": [SiteSyncStatus.QUEUED,
                                          SiteSyncStatus.FAILED]}
 
-        response = get(endpoint, **kwargs)
+        response = ayon_api.get(endpoint, **kwargs)
         if response.status_code not in [200, 204]:
             raise RuntimeError(
                 "Cannot get representations for sync with code {}"
@@ -1240,7 +1238,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                                            SiteSyncStatus.FAILED]
             kwargs["remoteStatusFilter"] = [SiteSyncStatus.OK]
 
-            response = get(endpoint, **kwargs)
+            response = ayon_api.get(endpoint, **kwargs)
             representations.extend(response.data["representations"])
 
         return representations
@@ -1358,7 +1356,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if priority:
             kwargs["priority"] = priority
 
-        response = post(endpoint, **kwargs)
+        response = ayon_api.post(endpoint, **kwargs)
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
@@ -1447,7 +1445,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
 
-        response = delete(endpoint)
+        response = ayon_api.delete(endpoint)
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
@@ -1507,7 +1505,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """Calls server endpoint to store sync info for 'representation_id'."""
         endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
 
-        response = post(endpoint, **payload_dict)
+        response = ayon_api.post(endpoint, **payload_dict)
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
@@ -1610,7 +1608,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name)  # noqa
 
-        response = get(endpoint, **payload_dict)
+        response = ayon_api.get(endpoint, **payload_dict)
         if response.status_code != 200:
             msg = "Cannot get sync state for representation ".format(representation_id)  # noqa
             raise RuntimeError(msg)
@@ -1634,7 +1632,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name)  # noqa
 
-        response = get(endpoint, **payload_dict)
+        response = ayon_api.get(endpoint, **payload_dict)
         if response.status_code != 200:
             msg = "Cannot get sync state for representation ".format(representation_id)  # noqa
             raise RuntimeError(msg)
