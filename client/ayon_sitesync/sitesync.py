@@ -6,13 +6,13 @@ import concurrent.futures
 import traceback
 import time
 
-from .providers import lib
 from ayon_core.lib import get_local_site_id
 from ayon_core.addon import AddonsManager
 from ayon_core.lib import Logger
 from ayon_core.pipeline import Anatomy
 from ayon_core.pipeline.load import get_representation_path_with_anatomy
 
+from .providers import lib
 from .utils import SyncStatus, ResumableError, get_linked_representation_id
 
 
