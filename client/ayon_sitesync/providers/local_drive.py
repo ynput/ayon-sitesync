@@ -12,8 +12,8 @@ log = Logger.get_logger("SyncServer")
 
 
 class LocalDriveHandler(AbstractProvider):
-    CODE = 'local_drive'
-    LABEL = 'Local drive'
+    CODE = "local_drive"
+    LABEL = "Local drive"
 
     """ Handles required operations on mounted disks with OS """
     def __init__(self, project_name, site_name, tree=None, presets=None):

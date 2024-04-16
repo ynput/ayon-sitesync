@@ -76,8 +76,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     # different limits imposed by its API
     # set 0 to no limit
     REPRESENTATION_LIMIT = 100
-    DEFAULT_SITE = 'studio'
-    LOCAL_SITE = 'local'
+    DEFAULT_SITE = "studio"
+    LOCAL_SITE = "local"
     LOG_PROGRESS_SEC = 5  # how often log progress to DB
     DEFAULT_PRIORITY = 50  # higher is better, allowed range 1 - 1000
 
@@ -218,7 +218,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             })
 
         payload_dict = {"files": new_site_files}
-        representation_id = representation_id.replace("-", '')
+        representation_id = representation_id.replace("-", "")
 
         self._set_state_sync_state(project_name, representation_id, site_name,
                                    payload_dict)
@@ -883,7 +883,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                                                [representation_id],
                                                processed_site)
         if not sync_state:
-            raise RuntimeError("Cannot find repre with '{}".format(representation_id))  # noqa
+            raise RuntimeError("Cannot find repre with '{}'".format(representation_id))  # noqa
         payload_dict = {"files": sync_state["files"]}
 
         alternate_sites = set(alternate_sites)
@@ -933,9 +933,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 repinfo_by_version_id[version_id] = {
                     "_id": version_id,
                     "repre_count": 1,
-                    'avail_repre_local': self._is_available(repre,
+                    "avail_repre_local": self._is_available(repre,
                                                             "localStatus"),
-                    'avail_repre_remote': self._is_available(repre,
+                    "avail_repre_remote": self._is_available(repre,
                                                              "remoteStatus"),
                 }
 
@@ -1040,7 +1040,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """
         from ayon_core.pipeline import Anatomy
 
-        return self._anatomies.get('project_name') or Anatomy(project_name)
+        return self._anatomies.get("project_name") or Anatomy(project_name)
 
     @property
     def sync_studio_settings(self):
@@ -1154,8 +1154,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         # overrides for Studio site for particular user
         roots = get_project_roots_for_site(project_name, local_site_id)
         studio_config = {
-            'enabled': True,
-            'provider': 'local_drive',
+            "enabled": True,
+            "provider": "local_drive",
             "root": roots
         }
         all_sites = {self.DEFAULT_SITE: studio_config}
@@ -1191,7 +1191,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         for site_config in sync_sett.get("sites"):
             sites[site_config["name"]] = site_config["provider"]
 
-        return sites.get(site, 'N/A')
+        return sites.get(site, "N/A")
 
     @time_function
     def get_sync_representations(self, project_name, active_site, remote_site,
@@ -1365,11 +1365,11 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if progress is not None or priority is not None:
             return
 
-        status = 'failed'
-        error_str = 'with error {}'.format(error)
+        status = "failed"
+        error_str = "with error {}".format(error)
         if new_file_id:
-            status = 'succeeded with id {}'.format(new_file_id)
-            error_str = ''
+            status = "succeeded with id {}".format(new_file_id)
+            error_str = ""
 
         source_file = file.get("path", "")
 
@@ -1425,7 +1425,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         remote_site = self.get_remote_site(project_name)
 
         if side:
-            if side == 'local':
+            if side == "local":
                 site_name = local_site
             else:
                 site_name = remote_site
@@ -1672,7 +1672,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         provider_name = self.get_provider_for_site(site=site_name)
 
-        if provider_name == 'local_drive':
+        if provider_name == "local_drive":
             representation = get_representation_by_id(
                 project_name, representation_id, fields=["files"])
             if not representation:
@@ -1680,7 +1680,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                     representation_id))
                 return
 
-            local_file_path = ''
+            local_file_path = ""
             for file in representation.get("files"):
                 local_file_path = self.get_local_file_path(project_name,
                                                            site_name,

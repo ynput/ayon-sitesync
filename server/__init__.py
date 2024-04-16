@@ -126,7 +126,7 @@ class SiteSync(BaseServerAddon):
                 used_site = settings.dict()["local_setting"][site_type]
                 sites[site_type] = []
 
-                if used_site == 'local':
+                if used_site == "local":
                     sites[site_type].append(site_info["id"])
                 else:
                     sites[site_type].append(used_site)        

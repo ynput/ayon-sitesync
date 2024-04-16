@@ -24,9 +24,9 @@ except (ImportError, SyntaxError):
     # handle imports from Python 2 hosts - in those only basic methods are used
     log.warning("Import failed, imported from Python 2, operations will fail.")
 
-SCOPES = ['https://www.googleapis.com/auth/drive.metadata.readonly',
-          'https://www.googleapis.com/auth/drive.file',
-          'https://www.googleapis.com/auth/drive.readonly']  # for write|delete
+SCOPES = ["https://www.googleapis.com/auth/drive.metadata.readonly",
+          "https://www.googleapis.com/auth/drive.file",
+          "https://www.googleapis.com/auth/drive.readonly"]  # for write|delete
 
 
 class GDriveHandler(AbstractProvider):
@@ -53,10 +53,10 @@ class GDriveHandler(AbstractProvider):
             }
           }
     """
-    CODE = 'gdrive'
-    LABEL = 'Google Drive'
+    CODE = "gdrive"
+    LABEL = "Google Drive"
 
-    FOLDER_STR = 'application/vnd.google-apps.folder'
+    FOLDER_STR = "application/vnd.google-apps.folder"
     MY_DRIVE_STR = 'My Drive'  # name of root folder of regular Google drive
     CHUNK_SIZE = 2097152  # must be divisible by 256! used for upload chunks
 

@@ -7,8 +7,8 @@ from ..utils import EditableScopes
 
 
 class DropboxHandler(AbstractProvider):
-    CODE = 'dropbox'
-    LABEL = 'Dropbox'
+    CODE = "dropbox"
+    LABEL = "Dropbox"
 
     def __init__(self, project_name, site_name, tree=None, presets=None):
         self.active = False

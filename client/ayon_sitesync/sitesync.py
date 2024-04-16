@@ -155,12 +155,12 @@ def resolve_paths(module, file_path, project_name,
         Returns:
             (string, string) - proper absolute paths, remote path is optional
     """
-    remote_file_path = ''
+    remote_file_path = ""
     if remote_handler:
         remote_file_path = remote_handler.resolve_path(file_path)
 
     local_handler = lib.factory.get_provider(
-        'local_drive', project_name, module.get_active_site(project_name))
+        "local_drive", project_name, module.get_active_site(project_name))
     local_file_path = local_handler.resolve_path(file_path)
 
     return local_file_path, remote_file_path
@@ -344,7 +344,7 @@ class SiteSyncThread(threading.Thread):
                     if not all([local_site, remote_site]):
                         continue
 
-                    remote_site_preset = preset.get('sites')[remote_site]
+                    remote_site_preset = preset.get("sites")[remote_site]
 
                     handler, remote_provider, limit = \
                         self._get_remote_provider_info(project_name,
@@ -379,14 +379,14 @@ class SiteSyncThread(threading.Thread):
                         if files:
                             for file in files:
                                 # skip already processed files
-                                file_path = file.get('path', '')
+                                file_path = file.get("path", "")
                                 if file_path in processed_file_path:
                                     continue
                                 status = self.module.check_status(
                                     file,
                                     local_site,
                                     remote_site,
-                                    preset.get('config'))
+                                    preset.get("config"))
                                 if status == SyncStatus.DO_UPLOAD:
                                     tree = handler.get_tree()
                                     task = asyncio.create_task(
@@ -506,7 +506,7 @@ class SiteSyncThread(threading.Thread):
         list(map(lambda task: task.cancel(), tasks))  # cancel all the tasks
         results = await asyncio.gather(*tasks, return_exceptions=True)
         self.log.debug(
-            f'Finished awaiting cancelled tasks, results: {results}...')
+            f"Finished awaiting cancelled tasks, results: {results}...")
         await self.loop.shutdown_asyncgens()
         # to really make sure everything else has time to stop
         self.executor.shutdown(wait=True)
@@ -536,8 +536,8 @@ class SiteSyncThread(threading.Thread):
                 local_site, remote_site))
             return None, None
 
-        local_site_config = sync_config.get('sites')[local_site]
-        remote_site_config = sync_config.get('sites')[remote_site]
+        local_site_config = sync_config.get("sites")[local_site]
+        remote_site_config = sync_config.get("sites")[remote_site]
         if not all([_site_is_working(self.module, project_name, local_site,
                                      local_site_config),
                     _site_is_working(self.module, project_name, remote_site,

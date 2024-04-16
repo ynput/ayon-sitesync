@@ -31,8 +31,8 @@ class SFTPHandler(AbstractProvider):
         Settings could be overwritten per project.
 
     """
-    CODE = 'sftp'
-    LABEL = 'SFTP'
+    CODE = "sftp"
+    LABEL = "SFTP"
 
     def __init__(self, project_name, site_name, tree=None, presets=None):
         self.presets = None
@@ -87,7 +87,7 @@ class SFTPHandler(AbstractProvider):
             Format is importing for usage of python's format ** approach
         """
         # TODO implement multiple roots
-        return {"root": {"work": self.presets['root']}}
+        return {"root": {"work": self.presets["root"]}}
 
     def get_tree(self):
         """

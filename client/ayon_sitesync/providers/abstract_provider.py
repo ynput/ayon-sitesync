@@ -7,8 +7,8 @@ log = Logger.get_logger("SyncServer")
 
 @six.add_metaclass(abc.ABCMeta)
 class AbstractProvider:
-    CODE = ''
-    LABEL = ''
+    CODE = ""
+    LABEL = ""
 
     _log = None
 
