@@ -1073,7 +1073,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         sites = self._transform_sites_from_settings(
             self.sync_studio_settings)
 
-        project_docs = ayon_api.get_projects(fields=["name"])
+        project_names = ayon_api.get_project_names()
         for project_doc in project_docs:
             project_sites = copy.deepcopy(sites)
             project_name = project_doc["name"]
