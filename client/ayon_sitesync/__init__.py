@@ -1,5 +1,6 @@
-from .addon import SiteSyncAddon
+from .addon import SiteSyncAddon, SYNC_ADDON_DIR
 
 __all__ = (
     "SiteSyncAddon",
+    "SYNC_ADDON_DIR"
 )

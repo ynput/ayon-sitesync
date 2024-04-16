@@ -5,8 +5,6 @@ from ayon_core.lib import Logger
 
 log = Logger.get_logger("SiteSync")
 
-SITE_SYNC_ROOT = os.path.dirname(os.path.abspath(__file__))
-
 
 class ResumableError(Exception):
     """Error which could be temporary, skip current loop, try next time"""

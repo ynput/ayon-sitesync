@@ -29,7 +29,6 @@ from .utils import (
     SyncStatus,
     SiteAlreadyPresentError,
     SiteSyncStatus,
-    SITE_SYNC_ROOT
 )
 
 SYNC_ADDON_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -123,7 +122,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """
 
         resource_path = os.path.join(
-            SITE_SYNC_ROOT, "providers", "resources"
+            SYNC_ADDON_DIR, "providers", "resources"
         )
         icons = {}
         for file_path in os.listdir(resource_path):
@@ -768,28 +767,26 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
               (ValueError)  Only If 'max_retries' provided if upload/download
         failed too many times to limit infinite loop check.
         """
-        representation = get_representation_by_id(
-            project_name, representation_id, fields=["_id", "files"])
-        if not representation:
+        representation_status = self.get_repre_sync_state(
+            project_name, [representation_id], site_name)
+
+        if not representation_status:
             return False
 
-        on_site = False
-        for file_info in representation.get("files", []):
-            for site in file_info.get("sites", []):
-                if site["name"] != site_name:
-                    continue
+        if site_name == get_local_site_id():
+            status = representation_status["localStatus"]
+        else:
+            status = representation_status["remoteStatus"]
 
-                if max_retries:
-                    tries = self._get_tries_count_from_rec(site)
-                    if tries >= max_retries:
-                        raise ValueError("Failed too many times")
+        if max_retries:
+            tries = status.get("retries", 0)
+            if tries >= max_retries:
+                raise ValueError("Failed too many times")
 
-                if (site.get("progress") or site.get("error") or
-                        not site.get("created_dt")):
-                    return False
-                on_site = True
+        if (status.get("progress") or status.get("error")):
+            return False
 
-        return on_site
+        return True
 
     def _reset_timer_with_rest_api(self):
         # POST to webserver sites to add to representations
