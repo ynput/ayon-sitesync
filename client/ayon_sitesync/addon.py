@@ -11,7 +11,7 @@ import click
 import ayon_api
 
 from ayon_core.settings import get_studio_settings
-from ayon_core.modules import AYONAddon, ITrayModule, IPluginPaths
+from ayon_core.addon import AYONAddon, ITrayAddon, IPluginPaths
 from ayon_common.utils import get_local_site_id
 from ayon_core.pipeline import Anatomy
 
