@@ -91,7 +91,7 @@ async def download(addon, project_name, file, representation, provider_name,
         Downloads file to local folder denoted in representation.Context.
 
     Args:
-        addon(SyncServerAddon): object to run SyncServerAddon API
+        addon (SyncServerAddon): object to run SyncServerAddon API
         project_name (str): source
         file (dictionary) : info about processed file
         representation (dictionary):  repr that 'file' belongs to
