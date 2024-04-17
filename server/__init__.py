@@ -116,6 +116,11 @@ class SiteSync(BaseServerAddon):
         project_name: str = Depends(dep_project_name),
         user: UserEntity = Depends(dep_current_user),
     ) -> {}:
+        """Provide values of available sites for 'user'.
+
+        It is used in Summary page to change combinations of sites to learn
+        availability of representations on them.
+        """
         sites = {}
         site_infos = await Postgres.fetch("select id, data from sites")
         for site_info in site_infos:
@@ -494,6 +499,7 @@ class SiteSync(BaseServerAddon):
         representation_id: str = Depends(dep_representation_id),
         site_name: str = Path(...),  # TODO: add regex validator/dependency here! Important!
     ) -> Response:
+        """Clear information about presence of repre_id on a site."""
         await check_sync_status_table(project_name)
 
         async with Postgres.acquire() as conn:
@@ -514,6 +520,7 @@ class SiteSync(BaseServerAddon):
 
 
 def get_overal_status(files: dict) -> StatusEnum:
+    """Resolves state of files of a representation for UI to print value"""
     all_states = [v.get("status", StatusEnum.NOT_AVAILABLE) for v in files.values()]
     if all(stat == StatusEnum.NOT_AVAILABLE for stat in all_states):
         return StatusEnum.NOT_AVAILABLE
