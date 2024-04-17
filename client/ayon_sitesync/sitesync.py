@@ -146,7 +146,7 @@ def resolve_paths(addon, file_path, project_name,
         Ejected here because of Python 2 hosts (GDriveHandler is an issue)
 
         Args:
-            addon(SyncServerAddon): object to run SyncServerAddon API
+            addon (SyncServerAddon): object to run SyncServerAddon API
             file_path(string): path with {root}
             project_name(string): project name
             remote_site_name(string): remote site
