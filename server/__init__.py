@@ -124,7 +124,8 @@ class SiteSync(BaseServerAddon):
                                                             site_info["id"])
             for site_type in ["active_site", "remote_site"]:
                 used_site = settings.dict()["local_setting"][site_type]
-                sites[site_type] = []
+                if not used_site:
+                    continue
 
                 if used_site == "local":
                     sites[site_type].append(site_info["id"])
@@ -165,7 +166,7 @@ class SiteSync(BaseServerAddon):
         ),
         folderIdsFilter: list[str] | None = Query(
             None,
-            description="Filter folders by id, eg filtering by folder ids",
+            description="Filter folders by id, eg filtering by asset ids",
             example="['57cf375c749611ed89de0242ac140004']",
         ),
         productFilter: str | None = Query(
