@@ -25,6 +25,8 @@ class IntegrateSiteSync(pyblish.api.InstancePlugin):
         project_name = context.data["projectEntity"]["name"]
         addons_by_name = context.data["ayonAddons"]
         sitesync_addon = addons_by_name["sitesync"]
+        if not sitesync_addon.enabled:
+            return
 
         for repre_id, inst in published_representations.items():  # noqa
             sites = sitesync_addon.compute_resource_sync_sites(
