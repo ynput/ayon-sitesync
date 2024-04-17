@@ -32,7 +32,7 @@ async def upload(addon, project_name, file, representation, provider_name,
         'projectB')
 
     Args:
-        addon(SyncServerAddon): object to run SyncServerAddon API
+        addon (SyncServerAddon): object to run SyncServerAddon API
         project_name (str): source db
         file (dictionary): of file from representation in Mongo
         representation (dictionary): of representation
