@@ -262,28 +262,6 @@ class SFTPHandler(AbstractProvider):
 
         return self.conn.isfile(file_path)
 
-    @classmethod
-    def get_presets(cls):
-        """
-            Get presets for this provider
-        Returns:
-            (dictionary) of configured sites
-        """
-        provider_presets = None
-        try:
-            provider_presets = (
-                get_studio_settings()["addons"]
-                ["sitesync"]
-                ["providers"]
-                ["sftp"]
-            )
-        except KeyError:
-            log.info(("Sync Server: There are no presets for SFTP " +
-                      "provider.").
-                     format(str(provider_presets)))
-            return
-        return provider_presets
-
     def _get_conn(self):
         """
             Returns fresh sftp connection.

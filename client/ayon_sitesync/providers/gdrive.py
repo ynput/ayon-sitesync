@@ -567,28 +567,6 @@ class GDriveHandler(AbstractProvider):
             return False
         return file[0]
 
-    @classmethod
-    def get_presets(cls):
-        """
-            Get presets for this provider
-        Returns:
-            (dictionary) of configured sites
-        """
-        provider_presets = None
-        try:
-            provider_presets = (
-                get_studio_settings()
-                ["sitesync"]
-                ["providers"]
-                ["gdrive"]
-            )
-        except KeyError:
-            log.info((
-                "Sync Server: There are no presets for Gdrive provider."
-            ).format(str(provider_presets)))
-            return
-        return provider_presets
-
     def _get_gd_service(self, credentials_path):
         """
             Authorize client with 'credentials.json', uses service account.
