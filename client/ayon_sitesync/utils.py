@@ -64,75 +64,75 @@ def get_linked_representation_id(
         link_type,
         max_depth=None
     ):
-        """Returns list of linked ids of particular type (if provided).
+    """Returns list of linked ids of particular type (if provided).
 
-        One of representation document or representation id must be passed.
-        Note:
-            Representation links now works only from representation through
-                version back to representations.
+    One of representation document or representation id must be passed.
+    Note:
+        Representation links now works only from representation through
+            version back to representations.
 
-        Todos:
-            Missing depth query. Not sure how it did find more representations
-                in depth, probably links to version?
-            This function should probably live in sitesync addon?
+    Todos:
+        Missing depth query. Not sure how it did find more representations
+            in depth, probably links to version?
+        This function should probably live in sitesync addon?
 
-        Args:
-            project_name (str): Name of project where look for links.
-            repre_entity (dict[str, Any]): Representation entity.
-            link_type (str): Type of link (e.g. 'reference', ...).
-            max_depth (int): Limit recursion level. Default: 0
+    Args:
+        project_name (str): Name of project where look for links.
+        repre_entity (dict[str, Any]): Representation entity.
+        link_type (str): Type of link (e.g. 'reference', ...).
+        max_depth (int): Limit recursion level. Default: 0
 
-        Returns:
-            List[ObjectId] Linked representation ids.
-        """
+    Returns:
+        List[ObjectId] Linked representation ids.
+    """
 
-        if not repre_entity:
-            return []
+    if not repre_entity:
+        return []
 
-        version_id = repre_entity["versionId"]
-        if max_depth is None or max_depth == 0:
-            max_depth = 1
+    version_id = repre_entity["versionId"]
+    if max_depth is None or max_depth == 0:
+        max_depth = 1
 
-        link_types = None
-        if link_type:
-            link_types = [link_type]
+    link_types = None
+    if link_type:
+        link_types = [link_type]
 
-        # Store already found version ids to avoid recursion, and also to store
-        #   output -> Don't forget to remove 'version_id' at the end!!!
-        linked_version_ids = {version_id}
-        # Each loop of depth will reset this variable
-        versions_to_check = {version_id}
-        for _ in range(max_depth):
-            if not versions_to_check:
-                break
+    # Store already found version ids to avoid recursion, and also to store
+    #   output -> Don't forget to remove 'version_id' at the end!!!
+    linked_version_ids = {version_id}
+    # Each loop of depth will reset this variable
+    versions_to_check = {version_id}
+    for _ in range(max_depth):
+        if not versions_to_check:
+            break
 
-            versions_links = get_versions_links(
-                project_name,
-                versions_to_check,
-                link_types=link_types,
-                link_direction="out")
-
-            versions_to_check = set()
-            for links in versions_links.values():
-                for link in links:
-                    # Care only about version links
-                    if link["entityType"] != "version":
-                        continue
-                    entity_id = link["entityId"]
-                    # Skip already found linked version ids
-                    if entity_id in linked_version_ids:
-                        continue
-                    linked_version_ids.add(entity_id)
-                    versions_to_check.add(entity_id)
-
-        linked_version_ids.remove(version_id)
-        if not linked_version_ids:
-            return []
-        representations = get_representations(
+        versions_links = get_versions_links(
             project_name,
-            version_ids=linked_version_ids,
-            fields=["id"])
-        return [
-            repre["id"]
-            for repre in representations
-        ]
+            versions_to_check,
+            link_types=link_types,
+            link_direction="out")
+
+        versions_to_check = set()
+        for links in versions_links.values():
+            for link in links:
+                # Care only about version links
+                if link["entityType"] != "version":
+                    continue
+                entity_id = link["entityId"]
+                # Skip already found linked version ids
+                if entity_id in linked_version_ids:
+                    continue
+                linked_version_ids.add(entity_id)
+                versions_to_check.add(entity_id)
+
+    linked_version_ids.remove(version_id)
+    if not linked_version_ids:
+        return []
+    representations = get_representations(
+        project_name,
+        version_ids=linked_version_ids,
+        fields=["id"])
+    return [
+        repre["id"]
+        for repre in representations
+    ]
