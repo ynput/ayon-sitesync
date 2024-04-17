@@ -157,9 +157,6 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
         task_entity = self.data["task_entity"]
 
         project_settings = self.data["project_settings"]
-        template_key = get_workfile_template_key(
-            task_name, host_name, project_name, project_settings
-        )
 
         # Get workfile data
         workfile_data = get_template_data(
@@ -172,8 +169,11 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
                 workfile_representation["context"]["version"] + 1)
         workfile_data["ext"] = extension
 
-        anatomy_result = anatomy.format(workfile_data)
-        local_workfile_path = anatomy_result[template_key]["default"]["path"]
+        template_key = get_workfile_template_key(
+            task_name, host_name, project_name, project_settings
+        )
+        template = anatomy.get_template_item("work", template_key, "path")
+        local_workfile_path = template.format_strict(workfile_data)
 
         # Copy last published workfile to local workfile directory
         shutil.copy(
