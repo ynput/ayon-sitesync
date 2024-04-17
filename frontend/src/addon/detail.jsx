@@ -49,14 +49,14 @@ const SiteSyncDetailTable = ({ data, localSite, remoteSite }) => (
       field="size"
       header="Size"
       body={(row) => formatFileSize(row.size)}
-      style={{ maxWidth: 200 }}
+      style={{ maxWidth: 100 }}
     />
     {localSite && (
       <Column
         field="localStatus"
         header="Local"
         body={(val) => formatStatus(val.localStatus)}
-        style={{ maxWidth: 150 }}
+        style={{ minWidth: 80, maxWidth:225, whiteSpace: "normal", overflow: "visible" }}
       />
     )}
     {remoteSite && (
@@ -64,7 +64,7 @@ const SiteSyncDetailTable = ({ data, localSite, remoteSite }) => (
         field="remoteStatus"
         header="Remote"
         body={(val) => formatStatus(val.remoteStatus)}
-        style={{ maxWidth: 150 }}
+        style={{ minWidth: 80, maxWidth:225, whiteSpace: "normal", overflow: "visible" }}
       />
     )}
   </DataTable>

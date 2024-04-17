@@ -10,11 +10,15 @@ const SYNC_STATES = [
 ]
 
 const formatStatus = (statusObj) => {
+   let failed_msg = "Failed"
+   if (statusObj["message"] !== null){
+       failed_msg = statusObj["message"]
+   }
   const cell = {
     '-1': { label: 'N/A', color: 'red' },
     0: { label: 'In progress', color: '#dddd11' },
     1: { label: 'Queued', color: '#ccccff' },
-    2: { label: 'Failed', color: 'red' },
+    2: { label:  failed_msg, color: 'red' },
     3: { label: 'Paused', color: '#0012ff' },
     4: { label: 'Synced', color: '#00ffaa' },
   }[statusObj['status']]
