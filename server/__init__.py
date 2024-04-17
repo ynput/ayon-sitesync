@@ -116,17 +116,14 @@ class SiteSync(BaseServerAddon):
         project_name: str = Depends(dep_project_name),
         user: UserEntity = Depends(dep_current_user),
     ) -> {}:
-        """Provide values of available sites for 'user'.
-
-        It is used in Summary page to change combinations of sites to learn
-        availability of representations on them.
-        """
-        sites = {}
+        sites = {"active_site": [], "remote_site": []}
         site_infos = await Postgres.fetch("select id, data from sites")
+        logging.info(f"site_infos::{len(site_infos)}")
         for site_info in site_infos:
             settings = await self.get_project_site_settings(project_name,
                                                             user.name, 
                                                             site_info["id"])
+            logging.info(f"settings::{settings.dict()['local_setting']}")
             for site_type in ["active_site", "remote_site"]:
                 used_site = settings.dict()["local_setting"][site_type]
                 if not used_site:
@@ -135,8 +132,8 @@ class SiteSync(BaseServerAddon):
                 if used_site == "local":
                     sites[site_type].append(site_info["id"])
                 else:
-                    sites[site_type].append(used_site)        
-
+                    sites[site_type].append(used_site)
+        logging.info(f"sites::{sites}")
         return sites
 
 
@@ -283,11 +280,11 @@ class SiteSync(BaseServerAddon):
             INNER JOIN
                 project_{project_name}.hierarchy as h
                 ON f.id = h.id
-            LEFT JOIN
+            INNER JOIN
                 project_{project_name}.sitesync_files_status as local
                 ON local.representation_id = r.id
                 AND local.site_name = '{localSite}'
-            LEFT JOIN
+            INNER JOIN
                 project_{project_name}.sitesync_files_status as remote
                 ON remote.representation_id = r.id
                 AND remote.site_name = '{remoteSite}'
@@ -499,7 +496,6 @@ class SiteSync(BaseServerAddon):
         representation_id: str = Depends(dep_representation_id),
         site_name: str = Path(...),  # TODO: add regex validator/dependency here! Important!
     ) -> Response:
-        """Clear information about presence of repre_id on a site."""
         await check_sync_status_table(project_name)
 
         async with Postgres.acquire() as conn:
@@ -520,7 +516,6 @@ class SiteSync(BaseServerAddon):
 
 
 def get_overal_status(files: dict) -> StatusEnum:
-    """Resolves state of files of a representation for UI to print value"""
     all_states = [v.get("status", StatusEnum.NOT_AVAILABLE) for v in files.values()]
     if all(stat == StatusEnum.NOT_AVAILABLE for stat in all_states):
         return StatusEnum.NOT_AVAILABLE
