@@ -1,13 +1,18 @@
 import os
 import shutil
 
-from ayon_api import get_repre_ids_by_context_filters, get_representations
+from ayon_api import (
+    get_representations,
+    get_products,
+    get_last_versions
+)
+
 from ayon_applications import PreLaunchHook
-from ayon_core.lib.profiles_filtering import filter_profiles
-from ayon_sitesync.sitesync import download_last_published_workfile
 from ayon_core.pipeline.template_data import get_template_data
 from ayon_core.pipeline.workfile import get_workfile_template_key
-from ayon_core.settings import get_project_settings
+from ayon_core.pipeline.workfile import should_use_last_workfile_on_launch
+
+from ayon_sitesync.sitesync import download_last_published_workfile
 
 
 class CopyLastPublishedWorkfile(PreLaunchHook):
@@ -37,8 +42,10 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
         Returns:
             None: This is a void method.
         """
+        project_name = self.data["project_name"]
         sitesync_addon = self.addons_manager.get("sitesync")
-        if not sitesync_addon or not sitesync_addon.enabled:
+        if (not sitesync_addon or not sitesync_addon.enabled or
+                not sitesync_addon.is_project_enabled(project_name, True)):
             self.log.debug("Sync server module is not enabled or available")
             return
 
@@ -52,28 +59,24 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
             )
             return
 
+        project_settings = self.data["project_settings"]
+
         # Get data
-        project_name = self.data["project_name"]
+        anatomy = self.data["anatomy"]
+        task_id = self.data["task_entity"]["id"]
+        folder_entity = self.data["folder_entity"]
+        folder_id = folder_entity["id"]
         task_name = self.data["task_name"]
         task_type = self.data["task_type"]
         host_name = self.application.host_name
+        project_entity = self.data["project_entity"]
+        task_entity = self.data["task_entity"]
 
-        # Check settings has enabled it
-        project_settings = get_project_settings(project_name)
-        profiles = project_settings["core"]["tools"]["Workfiles"][
-            "last_workfile_on_startup"
-        ]
-        filter_data = {
-            "tasks": task_name,
-            "task_types": task_type,
-            "hosts": host_name,
-        }
-        last_workfile_settings = filter_profiles(profiles, filter_data)
-        if not last_workfile_settings:
-            return
-        use_last_published_workfile = last_workfile_settings.get(
-            "use_last_published_workfile"
+        use_last_published_workfile = should_use_last_workfile_on_launch(
+            project_name, host_name, task_name, task_type,
+            project_settings=project_settings
         )
+
         if use_last_published_workfile is None:
             self.log.info(
                 (
@@ -95,48 +98,21 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
             )
             return
 
+        self.log.info("Trying to fetch last published workfile...")
+
+        workfile_representation = (
+            self._get_last_published_workfile_representation(
+                project_name, folder_id, task_id, host_name
+            )
+        )
+
+        if not workfile_representation:
+            self.log.info("Couldn't find published workfile representation")
+            return
+
         max_retries = int((sitesync_addon.sync_project_settings[project_name]
                                                                ["config"]
                                                                ["retry_cnt"]))
-
-        self.log.info("Trying to fetch last published workfile...")
-
-        folder_entity = self.data.get("folder_entity")
-        anatomy = self.data.get("anatomy")
-        hierarchy = "/".join(folder_entity["path"].split("/")[:-1]).lstrip("/")
-        context_filters = {
-            "folder.name": [folder_entity["name"]],
-            "hierarchy": [hierarchy],
-            "product.type": ["workfile"],
-            "task.name": [task_name],
-            "task.type": [task_type]
-        }
-
-        workfile_representation_ids = list(get_repre_ids_by_context_filters(
-            project_name,
-            context_filters=context_filters
-        ))
-
-        if not workfile_representation_ids:
-            self.log.debug(
-                'No published workfile for task "{}" and host "{}".'.format(
-                    task_name, host_name
-                )
-            )
-            return
-
-        workfile_representations = get_representations(
-            project_name, workfile_representation_ids)
-
-        if not workfile_representations:
-            self.log.debug(
-                f"Not found representations for '{workfile_representation_ids}"
-            )
-            return
-
-        workfile_representation = max(
-            workfile_representations, key=lambda r: r["context"]["version"]
-        )
 
         # Copy file and substitute path
         last_published_workfile_path = download_last_published_workfile(
@@ -152,11 +128,6 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
                 "Couldn't download {}".format(last_published_workfile_path)
             )
             return
-
-        project_entity = self.data["project_entity"]
-        task_entity = self.data["task_entity"]
-
-        project_settings = self.data["project_settings"]
 
         # Get workfile data
         workfile_data = get_template_data(
@@ -184,3 +155,42 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
         self.data["last_workfile_path"] = local_workfile_path
         # Keep source filepath for further path conformation
         self.data["source_filepath"] = last_published_workfile_path
+
+    def _get_last_published_workfile_representation(self,
+            project_name, folder_id, task_id, host_name):
+        """Looks for last published representation for host and context"""
+        product_entities = get_products(
+            project_name,
+            folder_ids={folder_id},
+            product_types={"workfile"}
+        )
+        product_ids = {
+            product_entity["id"]
+            for product_entity in product_entities
+        }
+        if not product_ids:
+            return
+        versions_by_product_id = get_last_versions(
+            project_name,
+            product_ids
+        )
+        version_ids = {
+            version_entity["id"]
+            for version_entity in versions_by_product_id.values()
+            if version_entity["taskId"] == task_id
+        }
+        if not version_ids:
+            return
+
+        addons_manager = self.addons_manager
+        host_addon = addons_manager[host_name]
+        workfile_extensions = host_addon.get_workfile_extensions()
+
+        for representation_entity in get_representations(
+                project_name,
+                version_ids=version_ids,
+        ):
+            ext = representation_entity["context"].get("ext")
+            ext = f".{ext}"
+            if ext in workfile_extensions:
+                return representation_entity
