@@ -330,7 +330,6 @@ class SiteSyncThread(threading.Thread):
         """
         while self.is_running and not self.addon.is_paused():
             try:
-                import time
                 start_time = time.time()
                 self.addon.set_sync_project_settings()  # clean cache
                 project_name = None
