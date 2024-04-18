@@ -23,9 +23,9 @@ class IntegrateSiteSync(pyblish.api.InstancePlugin):
 
         context = instance.context
         project_name = context.data["projectEntity"]["name"]
-        addons_by_name = context.data["ayonAddons"]
-        sitesync_addon = addons_by_name["sitesync"]
-        if not sitesync_addon.enabled:
+        addons_manager = context.data["ayonAddonsManager"]
+        sitesync_addon = addons_manager.get_enabled_addon("sitesync")
+        if sitesync_addon is None:
             return
 
         for repre_id, inst in published_representations.items():  # noqa
