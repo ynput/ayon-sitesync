@@ -880,8 +880,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         sync_state = self.get_repre_sync_state(project_name,
                                                [representation_id],
                                                processed_site)
+        # not yet available on processed_site, wont update alternate site yet
         if not sync_state:
-            raise RuntimeError("Cannot find repre with '{}'".format(representation_id))  # noqa
+            return
         payload_dict = {"files": sync_state["files"]}
 
         alternate_sites = set(alternate_sites)
