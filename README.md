@@ -17,9 +17,3 @@ various sites (eg. studio, specific artist site, GDrive). It should also allow
 marking each published file(s) to be synched to specific location eventually.
 
 Client side runs webserver on artist (or studio) machine which does real synching.
-
-Running from source:
--------------------
-If you would like to run this addon from source (inside of development bundle), please run `create_package`
-just to create `ayon_sitesyn/client/ayon_sitesync/version.py`. 
-File is ommitted from code to only have one place for bumping version (`package.py`)
