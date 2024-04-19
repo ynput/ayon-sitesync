@@ -874,6 +874,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 alternate_sites.extend(conf_alternative_sites)
                 continue
 
+        if not alternate_sites:
+            return
+
         sync_state = self.get_repre_sync_state(project_name,
                                                [representation_id],
                                                processed_site)
