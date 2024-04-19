@@ -1342,8 +1342,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                     if pause:
                         status_entity["pause"] = True
                     else:
-                        status_entity.remove("pause")
-            files_status.append(status_entity)
+                        status_doc.remove("pause")
+                files_status.append(status_doc)
 
         representation_id = representation["representationId"]
 
