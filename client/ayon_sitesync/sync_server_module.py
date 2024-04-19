@@ -1358,7 +1358,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
                         status_doc["pause"] = True
                     else:
                         status_doc.remove("pause")
-            files_status.append(status_doc)
+                files_status.append(status_doc)
 
         representation_id = representation["representationId"]
 
