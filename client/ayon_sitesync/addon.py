@@ -6,10 +6,9 @@ import threading
 import copy
 import signal
 from collections import deque, defaultdict
-import click
 
 from ayon_core.settings import get_studio_settings
-from ayon_core.addon import AYONAddon, ITrayAddon, IPluginPaths
+from ayon_core.addon import AYONAddon, ITrayAddon, IPluginPaths, click_wrap
 from ayon_core.lib import get_local_site_id
 
 import ayon_api
@@ -1342,8 +1341,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                     if pause:
                         status_entity["pause"] = True
                     else:
-                        status_doc.remove("pause")
-                files_status.append(status_doc)
+                        status_entity.remove("pause")
+                files_status.append(status_entity)
 
         representation_id = representation["representationId"]
 
@@ -1735,44 +1734,49 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         return int(ld)
 
     def cli(self, click_group):
-        click_group.add_command(cli_main)
+        # Define main command (name 'example')
+        main = click_wrap.group(
+            self._cli_main, name=self.name, help="SiteSync addon related commands."
+        )
 
+        (
+            main.command(
+                self._cli_command_syncservice, name="syncservice"
+            )
+            .option(
+                "--active_site", help="Name of active site", required=True
+            )
+        )
+        # Convert main command to click object and add it to parent group
+        click_group.add_command(main.to_click_obj())
 
-@click.group(SiteSyncAddon.name, help="SiteSync addon related commands.")
-def cli_main():
-    pass
+    def _cli_main(self):
+        pass
 
+    def _cli_command_syncservice(self, active_site):
+        """Launch sync server under entered site.
 
-@cli_main.command()
-@click.option(
-    "-a",
-    "--active_site",
-    required=True,
-    help="Name of active stie")
-def syncservice(active_site):
-    """Launch sync server under entered site.
+        This should be ideally used by system service (such us systemd or upstart
+        on linux and window service).
+        """
 
-    This should be ideally used by system service (such us systemd or upstart
-    on linux and window service).
-    """
+        from ayon_core.addon import AddonsManager
 
-    from ayon_core.addon import AddonsManager
+        os.environ["AYON_SITE_ID"] = active_site
 
-    os.environ["AYON_SITE_ID"] = active_site
+        def signal_handler(sig, frame):
+            print("You pressed Ctrl+C. Process ended.")
+            sitesync_addon.server_exit()
+            sys.exit(0)
 
-    def signal_handler(sig, frame):
-        print("You pressed Ctrl+C. Process ended.")
-        sitesync_addon.server_exit()
-        sys.exit(0)
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
 
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+        manager = AddonsManager()
+        sitesync_addon = manager.addons_by_name["sitesync"]
 
-    manager = AddonsManager()
-    sitesync_addon = manager.addons_by_name["sitesync"]
+        sitesync_addon.server_init()
+        sitesync_addon.server_start()
 
-    sitesync_addon.server_init()
-    sitesync_addon.server_start()
-
-    while True:
-        time.sleep(1.0)
+        while True:
+            time.sleep(1.0)
