@@ -1741,7 +1741,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         (
             main.command(
-                self._cli_command_syncservice, name="syncservice"
+                self._cli_command_syncservice, name="syncservice", help="Launch Site Sync under entered site."
             )
             .option(
                 "--active_site", help="Name of active site", required=True
