@@ -196,6 +196,11 @@ class SiteSync(BaseServerAddon):
             description=f"List of states to show. Available options: {StatusEnum.__doc__}",
             example=[StatusEnum.QUEUED, StatusEnum.IN_PROGRESS],
         ),
+        ignoreUnavailable: bool = Query(
+            True,
+            name="Ignore unavailable",
+            description="Ignore representations that are not available on both sites",
+        ),
         sortBy: SortByEnum = Query(
             SortByEnum.folder,
             description="Sort the result by this value",
@@ -280,11 +285,11 @@ class SiteSync(BaseServerAddon):
             INNER JOIN
                 project_{project_name}.hierarchy as h
                 ON f.id = h.id
-            INNER JOIN
+            {"INNER" if ignoreUnavailable else "LEFT"} JOIN
                 project_{project_name}.sitesync_files_status as local
                 ON local.representation_id = r.id
                 AND local.site_name = '{localSite}'
-            INNER JOIN
+            {"INNER" if ignoreUnavailable else "LEFT"} JOIN
                 project_{project_name}.sitesync_files_status as remote
                 ON remote.representation_id = r.id
                 AND remote.site_name = '{remoteSite}'

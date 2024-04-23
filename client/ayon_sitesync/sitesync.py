@@ -268,6 +268,7 @@ def download_last_published_workfile(
                 force=True,
                 priority=99
             )
+            
     sitesync_addon.reset_timer()
     print("Starting to download:{}".format(last_published_workfile_path))
     # While representation unavailable locally, wait.

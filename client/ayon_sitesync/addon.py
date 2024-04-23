@@ -255,7 +255,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         response = ayon_api.delete(endpoint)
         if response.status_code not in [200, 204]:
-            raise RuntimeError("Cannot update status")
+            raise RuntimeError("remove_site_1 - Cannot update status. Error code : {}".format(response.status_code))
 
         if remove_local_files:
             self._remove_local_file(project_name, representation_id, site_name)
@@ -911,10 +911,10 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         # get to upload
         kwargs = {"localSite": active_site,
                   "remoteSite": remote_site,
-                  "versionIdFilter": version_ids}
+                  "versionIdFilter": version_ids,
+                  "ignoreUnavailable": False}
 
         # kwargs["representationId"] = "94dca33a-7705-11ed-8c0a-34e12d91d510"
-
         response = ayon_api.get(endpoint, **kwargs)
         representations = response.data.get("representations", [])
         repinfo_by_version_id = defaultdict(dict)
@@ -1223,7 +1223,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                   "remoteSite": remote_site,
                   "localStatusFilter": [SiteSyncStatus.OK],
                   "remoteStatusFilter": [SiteSyncStatus.QUEUED,
-                                         SiteSyncStatus.FAILED]}
+                                         SiteSyncStatus.FAILED],
+                  "ignoreUnavailable": False}
 
         response = ayon_api.get(endpoint, **kwargs)
         if response.status_code not in [200, 204]:
@@ -1358,7 +1359,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         response = ayon_api.post(endpoint, **kwargs)
         if response.status_code not in [200, 204]:
-            raise RuntimeError("Cannot update status")
+            raise RuntimeError("update_db - Cannot update status. Error code : {}".format(response.status_code))
 
         if progress is not None or priority is not None:
             return
@@ -1447,7 +1448,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         response = ayon_api.delete(endpoint)
         if response.status_code not in [200, 204]:
-            raise RuntimeError("Cannot update status")
+            raise RuntimeError("remove_site_2 - Cannot update status. Error code : {}".format(response.status_code))
 
     def get_progress_for_repre(self, representation,
                                local_site_name, remote_site_name=None):
@@ -1507,7 +1508,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         response = ayon_api.post(endpoint, **payload_dict)
         if response.status_code not in [200, 204]:
-            raise RuntimeError("Cannot update status")
+            raise RuntimeError("_set_state_sync_state. Cannot update status. Error code in : {}".format(response.status_code))
 
     def get_repre_sync_state(self, project_name, representation_ids, local_site_name,
                              remote_site_name=None, **kwargs):
@@ -1601,7 +1602,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         payload_dict = {
             "localSite": local_site_name,
             "remoteSite": remote_site_name,
-            "representationIds": representation_ids
+            "representationIds": representation_ids,
+            "ignoreUnavailable": False
         }
         if kwargs:
             payload_dict.update(kwargs)
@@ -1610,7 +1612,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         response = ayon_api.get(endpoint, **payload_dict)
         if response.status_code != 200:
-            msg = "Cannot get sync state for representation ".format(representation_id)  # noqa
+            msg = "Cannot get sync state for representation ".format(representation_ids)  # noqa
             raise RuntimeError(msg)
 
         return response.data["representations"]
@@ -1625,16 +1627,17 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         payload_dict = {
             "localSite": local_site_name,
             "remoteSite": remote_site_name,
-            "versionIdsFilter": version_ids
+            "versionIdsFilter": version_ids,
+            "ignoreUnavailable": False
         }
         if kwargs:
             payload_dict.update(kwargs)
 
         endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name)  # noqa
 
-        response = ayon_api.get(endpoint, **payload_dict)
+        response = ayon_api.get(endpoint, **payload_dict) 
         if response.status_code != 200:
-            msg = "Cannot get sync state for representation ".format(representation_id)  # noqa
+            msg = "Cannot get sync state for versions ".format(version_ids)  # noqa
             raise RuntimeError(msg)
 
         version_statuses = defaultdict(tuple)
@@ -1647,7 +1650,6 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 version_statuses.get(version_id, dummy_tuple)[0] + int(avail_local),
                 version_statuses.get(version_id, dummy_tuple)[1] + int(avail_remote)
             )
-
         return version_statuses
 
     def _remove_local_file(self, project_name, representation_id, site_name):
@@ -1734,7 +1736,6 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         return int(ld)
 
     def cli(self, click_group):
-        # Define main command (name 'example')
         main = click_wrap.group(
             self._cli_main, name=self.name, help="SiteSync addon related commands."
         )
@@ -1747,7 +1748,6 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 "--active_site", help="Name of active site", required=True
             )
         )
-        # Convert main command to click object and add it to parent group
         click_group.add_command(main.to_click_obj())
 
     def _cli_main(self):
