@@ -255,7 +255,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         response = ayon_api.delete(endpoint)
         if response.status_code not in [200, 204]:
-            raise RuntimeError("remove_site_1 - Cannot update status. Error code : {}".format(response.status_code))
+            raise RuntimeError("Cannot update status. Error code : {}".format(response.status_code))
 
         if remove_local_files:
             self._remove_local_file(project_name, representation_id, site_name)
@@ -1359,7 +1359,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         response = ayon_api.post(endpoint, **kwargs)
         if response.status_code not in [200, 204]:
-            raise RuntimeError("update_db - Cannot update status. Error code : {}".format(response.status_code))
+            raise RuntimeError("Cannot update status. Error code : {}".format(response.status_code))
 
         if progress is not None or priority is not None:
             return
@@ -1489,7 +1489,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         response = ayon_api.post(endpoint, **payload_dict)
         if response.status_code not in [200, 204]:
-            raise RuntimeError("_set_state_sync_state. Cannot update status. Error code in : {}".format(response.status_code))
+            raise RuntimeError("Cannot update status. Error code in : {}".format(response.status_code))
 
     def get_repre_sync_state(self, project_name, representation_ids, local_site_name,
                              remote_site_name=None, ignoreLocal=True, **kwargs):
