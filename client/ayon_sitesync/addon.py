@@ -1432,24 +1432,6 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         self.add_site(project_name, representation_id, site_name, file_id,
                       force=True)
 
-    def remove_site(self, project_name, representation, site_name):
-        """
-            Removes 'site_name' for 'representation' if present.
-        """
-        representation_id = representation["id"]
-        sync_info = self.get_repre_sync_state(project_name, [representation_id],
-                                              site_name)
-        if not sync_info:
-            msg = "Site {} not found".format(site_name)
-            self.log.warning(msg)
-            return
-
-        endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
-
-        response = ayon_api.delete(endpoint)
-        if response.status_code not in [200, 204]:
-            raise RuntimeError("remove_site_2 - Cannot update status. Error code : {}".format(response.status_code))
-
     def get_progress_for_repre(self, representation,
                                local_site_name, remote_site_name=None):
         """Calculates average progress for representation.
@@ -1468,8 +1450,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         project_name = representation["context"]["project"]["name"]
         representation_id = representation["id"]
         sync_status = self.get_repre_sync_state(project_name, [representation_id],
-                                                local_site_name, remote_site_name)
-
+                                                local_site_name, remote_site_name, ignoreLocal=False)
         progress = {local_site_name: -1,
                     remote_site_name: -1}
         if not sync_status:
@@ -1511,7 +1492,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             raise RuntimeError("_set_state_sync_state. Cannot update status. Error code in : {}".format(response.status_code))
 
     def get_repre_sync_state(self, project_name, representation_ids, local_site_name,
-                             remote_site_name=None, **kwargs):
+                             remote_site_name=None, ignoreLocal=True, **kwargs):
         """Use server endpoint to get synchronization info for repre_id(s).
 
         Args:
@@ -1529,7 +1510,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                                                  **kwargs)
         if representations:
             representation = representations[0]
-            if representation["localStatus"]["status"] != -1:
+            if ignoreLocal and representation["localStatus"]["status"] != -1:
+                return representation
+            elif not ignoreLocal:
                 return representation
 
     def get_representations_sync_state(self, project_name, representation_ids,
@@ -1674,17 +1657,18 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         if provider_name == "local_drive":
             representation = get_representation_by_id(
-                project_name, representation_id, fields=["files"])
+                project_name, representation_id)
+            
             if not representation:
                 self.log.debug("No repre {} found".format(
                     representation_id))
                 return
-
+            
             local_file_path = ""
-            for file in representation.get("files"):
+            for file in representation["files"]:
                 local_file_path = self.get_local_file_path(project_name,
                                                            site_name,
-                                                           file.get("path", "")
+                                                           file["path"]
                                                            )
                 try:
                     self.log.debug("Removing {}".format(local_file_path))
@@ -1694,7 +1678,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                     self.log.debug(msg)
                     raise ValueError(msg)
                 except OSError:
-                    msg = "File {} cannot be removed".format(file["path"])
+                    msg = "File {} cannot be removed".format(local_file_path)
                     self.log.warning(msg)
                     raise ValueError(msg)
 

@@ -265,8 +265,7 @@ def download_last_published_workfile(
                 project_name,
                 repre_id,
                 local_site_id,
-                force=True,
-                priority=99
+                force=True
             )
             
     sitesync_addon.reset_timer()
