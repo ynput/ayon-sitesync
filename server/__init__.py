@@ -203,6 +203,12 @@ class SiteSync(BaseServerAddon):
             name="Sort descending",
             description="Sort the result in descending order",
         ),
+        bothOnly: bool = Query(
+            False,
+            name="Query only with both sites",
+            description="Used for front end UI to show only repres with " 
+                        "both sides",
+        ),
         # Pagination
         page: int = Query(1, ge=1),
         pageLength: int = Query(50, ge=1),
@@ -248,6 +254,10 @@ class SiteSync(BaseServerAddon):
         if access_list is not None:
             conditions.append(f"path like ANY ('{{ {','.join(access_list)} }}')")
 
+        sites_join = "LEFT"
+        if bothOnly:
+            sites_join = "INNER"
+
         query = f"""
             SELECT
                 f.name as folder,
@@ -277,11 +287,11 @@ class SiteSync(BaseServerAddon):
             INNER JOIN
                 project_{project_name}.hierarchy as h
                 ON f.id = h.id
-            INNER JOIN
+            {sites_join} JOIN
                 project_{project_name}.sitesync_files_status as local
                 ON local.representation_id = r.id
                 AND local.site_name = '{localSite}'
-            INNER JOIN
+            {sites_join} JOIN
                 project_{project_name}.sitesync_files_status as remote
                 ON remote.representation_id = r.id
                 AND remote.site_name = '{remoteSite}'
