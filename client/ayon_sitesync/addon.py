@@ -253,7 +253,6 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             site_name
         )
 
-
         response = ayon_api.delete(endpoint)
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
@@ -1673,7 +1672,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         if provider_name == "local_drive":
             representation = get_representation_by_id(
-                project_name, representation_id, fields=["files"])
+                project_name, representation_id
+            )
             if not representation:
                 self.log.debug("No repre {} found".format(
                     representation_id))
