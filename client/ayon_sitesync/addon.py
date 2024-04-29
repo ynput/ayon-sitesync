@@ -1682,6 +1682,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             folder = None
             try:
                 folder = os.path.dirname(local_file_path)
+                if os.listdir(folder):  # is folder not empty
+                    return
                 os.rmdir(folder)
             except OSError:
                 msg = "folder {} cannot be removed".format(folder)
