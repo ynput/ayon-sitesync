@@ -118,12 +118,10 @@ class SiteSync(BaseServerAddon):
     ) -> {}:
         sites = {"active_site": [], "remote_site": []}
         site_infos = await Postgres.fetch("select id, data from sites")
-        logging.info(f"site_infos::{len(site_infos)}")
         for site_info in site_infos:
             settings = await self.get_project_site_settings(project_name,
                                                             user.name, 
                                                             site_info["id"])
-            logging.info(f"settings::{settings.dict()['local_setting']}")
             for site_type in ["active_site", "remote_site"]:
                 used_site = settings.dict()["local_setting"][site_type]
                 if not used_site:
@@ -133,7 +131,6 @@ class SiteSync(BaseServerAddon):
                     sites[site_type].append(site_info["id"])
                 else:
                     sites[site_type].append(used_site)
-        logging.info(f"sites::{sites}")
         return sites
 
 
