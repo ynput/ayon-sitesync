@@ -1431,24 +1431,6 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         self.add_site(project_name, representation_id, site_name, file_id,
                       force=True)
 
-    def remove_site(self, project_name, representation, site_name):
-        """
-            Removes 'site_name' for 'representation' if present.
-        """
-        representation_id = representation["id"]
-        sync_info = self.get_repre_sync_state(project_name, [representation_id],
-                                              site_name)
-        if not sync_info:
-            msg = "Site {} not found".format(site_name)
-            self.log.warning(msg)
-            return
-
-        endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
-
-        response = ayon_api.delete(endpoint)
-        if response.status_code not in [200, 204]:
-            raise RuntimeError("Cannot update status")
-
     def get_progress_for_repre(self, representation,
                                local_site_name, remote_site_name=None):
         """Calculates average progress for representation.
