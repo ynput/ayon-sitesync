@@ -201,7 +201,7 @@ class GDriveHandler(AbstractProvider):
                 return folder_id
 
     def upload_file(self, source_path, path,
-                    server, project_name, file, representation, site_name,
+                    addon, project_name, file, representation, site_name,
                     overwrite=False):
         """
             Uploads single file from 'source_path' to destination 'path'.
@@ -213,7 +213,7 @@ class GDriveHandler(AbstractProvider):
             overwrite (boolean): replace existing file
 
             arguments for saving progress:
-            server (SyncServer): server instance to call update_db on
+            addon (SiteSync): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
             representation (dict): complete repre containing 'file'
@@ -272,7 +272,7 @@ class GDriveHandler(AbstractProvider):
             last_tick = status = response = None
             status_val = 0
             while response is None:
-                if server.is_representation_paused(
+                if addon.is_representation_paused(
                         representation["representationId"],
                         check_parents=True,
                         project_name=project_name):
@@ -280,17 +280,16 @@ class GDriveHandler(AbstractProvider):
                 if status:
                     status_val = float(status.progress())
                 if not last_tick or \
-                        time.time() - last_tick >= server.LOG_PROGRESS_SEC:
+                        time.time() - last_tick >= addon.LOG_PROGRESS_SEC:
                     last_tick = time.time()
                     self.log.debug("Uploaded %d%%." % int(status_val * 100))
-                    server.update_db(project_name=project_name,
-                                     new_file_id=None,
-                                     file=file,
-                                     representation=representation,
-                                     site_name=site_name,
-                                     side="remote",
-                                     progress=status_val
-                                     )
+                    addon.update_db(project_name=project_name,
+                                    new_file_id=None,
+                                    file=file,
+                                    representation=representation,
+                                    site_name=site_name,
+                                    side="remote",
+                                    progress=status_val)
                 status, response = request.next_chunk()
 
         except errors.HttpError as ex:
@@ -310,7 +309,7 @@ class GDriveHandler(AbstractProvider):
         return response['id']
 
     def download_file(self, source_path, local_path,
-                      server, project_name, file, representation, site_name,
+                      addon, project_name, file, representation, site_name,
                       overwrite=False):
         """
             Downloads single file from 'source_path' (remote) to 'local_path'.
@@ -323,7 +322,7 @@ class GDriveHandler(AbstractProvider):
             overwrite (boolean): replace existing file
 
             arguments for saving progress:
-            server (SyncServer): server instance to call update_db on
+            addon (SiteSync): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
             representation (dict): complete repre containing 'file'
@@ -360,7 +359,7 @@ class GDriveHandler(AbstractProvider):
             last_tick = status = response = None
             status_val = 0
             while response is None:
-                if server.is_representation_paused(
+                if addon.is_representation_paused(
                         representation["representationId"],
                         check_parents=True,
                         project_name=project_name):
@@ -368,18 +367,17 @@ class GDriveHandler(AbstractProvider):
                 if status:
                     status_val = float(status.progress())
                 if not last_tick or \
-                        time.time() - last_tick >= server.LOG_PROGRESS_SEC:
+                        time.time() - last_tick >= addon.LOG_PROGRESS_SEC:
                     last_tick = time.time()
                     self.log.debug("Downloaded %d%%." %
                               int(status_val * 100))
-                    server.update_db(project_name=project_name,
-                                     new_file_id=None,
-                                     file=file,
-                                     representation=representation,
-                                     site_name=site_name,
-                                     side="local",
-                                     progress=status_val
-                                     )
+                    addon.update_db(project_name=project_name,
+                                    new_file_id=None,
+                                    file=file,
+                                    representation=representation,
+                                    site_name=site_name,
+                                    side="local",
+                                    progress=status_val)
                 status, response = downloader.next_chunk()
 
         return target_name

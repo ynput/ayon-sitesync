@@ -2,7 +2,7 @@ import abc
 import six
 from ayon_core.lib import Logger
 
-log = Logger.get_logger("SyncServer")
+log = Logger.get_logger("SiteSync")
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -37,7 +37,7 @@ class AbstractProvider:
 
     @abc.abstractmethod
     def upload_file(self, source_path, path,
-                    server, project_name, file, representation, site,
+                    addon, project_name, file, representation, site,
                     overwrite=False):
         """
             Copy file from 'source_path' to 'target_path' on provider.
@@ -49,7 +49,7 @@ class AbstractProvider:
             overwrite (boolean): replace existing file
 
             arguments for saving progress:
-            server (SyncServer): server instance to call update_db on
+            addon (SiteSyncAddon): addon instance to call update_db on
             project_name (str): name of project_name
             file (dict): info about uploaded file (matches structure from db)
             representation (dict): complete repre containing 'file'
@@ -62,7 +62,7 @@ class AbstractProvider:
 
     @abc.abstractmethod
     def download_file(self, source_path, local_path,
-                      server, project_name, file, representation, site,
+                      addon, project_name, file, representation, site,
                       overwrite=False):
         """
             Download file from provider into local system
@@ -73,7 +73,7 @@ class AbstractProvider:
             overwrite (boolean): replace existing file
 
             arguments for saving progress:
-            server (SyncServer): server instance to call update_db on
+            addon (SiteSyncAddon): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
             representation (dict): complete repre containing 'file'

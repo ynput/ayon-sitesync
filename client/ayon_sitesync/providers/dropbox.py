@@ -119,7 +119,7 @@ class DropboxHandler(AbstractProvider):
         return False
 
     def upload_file(self, source_path, path,
-                    server, project_name, file, representation, site_name,
+                    addon, project_name, file, representation, site_name,
                     overwrite=False):
         """
             Copy file from 'source_path' to 'target_path' on provider.
@@ -131,7 +131,7 @@ class DropboxHandler(AbstractProvider):
             overwrite (boolean): replace existing file
 
             arguments for saving progress:
-            server (SyncServer): server instance to call update_db on
+            addon (SiteSync): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
             representation (dict): complete repre containing 'file'
@@ -184,7 +184,7 @@ class DropboxHandler(AbstractProvider):
                             cursor.offset)
                         cursor.offset = f.tell()
 
-        server.update_db(
+        addon.update_db(
             project_name=project_name,
             new_file_id=None,
             file=file,
@@ -197,7 +197,7 @@ class DropboxHandler(AbstractProvider):
         return path
 
     def download_file(self, source_path, local_path,
-                      server, project_name, file, representation, site_name,
+                      addon, project_name, file, representation, site_name,
                       overwrite=False):
         """
             Download file from provider into local system
@@ -208,7 +208,7 @@ class DropboxHandler(AbstractProvider):
             overwrite (boolean): replace existing file
 
             arguments for saving progress:
-            server (SyncServer): server instance to call update_db on
+            addon (SiteSync): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
             representation (dict): complete repre containing 'file'
@@ -232,7 +232,7 @@ class DropboxHandler(AbstractProvider):
 
         self.dbx.files_download_to_file(local_path, source_path)
 
-        server.update_db(
+        addon.update_db(
             project_name=project_name,
             new_file_id=None,
             file=file,

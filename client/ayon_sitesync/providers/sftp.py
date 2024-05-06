@@ -5,9 +5,8 @@ import threading
 import platform
 
 from ayon_core.lib import Logger
-from ayon_core.settings import get_studio_settings
 from .abstract_provider import AbstractProvider
-log = Logger.get_logger("SyncServer-SFTPHandler")
+log = Logger.get_logger("SiteSync-SFTPHandler")
 
 pysftp = None
 try:
@@ -117,7 +116,7 @@ class SFTPHandler(AbstractProvider):
         return os.path.basename(path)
 
     def upload_file(self, source_path, target_path,
-                    server, project_name, file, representation, site,
+                    addon, project_name, file, representation, site,
                     overwrite=False):
         """
             Uploads single file from 'source_path' to destination 'path'.
@@ -129,7 +128,7 @@ class SFTPHandler(AbstractProvider):
             overwrite (boolean): replace existing file
 
             arguments for saving progress:
-            server (SyncServer): server instance to call update_db on
+            addon (SiteSync): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
             representation (dict): complete repre containing 'file'
@@ -151,7 +150,7 @@ class SFTPHandler(AbstractProvider):
         thread = threading.Thread(target=self._upload,
                                   args=(source_path, target_path))
         thread.start()
-        self._mark_progress(project_name, file, representation, server,
+        self._mark_progress(project_name, file, representation, addon,
                             site, source_path, target_path, "upload")
 
         return os.path.basename(target_path)
@@ -162,7 +161,7 @@ class SFTPHandler(AbstractProvider):
         conn.put(source_path, target_path)
 
     def download_file(self, source_path, target_path,
-                      server, project_name, file, representation, site,
+                      addon, project_name, file, representation, site,
                       overwrite=False):
         """
             Downloads single file from 'source_path' (remote) to 'target_path'.
@@ -175,7 +174,7 @@ class SFTPHandler(AbstractProvider):
             overwrite (boolean): replace existing file
 
             arguments for saving progress:
-            server (SyncServer): server instance to call update_db on
+            addon (SiteSync): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
             representation (dict): complete repre containing 'file'
@@ -197,7 +196,7 @@ class SFTPHandler(AbstractProvider):
         thread = threading.Thread(target=self._download,
                                   args=(source_path, target_path))
         thread.start()
-        self._mark_progress(project_name, file, representation, server,
+        self._mark_progress(project_name, file, representation, addon,
                             site, source_path, target_path, "download")
 
         return os.path.basename(target_path)

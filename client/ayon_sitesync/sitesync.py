@@ -32,7 +32,7 @@ async def upload(addon, project_name, file, representation, provider_name,
         'projectB')
 
     Args:
-        addon (SyncServerAddon): object to run SyncServerAddon API
+        addon (SiteSyncAddon): object to run SiteSyncAddon API
         project_name (str): source db
         file (dictionary): of file from representation in Mongo
         representation (dictionary): of representation
@@ -91,7 +91,7 @@ async def download(addon, project_name, file, representation, provider_name,
         Downloads file to local folder denoted in representation.Context.
 
     Args:
-        addon (SyncServerAddon): object to run SyncServerAddon API
+        addon (SiteSyncAddon): object to run SiteSyncAddon API
         project_name (str): source
         file (dictionary) : info about processed file
         representation (dictionary):  repr that 'file' belongs to
@@ -146,7 +146,7 @@ def resolve_paths(addon, file_path, project_name,
         Ejected here because of Python 2 hosts (GDriveHandler is an issue)
 
         Args:
-            addon (SyncServerAddon): object to run SyncServerAddon API
+            addon (SiteSyncAddon): object to run SiteSyncAddon API
             file_path(string): path with {root}
             project_name(string): project name
             remote_site_name(string): remote site
@@ -172,7 +172,7 @@ def _site_is_working(addon, project_name, site_name, site_config):
         Must be here as lib.factory access doesn't work in Python 2 hosts.
 
         Args:
-            addon (SyncServerAddon)
+            addon (SiteSyncAddon)
             project_name(string):
             site_name(string):
             site_config (dict): configuration for site from Settings
@@ -298,18 +298,18 @@ class SiteSyncThread(threading.Thread):
         self.is_running = True
 
         try:
-            self.log.info("Starting Sync Server")
+            self.log.info("Starting SiteSync")
             self.loop = asyncio.new_event_loop()  # create new loop for thread
             asyncio.set_event_loop(self.loop)
             self.loop.set_default_executor(self.executor)
 
             asyncio.ensure_future(self.check_shutdown(), loop=self.loop)
             asyncio.ensure_future(self.sync_loop(), loop=self.loop)
-            self.log.info("Sync Server Started")
+            self.log.info("SiteSync Started")
             self.loop.run_forever()
         except Exception:
             self.log.warning(
-                "Sync Server service has failed", exc_info=True
+                "SiteSync service has failed", exc_info=True
             )
         finally:
             self.loop.close()  # optional

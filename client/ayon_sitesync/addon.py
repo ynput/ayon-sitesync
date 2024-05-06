@@ -514,7 +514,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 representation_id (string): MongoDB objectId value
                 site_name (string): 'gdrive', 'studio' etc.
         """
-        self.log.info("Pausing SyncServer for {}".format(representation_id))
+        self.log.info("Pausing SiteSync for {}".format(representation_id))
         self._paused_representations.add(representation_id)
         representation = get_representation_by_id(project_name,
                                                   representation_id)
@@ -533,7 +533,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 representation_id (string): MongoDB objectId value
                 site_name (string): 'gdrive', 'studio' etc.
         """
-        self.log.info("Unpausing SyncServer for {}".format(representation_id))
+        self.log.info("Unpausing SiteSync for {}".format(representation_id))
         try:
             self._paused_representations.remove(representation_id)
         except KeyError:
@@ -574,7 +574,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             Args:
                 project_name (string): project_name name
         """
-        self.log.info("Pausing SyncServer for {}".format(project_name))
+        self.log.info("Pausing SiteSync for {}".format(project_name))
         self._paused_projects.add(project_name)
 
     # TODO hook to some trigger - no Sync Queue anymore
@@ -587,7 +587,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             Args:
                 project_name (string):
         """
-        self.log.info("Unpausing SyncServer for {}".format(project_name))
+        self.log.info("Unpausing SiteSync for {}".format(project_name))
         try:
             self._paused_projects.remove(project_name)
         except KeyError:
@@ -616,14 +616,14 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
             It won't check anything, not uploading/downloading...
         """
-        self.log.info("Pausing SyncServer")
+        self.log.info("Pausing SiteSync")
         self._paused = True
 
     def unpause_server(self):
         """
             Unpause server
         """
-        self.log.info("Unpausing SyncServer")
+        self.log.info("Unpausing SiteSync")
         self._paused = False
 
     def is_paused(self):
@@ -810,7 +810,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         requests.post(rest_api_url)
 
     def get_enabled_projects(self):
-        """Returns list of projects which have SyncServer enabled."""
+        """Returns list of projects which have SiteSync enabled."""
         enabled_projects = []
 
         if self.enabled:
