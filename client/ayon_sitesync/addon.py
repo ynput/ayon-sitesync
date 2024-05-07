@@ -221,8 +221,13 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         self._set_state_sync_state(project_name, representation_id, site_name,
                                    payload_dict)
 
-    def remove_site(self, project_name, representation_id, site_name,
-                    remove_local_files=False):
+    def remove_site(
+        self,
+        project_name,
+        representation_id,
+        site_name,
+        remove_local_files=False
+    ):
         """
             Removes 'site_name' for particular 'representation_id' on
             'project_name'
@@ -522,8 +527,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         self.update_db(project_name, representation, site_name, pause=True)
 
     # TODO hook to some trigger - no Sync Queue anymore
-    def unpause_representation(self, project_name,
-                               representation_id, site_name):
+    def unpause_representation(
+        self, project_name, representation_id, site_name
+    ):
         """
             Sets 'representation_id' as unpaused.
 
@@ -544,8 +550,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                                                   representation_id)
         self.update_db(project_name, representation, site_name, pause=False)
 
-    def is_representation_paused(self, representation_id,
-                                 check_parents=False, project_name=None):
+    def is_representation_paused(
+        self, representation_id, check_parents=False, project_name=None
+    ):
         """
             Returns if 'representation_id' is paused or not.
 
@@ -783,7 +790,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             if tries >= max_retries:
                 raise ValueError("Failed too many times")
 
-        if (status.get("progress") or status.get("error")):
+        if status.get("progress") or status.get("error"):
             return False
 
         return True
@@ -841,24 +848,25 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 return True
         return False
 
-    def handle_alternate_site(self, project_name, representation_id,
-                              processed_site, file_id):
+    def handle_alternate_site(
+        self, project_name, representation_id, processed_site, file_id
+    ):
         """
-            For special use cases where one site vendors another.
+        For special use cases where one site vendors another.
 
-            Current use case is sftp site vendoring (exposing) same data as
-            regular site (studio). Each site is accessible for different
-            audience. 'studio' for artists in a studio, 'sftp' for externals.
+        Current use case is sftp site vendoring (exposing) same data as
+        regular site (studio). Each site is accessible for different
+        audience. 'studio' for artists in a studio, 'sftp' for externals.
 
-            Change of file status on one site actually means same change on
-            'alternate' site. (eg. artists publish to 'studio', 'sftp' is using
-            same location >> file is accesible on 'sftp' site right away.
+        Change of file status on one site actually means same change on
+        'alternate' site. (eg. artists publish to 'studio', 'sftp' is using
+        same location >> file is accesible on 'sftp' site right away.
 
-            Args:
-                project_name (str): name of project
-                representation_id (uuid)
-                processed_site (str): real site_name of published/uploaded file
-                file_id (uuid): DB id of file handled
+        Args:
+            project_name (str): name of project
+            representation_id (uuid)
+            processed_site (str): real site_name of published/uploaded file
+            file_id (uuid): DB id of file handled
         """
         sites = self._transform_sites_from_settings(self.sync_studio_settings)
         sites[self.DEFAULT_SITE] = {"provider": "local_drive",
@@ -894,8 +902,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                                        payload_dict)
 
     # TODO - for Loaders
-    def get_repre_info_for_versions(self, project_name, version_ids,
-                                    active_site, remote_site):
+    def get_repre_info_for_versions(
+        self, project_name, version_ids, active_site, remote_site
+    ):
         """Returns representation documents for versions and sites combi
 
         Args:
@@ -993,7 +1002,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             self.sitesync_thread.start()
         else:
             self.log.info("No presets or active providers. " +
-                     "Synchronization not possible.")
+                          "Synchronization not possible.")
 
     def tray_exit(self):
         """
@@ -1095,8 +1104,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             self.log.info("No enabled and configured projects for sync.")
         return sync_project_settings
 
-    def get_sync_project_setting(self, project_name, exclude_locals=False,
-                                 cached=True):
+    def get_sync_project_setting(
+        self, project_name, exclude_locals=False, cached=True
+    ):
         """ Handles pulling sitesync's settings for enabled 'project_name'
 
             Args:
@@ -1161,8 +1171,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         return roots
 
-    def _get_default_site_configs(self, sync_enabled=True, project_name=None,
-                                  proj_settings=None):
+    def _get_default_site_configs(
+        self, sync_enabled=True, project_name=None, proj_settings=None
+    ):
         """
             Returns settings for 'studio' and user's local site
 
@@ -1212,8 +1223,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         return sites.get(site, "N/A")
 
     @time_function
-    def get_sync_representations(self, project_name, active_site, remote_site,
-                                 limit=10):
+    def get_sync_representations(
+        self, project_name, active_site, remote_site, limit=10
+    ):
         """
             Get representations that should be synced, these could be
             recognised by presence of document in 'files.sites', where key is
@@ -1236,7 +1248,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         self.log.debug("Check representations for: {}-{}".format(active_site,
                                                                  remote_site))
 
-        endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name) # noqa
+        endpoint = "{}/{}/state".format(self.endpoint_prefix,
+                                        project_name)
 
         # get to upload
         kwargs = {"localSite": active_site,
@@ -1313,10 +1326,19 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         return SyncStatus.DO_NOTHING
 
-    def update_db(self, project_name, representation, site_name,
-                  new_file_id=None, file=None,
-                  side=None, error=None, progress=None, priority=None,
-                  pause=None):
+    def update_db(
+        self,
+        project_name,
+        representation,
+        site_name,
+        new_file_id=None,
+        file=None,
+        side=None,
+        error=None,
+        progress=None,
+        priority=None,
+        pause=None
+    ):
         """
             Update 'provider' portion of records in DB with success (file_id)
             or error (exception)
@@ -1366,7 +1388,11 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         representation_id = representation["representationId"]
 
-        endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
+        endpoint = "{}/{}/state/{}/{}".format(
+            self.endpoint_prefix,
+            project_name,
+            representation_id,
+            site_name)
 
         # get to upload
         kwargs = {
@@ -1402,8 +1428,14 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             )
         )
 
-    def reset_site_on_representation(self, project_name, representation_id,
-                                     side=None, file_id=None, site_name=None):
+    def reset_site_on_representation(
+        self,
+        project_name,
+        representation_id,
+        side=None,
+        file_id=None,
+        site_name=None
+    ):
         """
             Reset information about synchronization for particular 'file_id'
             and provider.
@@ -1451,8 +1483,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         self.add_site(project_name, representation_id, site_name, file_id,
                       force=True)
 
-    def get_progress_for_repre(self, representation,
-                               local_site_name, remote_site_name=None):
+    def get_progress_for_repre(
+        self, representation, local_site_name, remote_site_name=None
+    ):
         """Calculates average progress for representation.
 
         If site has created_dt >> fully available >> progress == 1
@@ -1468,8 +1501,10 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """
         project_name = representation["context"]["project"]["name"]
         representation_id = representation["id"]
-        sync_status = self.get_repre_sync_state(project_name, [representation_id],
-                                                local_site_name, remote_site_name)
+        sync_status = self.get_repre_sync_state(project_name,
+                                                [representation_id],
+                                                local_site_name,
+                                                remote_site_name)
 
         progress = {local_site_name: -1,
                     remote_site_name: -1}
@@ -1505,14 +1540,23 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     def _set_state_sync_state(self, project_name, representation_id, site_name,
                               payload_dict):
         """Calls server endpoint to store sync info for 'representation_id'."""
-        endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
+        endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix,
+                                              project_name,
+                                              representation_id,
+                                              site_name)
 
         response = ayon_api.post(endpoint, **payload_dict)
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
-    def get_repre_sync_state(self, project_name, representation_ids, local_site_name,
-                             remote_site_name=None, **kwargs):
+    def get_repre_sync_state(
+        self,
+        project_name,
+        representation_ids,
+        local_site_name,
+        remote_site_name=None,
+        **kwargs
+    ):
         """Use server endpoint to get synchronization info for repre_id(s).
 
         Args:
@@ -1533,9 +1577,14 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             if representation["localStatus"]["status"] != -1:
                 return representation
 
-    def get_representations_sync_state(self, project_name, representation_ids,
-                                       local_site_name,remote_site_name=None,
-                                       **kwargs):
+    def get_representations_sync_state(
+        self,
+        project_name,
+        representation_ids,
+        local_site_name,
+        remote_site_name=None,
+        **kwargs
+    ):
         """Use server endpoint to get synchronization info for representations.
 
         Calculates float progress based on progress of all files for repre.
@@ -1586,8 +1635,14 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         return states
             
-    def _get_repres_state(self, project_name, representation_ids, local_site_name,
-                          remote_site_name=None, **kwargs):
+    def _get_repres_state(
+        self,
+        project_name,
+        representation_ids,
+        local_site_name,
+        remote_site_name=None,
+        **kwargs
+    ):
         """Use server endpoint to get synchronization info for representations.
 
         Args:
@@ -1608,7 +1663,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if kwargs:
             payload_dict.update(kwargs)
 
-        endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name)  # noqa
+        endpoint = "{}/{}/state".format(self.endpoint_prefix,
+                                        project_name)
 
         response = ayon_api.get(endpoint, **payload_dict)
         if response.status_code != 200:
@@ -1617,8 +1673,14 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         return response.data["representations"]
     
-    def get_version_availability(self, project_name, version_ids, local_site_name,
-                                 remote_site_name, **kwargs):
+    def get_version_availability(
+        self,
+        project_name,
+        version_ids,
+        local_site_name,
+        remote_site_name,
+        **kwargs
+    ):
         """Returns aggregate state for version_ids
 
         Returns:
