@@ -7,6 +7,7 @@ import copy
 import signal
 from collections import deque, defaultdict
 import click
+import platform
 
 from ayon_core.settings import get_studio_settings
 from ayon_core.addon import AYONAddon, ITrayAddon, IPluginPaths
@@ -1140,6 +1141,26 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 sites[site_name] = configured_site
         return sites
 
+    def _get_project_roots_for_site(self, project_name, local_site_id):
+        """Returns projects roots and their overrides."""
+        # overrides for Studio site for particular user
+        roots = get_project_roots_for_site(project_name, local_site_id)
+        if all(roots.values()):
+            return roots
+
+        #TODO temporary to get roots without overrides
+        #ayon_api.get_project_roots_by_site returns only overrides.
+        #Should be replaced when ayon_api implements `siteRoots` method
+        platform_name = platform.system().lower()
+        default_roots = ayon_api.get(f"projects/{project_name}/siteRoots",
+                                     platform=platform_name).data
+        for key, value in roots.items():
+            if value:
+                continue
+            roots[key] = default_roots[key]
+
+        return roots
+
     def _get_default_site_configs(self, sync_enabled=True, project_name=None,
                                   proj_settings=None):
         """
@@ -1149,8 +1170,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             eg. value used to push TO LS not to get actual value for syncing.
         """
         local_site_id = get_local_site_id()
-        # overrides for Studio site for particular user
-        roots = get_project_roots_for_site(project_name, local_site_id)
+        roots = self._get_project_roots_for_site(project_name, local_site_id)
         studio_config = {
             "enabled": True,
             "provider": "local_drive",
