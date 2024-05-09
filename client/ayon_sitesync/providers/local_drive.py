@@ -8,6 +8,8 @@ from ayon_core.lib import Logger
 from ayon_core.pipeline import Anatomy
 from .abstract_provider import AbstractProvider
 
+from ayon_core.addon import AddonsManager
+
 log = Logger.get_logger("SiteSync")
 
 
@@ -110,11 +112,23 @@ class LocalDriveHandler(AbstractProvider):
                      {"root": {"root_ONE": "value", "root_TWO":"value}}
             Format is importing for usage of python's format ** approach
         """
+        site_name = self._normalize_site_name(self.site_name)
         if not anatomy:
             anatomy = Anatomy(self.project_name,
-                              self._normalize_site_name(self.site_name))
+                              site_name)
 
-        return {'root': anatomy.roots}
+        # TODO cleanup when Anatomy will implement siteRoots method
+        roots = anatomy.roots
+        root_values = [root.value for root in roots.values()]
+        if not all(root_values):
+            manager = AddonsManager()
+            sitesync_addon = manager.get_enabled_addon("sitesync")
+            if not sitesync_addon:
+                raise RuntimeError("No SiteSync addon")
+            roots = sitesync_addon._get_project_roots_for_site(
+                self.project_name, site_name)
+
+        return {'root': roots}
 
     def get_tree(self):
         return
