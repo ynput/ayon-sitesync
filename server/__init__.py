@@ -12,15 +12,14 @@ from ayon_server.api import (
     dep_project_name, 
     dep_representation_id, 
 )
-from ayon_server.api.dependencies import dep_site_id, SiteID
+
 from ayon_server.entities.representation import RepresentationEntity
 from ayon_server.entities.user import UserEntity
 from ayon_server.lib.postgres import Postgres
 from ayon_server.utils import SQLTool
 
 from .settings.settings import SiteSyncSettings
-from .version import __version__
-from .models import (
+from .settings.models import (
     FileModel,
     RepresentationStateModel,
     SiteSyncParamsModel,
@@ -29,15 +28,10 @@ from .models import (
     SortByEnum,
     StatusEnum,
     SyncStatusModel,
-    UserSyncSites
 )
 
 
 class SiteSync(BaseServerAddon):
-    name = "sitesync"
-    title = "Site Sync"
-    version = __version__
-
     settings_model: Type[SiteSyncSettings] = SiteSyncSettings
 
     frontend_scopes: dict[str, Any] = {"project": {}}
@@ -122,7 +116,7 @@ class SiteSync(BaseServerAddon):
         project_name: str = Depends(dep_project_name),
         user: UserEntity = Depends(dep_current_user),
     ) -> {}:
-        sites = {}
+        sites = {"active_site": [], "remote_site": []}
         site_infos = await Postgres.fetch("select id, data from sites")
         for site_info in site_infos:
             settings = await self.get_project_site_settings(project_name,
@@ -130,13 +124,13 @@ class SiteSync(BaseServerAddon):
                                                             site_info["id"])
             for site_type in ["active_site", "remote_site"]:
                 used_site = settings.dict()["local_setting"][site_type]
-                sites[site_type] = []
+                if not used_site:
+                    continue
 
-                if used_site == 'local':
+                if used_site == "local":
                     sites[site_type].append(site_info["id"])
                 else:
-                    sites[site_type].append(used_site)        
-
+                    sites[site_type].append(used_site)
         return sites
 
 
@@ -209,6 +203,12 @@ class SiteSync(BaseServerAddon):
             name="Sort descending",
             description="Sort the result in descending order",
         ),
+        bothOnly: bool = Query(
+            False,
+            name="Query only with both sites",
+            description="Used for front end UI to show only repres with " 
+                        "both sides",
+        ),
         # Pagination
         page: int = Query(1, ge=1),
         pageLength: int = Query(50, ge=1),
@@ -254,6 +254,10 @@ class SiteSync(BaseServerAddon):
         if access_list is not None:
             conditions.append(f"path like ANY ('{{ {','.join(access_list)} }}')")
 
+        sites_join = "LEFT"
+        if bothOnly:
+            sites_join = "INNER"
+
         query = f"""
             SELECT
                 f.name as folder,
@@ -283,11 +287,11 @@ class SiteSync(BaseServerAddon):
             INNER JOIN
                 project_{project_name}.hierarchy as h
                 ON f.id = h.id
-            LEFT JOIN
+            {sites_join} JOIN
                 project_{project_name}.sitesync_files_status as local
                 ON local.representation_id = r.id
                 AND local.site_name = '{localSite}'
-            LEFT JOIN
+            {sites_join} JOIN
                 project_{project_name}.sitesync_files_status as remote
                 ON remote.representation_id = r.id
                 AND remote.site_name = '{remoteSite}'

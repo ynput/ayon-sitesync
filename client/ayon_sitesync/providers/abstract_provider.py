@@ -1,14 +1,14 @@
 import abc
 import six
-from openpype.lib import Logger
+from ayon_core.lib import Logger
 
-log = Logger.get_logger("SyncServer")
+log = Logger.get_logger("SiteSync")
 
 
 @six.add_metaclass(abc.ABCMeta)
 class AbstractProvider:
-    CODE = ''
-    LABEL = ''
+    CODE = ""
+    LABEL = ""
 
     _log = None
 
@@ -35,42 +35,9 @@ class AbstractProvider:
             (boolean)
         """
 
-    @classmethod
-    @abc.abstractmethod
-    def get_system_settings_schema(cls):
-        """
-            Returns dict for editable properties on system settings level
-
-
-            Returns:
-                (list) of dict
-        """
-
-    @classmethod
-    @abc.abstractmethod
-    def get_project_settings_schema(cls):
-        """
-            Returns dict for editable properties on project settings level
-
-
-            Returns:
-                (list) of dict
-        """
-
-    @classmethod
-    @abc.abstractmethod
-    def get_local_settings_schema(cls):
-        """
-            Returns dict for editable properties on local settings level
-
-
-            Returns:
-               (list) of dict
-        """
-
     @abc.abstractmethod
     def upload_file(self, source_path, path,
-                    server, project_name, file, representation, site,
+                    addon, project_name, file, representation, site,
                     overwrite=False):
         """
             Copy file from 'source_path' to 'target_path' on provider.
@@ -82,7 +49,7 @@ class AbstractProvider:
             overwrite (boolean): replace existing file
 
             arguments for saving progress:
-            server (SyncServer): server instance to call update_db on
+            addon (SiteSyncAddon): addon instance to call update_db on
             project_name (str): name of project_name
             file (dict): info about uploaded file (matches structure from db)
             representation (dict): complete repre containing 'file'
@@ -95,7 +62,7 @@ class AbstractProvider:
 
     @abc.abstractmethod
     def download_file(self, source_path, local_path,
-                      server, project_name, file, representation, site,
+                      addon, project_name, file, representation, site,
                       overwrite=False):
         """
             Download file from provider into local system
@@ -106,7 +73,7 @@ class AbstractProvider:
             overwrite (boolean): replace existing file
 
             arguments for saving progress:
-            server (SyncServer): server instance to call update_db on
+            addon (SiteSyncAddon): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
             representation (dict): complete repre containing 'file'

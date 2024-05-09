@@ -29,6 +29,7 @@ const defaultParams = {
     localStatus: { value: null, matchMode: FilterMatchMode.IN },
     remoteStatus: { value: null, matchMode: FilterMatchMode.IN },
   },
+  bothOnly: true
 }
 
 const textMatchModes = [
@@ -86,12 +87,15 @@ const SiteSyncSummary = ({
   const [loading, setLoading] = useState(false)
   const [representations, setRepresentations] = useState([])
   const [selectedRepresentation, setSelectedRepresentation] = useState(null)
-  const [selectedLocalSite, setSelectedLocalSite] = useState(localSites && localSites[0]["value"])
-  const [selectedRemoteSite, setSelectedRemoteSite] = useState(remoteSites && remoteSites[0]["value"])
+  const [selectedLocalSite, setSelectedLocalSite] =
+    useState(localSites && localSites[0] && localSites[0]["value"])
+  const [selectedRemoteSite, setSelectedRemoteSite] =
+    useState(remoteSites && remoteSites[0] && remoteSites[0]["value"])
   const [lazyParams, setLazyParams] = useState(defaultParams)
 
   useEffect(() => {
     setLoading(true)
+    console.log(lazyParams)
     axios
       .get(baseUrl + buildQueryString(selectedLocalSite,
                                       selectedRemoteSite,

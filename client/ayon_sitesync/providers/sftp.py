@@ -4,10 +4,9 @@ import time
 import threading
 import platform
 
-from openpype.lib import Logger
-from openpype.settings import get_system_settings
+from ayon_core.lib import Logger
 from .abstract_provider import AbstractProvider
-log = Logger.get_logger("SyncServer-SFTPHandler")
+log = Logger.get_logger("SiteSync-SFTPHandler")
 
 pysftp = None
 try:
@@ -31,8 +30,8 @@ class SFTPHandler(AbstractProvider):
         Settings could be overwritten per project.
 
     """
-    CODE = 'sftp'
-    LABEL = 'SFTP'
+    CODE = "sftp"
+    LABEL = "SFTP"
 
     def __init__(self, project_name, site_name, tree=None, presets=None):
         self.presets = None
@@ -74,112 +73,6 @@ class SFTPHandler(AbstractProvider):
         """
         return self.presets.get("enabled") and self.conn is not None
 
-    @classmethod
-    def get_system_settings_schema(cls):
-        """
-            Returns dict for editable properties on system settings level
-
-
-            Returns:
-                (list) of dict
-        """
-        return []
-
-    @classmethod
-    def get_project_settings_schema(cls):
-        """
-            Returns dict for editable properties on project settings level
-
-            Currently not implemented in Settings yet!
-
-            Returns:
-                (list) of dict
-        """
-        # {platform} tells that value is multiplatform and only specific OS
-        # should be returned
-        editable = [
-            # credentials could be overridden on Project or User level
-            {
-                'key': "sftp_host",
-                'label': "SFTP host name",
-                'type': 'text'
-            },
-            {
-                "type": "number",
-                "key": "sftp_port",
-                "label": "SFTP port"
-            },
-            {
-                'key': "sftp_user",
-                'label': "SFTP user name",
-                'type': 'text'
-            },
-            {
-                'key': "sftp_pass",
-                'label': "SFTP password",
-                'type': 'text'
-            },
-            {
-                'key': "sftp_key",
-                'label': "SFTP user ssh key",
-                'type': 'path',
-                "multiplatform": True
-            },
-            {
-                'key': "sftp_key_pass",
-                'label': "SFTP user ssh key password",
-                'type': 'text'
-            },
-            # roots could be overridden only on Project level, User cannot
-            {
-                "key": "root",
-                "label": "Roots",
-                "type": "dict-roots",
-                "object_type": {
-                    "type": "path",
-                    "multiplatform": False,
-                    "multipath": False
-                }
-            }
-        ]
-        return editable
-
-    @classmethod
-    def get_local_settings_schema(cls):
-        """
-            Returns dict for editable properties on local settings level
-
-            Currently not implemented in Settings yet!
-
-            Returns:
-                (dict)
-        """
-        editable = [
-            # credentials could be override on Project or User level
-            {
-                'key': "sftp_user",
-                'label': "SFTP user name",
-                'type': 'text'
-            },
-            {
-                'key': "sftp_pass",
-                'label': "SFTP password",
-                'type': 'text'
-            },
-            {
-                'key': "sftp_key",
-                'label': "SFTP user ssh key",
-                'type': 'path',
-                "multiplatform": True
-            },
-            {
-                'key': "sftp_key_pass",
-                'label': "SFTP user ssh key password",
-                'type': 'text'
-            }
-        ]
-        return editable
-
     def get_roots_config(self, anatomy=None):
         """
             Returns root values for path resolving
@@ -193,7 +86,7 @@ class SFTPHandler(AbstractProvider):
             Format is importing for usage of python's format ** approach
         """
         # TODO implement multiple roots
-        return {"root": {"work": self.presets['root']}}
+        return {"root": {"work": self.presets["root"]}}
 
     def get_tree(self):
         """
@@ -223,7 +116,7 @@ class SFTPHandler(AbstractProvider):
         return os.path.basename(path)
 
     def upload_file(self, source_path, target_path,
-                    server, project_name, file, representation, site,
+                    addon, project_name, file, representation, site,
                     overwrite=False):
         """
             Uploads single file from 'source_path' to destination 'path'.
@@ -235,7 +128,7 @@ class SFTPHandler(AbstractProvider):
             overwrite (boolean): replace existing file
 
             arguments for saving progress:
-            server (SyncServer): server instance to call update_db on
+            addon (SiteSync): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
             representation (dict): complete repre containing 'file'
@@ -257,7 +150,7 @@ class SFTPHandler(AbstractProvider):
         thread = threading.Thread(target=self._upload,
                                   args=(source_path, target_path))
         thread.start()
-        self._mark_progress(project_name, file, representation, server,
+        self._mark_progress(project_name, file, representation, addon,
                             site, source_path, target_path, "upload")
 
         return os.path.basename(target_path)
@@ -268,7 +161,7 @@ class SFTPHandler(AbstractProvider):
         conn.put(source_path, target_path)
 
     def download_file(self, source_path, target_path,
-                      server, project_name, file, representation, site,
+                      addon, project_name, file, representation, site,
                       overwrite=False):
         """
             Downloads single file from 'source_path' (remote) to 'target_path'.
@@ -281,7 +174,7 @@ class SFTPHandler(AbstractProvider):
             overwrite (boolean): replace existing file
 
             arguments for saving progress:
-            server (SyncServer): server instance to call update_db on
+            addon (SiteSync): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
             representation (dict): complete repre containing 'file'
@@ -303,7 +196,7 @@ class SFTPHandler(AbstractProvider):
         thread = threading.Thread(target=self._download,
                                   args=(source_path, target_path))
         thread.start()
-        self._mark_progress(project_name, file, representation, server,
+        self._mark_progress(project_name, file, representation, addon,
                             site, source_path, target_path, "download")
 
         return os.path.basename(target_path)
@@ -367,28 +260,6 @@ class SFTPHandler(AbstractProvider):
             return False
 
         return self.conn.isfile(file_path)
-
-    @classmethod
-    def get_presets(cls):
-        """
-            Get presets for this provider
-        Returns:
-            (dictionary) of configured sites
-        """
-        provider_presets = None
-        try:
-            provider_presets = (
-                get_system_settings()["modules"]
-                ["sync_server"]
-                ["providers"]
-                ["sftp"]
-            )
-        except KeyError:
-            log.info(("Sync Server: There are no presets for SFTP " +
-                      "provider.").
-                     format(str(provider_presets)))
-            return
-        return provider_presets
 
     def _get_conn(self):
         """

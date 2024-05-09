@@ -4,16 +4,18 @@ import shutil
 import threading
 import time
 
-from openpype.lib import Logger
-from openpype.pipeline import Anatomy
+from ayon_core.lib import Logger
+from ayon_core.pipeline import Anatomy
 from .abstract_provider import AbstractProvider
 
-log = Logger.get_logger("SyncServer")
+from ayon_core.addon import AddonsManager
+
+log = Logger.get_logger("SiteSync")
 
 
 class LocalDriveHandler(AbstractProvider):
-    CODE = 'local_drive'
-    LABEL = 'Local drive'
+    CODE = "local_drive"
+    LABEL = "Local drive"
 
     """ Handles required operations on mounted disks with OS """
     def __init__(self, project_name, site_name, tree=None, presets=None):
@@ -27,59 +29,6 @@ class LocalDriveHandler(AbstractProvider):
 
     def is_active(self):
         return True
-
-    @classmethod
-    def get_system_settings_schema(cls):
-        """
-            Returns dict for editable properties on system settings level
-
-
-            Returns:
-                (list) of dict
-        """
-        return []
-
-    @classmethod
-    def get_project_settings_schema(cls):
-        """
-            Returns dict for editable properties on project settings level
-
-
-            Returns:
-                (list) of dict
-        """
-        # for non 'studio' sites, 'studio' is configured in Anatomy
-        editable = [
-            {
-                "key": "root",
-                "label": "Roots",
-                "type": "dict-roots",
-                "object_type": {
-                    "type": "path",
-                    "multiplatform": True,
-                    "multipath": False
-                }
-            }
-        ]
-        return editable
-
-    @classmethod
-    def get_local_settings_schema(cls):
-        """
-            Returns dict for editable properties on local settings level
-
-
-            Returns:
-                (dict)
-        """
-        editable = [
-            {
-                'key': "root",
-                'label': "Roots",
-                'type': 'dict'
-            }
-        ]
-        return editable
 
     def upload_file(self, source_path, target_path,
                     server, project_name, file, representation, site,
@@ -163,24 +112,26 @@ class LocalDriveHandler(AbstractProvider):
                      {"root": {"root_ONE": "value", "root_TWO":"value}}
             Format is importing for usage of python's format ** approach
         """
+        site_name = self._normalize_site_name(self.site_name)
         if not anatomy:
             anatomy = Anatomy(self.project_name,
-                              self._normalize_site_name(self.site_name))
+                              site_name)
 
-        return {'root': anatomy.roots}
+        # TODO cleanup when Anatomy will implement siteRoots method
+        roots = anatomy.roots
+        root_values = [root.value for root in roots.values()]
+        if not all(root_values):
+            manager = AddonsManager()
+            sitesync_addon = manager.get_enabled_addon("sitesync")
+            if not sitesync_addon:
+                raise RuntimeError("No SiteSync addon")
+            roots = sitesync_addon._get_project_roots_for_site(
+                self.project_name, site_name)
+
+        return {'root': roots}
 
     def get_tree(self):
         return
-
-    def get_configurable_items_for_site(self):
-        """
-            Returns list of items that should be configurable by User
-
-            Returns:
-                (list of dict)
-                [{key:"root", label:"root", value:"valueFromSettings"}]
-        """
-        pass
 
     def _copy(self, source_path, target_path):
         print("copying {}->{}".format(source_path, target_path))

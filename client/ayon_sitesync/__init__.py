@@ -1,7 +1,6 @@
-from .sync_server_module import SyncServerModule
-
-V3_ALIAS = "sync_server"  # temporary until v3 is completely removed
+from .addon import SiteSyncAddon, SYNC_ADDON_DIR
 
 __all__ = (
-    "SyncServerModule",
+    "SiteSyncAddon",
+    "SYNC_ADDON_DIR"
 )

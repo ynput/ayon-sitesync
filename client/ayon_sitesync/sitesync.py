@@ -4,15 +4,19 @@ import asyncio
 import threading
 import concurrent.futures
 import traceback
+import time
+
+from ayon_core.lib import get_local_site_id
+from ayon_core.addon import AddonsManager
+from ayon_core.lib import Logger
+from ayon_core.pipeline import Anatomy
+from ayon_core.pipeline.load import get_representation_path_with_anatomy
 
 from .providers import lib
-from openpype.lib import Logger
-from openpype.pipeline import Anatomy
-
-from .utils import SyncStatus, ResumableError
+from .utils import SyncStatus, ResumableError, get_linked_representation_id
 
 
-async def upload(module, project_name, file, representation, provider_name,
+async def upload(addon, project_name, file, representation, provider_name,
                  remote_site_name, tree=None, preset=None):
     """
         Upload single 'file' of a 'representation' to 'provider'.
@@ -28,7 +32,7 @@ async def upload(module, project_name, file, representation, provider_name,
         'projectB')
 
     Args:
-        module(SyncServerModule): object to run SyncServerModule API
+        addon (SiteSyncAddon): object to run SiteSyncAddon API
         project_name (str): source db
         file (dictionary): of file from representation in Mongo
         representation (dictionary): of representation
@@ -40,7 +44,7 @@ async def upload(module, project_name, file, representation, provider_name,
 
     """
     # create ids sequentially, upload file in parallel later
-    with module.lock:
+    with addon.lock:
         # this part modifies structure on 'remote_site', only single
         # thread can do that at a time, upload/download to prepared
         # structure should be run in parallel
@@ -53,7 +57,7 @@ async def upload(module, project_name, file, representation, provider_name,
         file_path = file.get("path", "")
 
         local_file_path, remote_file_path = resolve_paths(
-            module, file_path, project_name,
+            addon, file_path, project_name,
             remote_site_name, remote_handler
         )
 
@@ -70,7 +74,7 @@ async def upload(module, project_name, file, representation, provider_name,
                                          remote_handler.upload_file,
                                          local_file_path,
                                          remote_file_path,
-                                         module,
+                                         addon,
                                          project_name,
                                          file,
                                          representation,
@@ -81,13 +85,13 @@ async def upload(module, project_name, file, representation, provider_name,
     return file_id
 
 
-async def download(module, project_name, file, representation, provider_name,
+async def download(addon, project_name, file, representation, provider_name,
                    remote_site_name, tree=None, preset=None):
     """
         Downloads file to local folder denoted in representation.Context.
 
     Args:
-        module(SyncServerModule): object to run SyncServerModule API
+        addon (SiteSyncAddon): object to run SiteSyncAddon API
         project_name (str): source
         file (dictionary) : info about processed file
         representation (dictionary):  repr that 'file' belongs to
@@ -100,7 +104,7 @@ async def download(module, project_name, file, representation, provider_name,
         Returns:
         (string) - 'name' of local file
     """
-    with module.lock:
+    with addon.lock:
         remote_handler = lib.factory.get_provider(provider_name,
                                                   project_name,
                                                   remote_site_name,
@@ -109,20 +113,20 @@ async def download(module, project_name, file, representation, provider_name,
 
         file_path = file.get("path", "")
         local_file_path, remote_file_path = resolve_paths(
-            module, file_path, project_name, remote_site_name, remote_handler
+            addon, file_path, project_name, remote_site_name, remote_handler
         )
 
         local_folder = os.path.dirname(local_file_path)
         os.makedirs(local_folder, exist_ok=True)
 
-    local_site = module.get_active_site(project_name)
+    local_site = addon.get_active_site(project_name)
 
     loop = asyncio.get_running_loop()
     file_id = await loop.run_in_executor(None,
                                          remote_handler.download_file,
                                          remote_file_path,
                                          local_file_path,
-                                         module,
+                                         addon,
                                          project_name,
                                          file,
                                          representation,
@@ -133,7 +137,7 @@ async def download(module, project_name, file, representation, provider_name,
     return file_id
 
 
-def resolve_paths(module, file_path, project_name,
+def resolve_paths(addon, file_path, project_name,
                   remote_site_name=None, remote_handler=None):
     """
         Returns tuple of local and remote file paths with {root}
@@ -142,7 +146,7 @@ def resolve_paths(module, file_path, project_name,
         Ejected here because of Python 2 hosts (GDriveHandler is an issue)
 
         Args:
-            module(SyncServerModule): object to run SyncServerModule API
+            addon (SiteSyncAddon): object to run SiteSyncAddon API
             file_path(string): path with {root}
             project_name(string): project name
             remote_site_name(string): remote site
@@ -150,32 +154,32 @@ def resolve_paths(module, file_path, project_name,
         Returns:
             (string, string) - proper absolute paths, remote path is optional
     """
-    remote_file_path = ''
+    remote_file_path = ""
     if remote_handler:
         remote_file_path = remote_handler.resolve_path(file_path)
 
     local_handler = lib.factory.get_provider(
-        'local_drive', project_name, module.get_active_site(project_name))
+        "local_drive", project_name, addon.get_active_site(project_name))
     local_file_path = local_handler.resolve_path(file_path)
 
     return local_file_path, remote_file_path
 
 
-def _site_is_working(module, project_name, site_name, site_config):
+def _site_is_working(addon, project_name, site_name, site_config):
     """
         Confirm that 'site_name' is configured correctly for 'project_name'.
 
         Must be here as lib.factory access doesn't work in Python 2 hosts.
 
         Args:
-            module (SyncServerModule)
+            addon (SiteSyncAddon)
             project_name(string):
             site_name(string):
             site_config (dict): configuration for site from Settings
         Returns
             (bool)
     """
-    provider = module.get_provider_for_site(site=site_name)
+    provider = addon.get_provider_for_site(site=site_name)
     handler = lib.factory.get_provider(provider,
                                        project_name,
                                        site_name,
@@ -210,10 +214,10 @@ def download_last_published_workfile(
     if not anatomy:
         anatomy = Anatomy(project_name)
 
-    # Get sync server module
-    sync_server = ModulesManager().modules_by_name.get("sync_server")
-    if not sync_server or not sync_server.enabled:
-        print("Sync server module is disabled or unavailable.")
+    # Get sync server addon
+    sitesync_addon = AddonsManager().addons_by_name.get("sitesync")
+    if not sitesync_addon or not sitesync_addon.enabled:
+        print("Site sync addon is disabled or unavailable.")
         return
 
     if not workfile_representation:
@@ -231,14 +235,15 @@ def download_last_published_workfile(
         return
 
     # If representation isn't available on remote site, then return.
-    if not sync_server.is_representation_on_site(
+    remote_site = sitesync_addon.get_remote_site(project_name)
+    if not sitesync_addon.is_representation_on_site(
         project_name,
-        workfile_representation["_id"],
-        sync_server.get_remote_site(project_name),
+        workfile_representation["id"],
+        remote_site,
     ):
         print(
-            "Representation for task '{}' and host '{}'".format(
-                task_name, host_name
+            "Representation not available for task '{}', site '{}'".format(
+                task_name, remote_site
             )
         )
         return
@@ -247,43 +252,43 @@ def download_last_published_workfile(
     local_site_id = get_local_site_id()
 
     # Add workfile representation to local site
-    representation_ids = {workfile_representation["_id"]}
+    representation_ids = {workfile_representation["id"]}
     representation_ids.update(
         get_linked_representation_id(
-            project_name, repre_id=workfile_representation["_id"]
+            project_name, workfile_representation, "reference"
         )
     )
     for repre_id in representation_ids:
-        if not sync_server.is_representation_on_site(project_name, repre_id,
-                                                     local_site_id):
-            sync_server.add_site(
+        if not sitesync_addon.is_representation_on_site(project_name, repre_id,
+                                                        local_site_id):
+            sitesync_addon.add_site(
                 project_name,
                 repre_id,
                 local_site_id,
                 force=True,
                 priority=99
             )
-    sync_server.reset_timer()
+    sitesync_addon.reset_timer()
     print("Starting to download:{}".format(last_published_workfile_path))
     # While representation unavailable locally, wait.
-    while not sync_server.is_representation_on_site(
-        project_name, workfile_representation["_id"], local_site_id,
+    while not sitesync_addon.is_representation_on_site(
+        project_name, workfile_representation["id"], local_site_id,
         max_retries=max_retries
     ):
-        sleep(5)
+        time.sleep(5)
 
     return last_published_workfile_path
 
 
-class SyncServerThread(threading.Thread):
+class SiteSyncThread(threading.Thread):
     """
         Separate thread running synchronization server with asyncio loop.
         Stopped when tray is closed.
     """
-    def __init__(self, module):
+    def __init__(self, addon):
         self.log = Logger.get_logger(self.__class__.__name__)
-        super(SyncServerThread, self).__init__()
-        self.module = module
+        super(SiteSyncThread, self).__init__()
+        self.addon = addon
         self.loop = None
         self.is_running = False
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)
@@ -293,18 +298,18 @@ class SyncServerThread(threading.Thread):
         self.is_running = True
 
         try:
-            self.log.info("Starting Sync Server")
+            self.log.info("Starting SiteSync")
             self.loop = asyncio.new_event_loop()  # create new loop for thread
             asyncio.set_event_loop(self.loop)
             self.loop.set_default_executor(self.executor)
 
             asyncio.ensure_future(self.check_shutdown(), loop=self.loop)
             asyncio.ensure_future(self.sync_loop(), loop=self.loop)
-            self.log.info("Sync Server Started")
+            self.log.info("SiteSync Started")
             self.loop.run_forever()
         except Exception:
             self.log.warning(
-                "Sync Server service has failed", exc_info=True
+                "SiteSync service has failed", exc_info=True
             )
         finally:
             self.loop.close()  # optional
@@ -323,30 +328,29 @@ class SyncServerThread(threading.Thread):
         Returns:
 
         """
-        while self.is_running and not self.module.is_paused():
+        while self.is_running and not self.addon.is_paused():
             try:
-                import time
                 start_time = time.time()
-                self.module.set_sync_project_settings()  # clean cache
+                self.addon.set_sync_project_settings()  # clean cache
                 project_name = None
-                enabled_projects = self.module.get_enabled_projects()
+                enabled_projects = self.addon.get_enabled_projects()
                 for project_name in enabled_projects:
                     self.log.info(f"Processing '{project_name}'")
-                    preset = self.module.sync_project_settings[project_name]
+                    preset = self.addon.sync_project_settings[project_name]
 
                     local_site, remote_site = self._working_sites(project_name,
                                                                   preset)
                     if not all([local_site, remote_site]):
                         continue
 
-                    remote_site_preset = preset.get('sites')[remote_site]
+                    remote_site_preset = preset.get("sites")[remote_site]
 
                     handler, remote_provider, limit = \
                         self._get_remote_provider_info(project_name,
                                                        remote_site,
                                                        remote_site_preset)
 
-                    sync_repres = self.module.get_sync_representations(
+                    sync_repres = self.addon.get_sync_representations(
                         project_name,
                         local_site,
                         remote_site,
@@ -367,25 +371,24 @@ class SyncServerThread(threading.Thread):
                     # call only if needed, eg. DO_UPLOAD or DO_DOWNLOAD
                     for sync in sync_repres:
                         sync_id = sync["representationId"]
-                        if self.module.\
-                                is_representation_paused(sync_id):
+                        if self.addon.is_representation_paused(sync_id):
                             continue
                         files = sync.get("files") or []
                         if files:
                             for file in files:
                                 # skip already processed files
-                                file_path = file.get('path', '')
+                                file_path = file.get("path", "")
                                 if file_path in processed_file_path:
                                     continue
-                                status = self.module.check_status(
+                                status = self.addon.check_status(
                                     file,
                                     local_site,
                                     remote_site,
-                                    preset.get('config'))
+                                    preset.get("config"))
                                 if status == SyncStatus.DO_UPLOAD:
                                     tree = handler.get_tree()
                                     task = asyncio.create_task(
-                                        upload(self.module,
+                                        upload(self.addon,
                                                project_name,
                                                file,
                                                sync,
@@ -405,7 +408,7 @@ class SyncServerThread(threading.Thread):
                                 if status == SyncStatus.DO_DOWNLOAD:
                                     tree = handler.get_tree()
                                     task = asyncio.create_task(
-                                        download(self.module,
+                                        download(self.addon,
                                                  project_name,
                                                  file,
                                                  sync,
@@ -439,16 +442,16 @@ class SyncServerThread(threading.Thread):
                             self.log.warning(f"{traceback.format_tb(file_result.__traceback__)}")
                             file_result = None  # it is exception >> no id >> reset
 
-                        self.module.update_db(project_name=project_name,
-                                              new_file_id=file_result,
-                                              file=file,
-                                              representation=representation,
-                                              site_name=site_name,
-                                              side=side,
-                                              error=error)
+                        self.addon.update_db(project_name=project_name,
+                                             new_file_id=file_result,
+                                             file=file,
+                                             representation=representation,
+                                             site_name=site_name,
+                                             side=side,
+                                             error=error)
 
                         repre_id = representation["representationId"]
-                        self.module.handle_alternate_site(project_name,
+                        self.addon.handle_alternate_site(project_name,
                                                           repre_id,
                                                           site_name,
                                                           file["fileHash"])
@@ -456,7 +459,7 @@ class SyncServerThread(threading.Thread):
                 duration = time.time() - start_time
                 self.log.debug("One loop took {:.2f}s".format(duration))
 
-                delay = self.module.get_loop_delay(project_name)
+                delay = self.addon.get_loop_delay(project_name)
                 self.log.debug(
                     "Waiting for {} seconds to new loop".format(delay)
                 )
@@ -489,19 +492,19 @@ class SyncServerThread(threading.Thread):
             periodically.
         """
         while self.is_running:
-            if self.module.long_running_tasks:
-                task = self.module.long_running_tasks.pop()
+            if self.addon.long_running_tasks:
+                task = self.addon.long_running_tasks.pop()
                 self.log.info("starting long running")
                 await self.loop.run_in_executor(None, task["func"])
                 self.log.info("finished long running")
-                self.module.projects_processed.remove(task["project_name"])
+                self.addon.projects_processed.remove(task["project_name"])
             await asyncio.sleep(0.5)
         tasks = [task for task in asyncio.all_tasks() if
                  task is not asyncio.current_task()]
         list(map(lambda task: task.cancel(), tasks))  # cancel all the tasks
         results = await asyncio.gather(*tasks, return_exceptions=True)
         self.log.debug(
-            f'Finished awaiting cancelled tasks, results: {results}...')
+            f"Finished awaiting cancelled tasks, results: {results}...")
         await self.loop.shutdown_asyncgens()
         # to really make sure everything else has time to stop
         self.executor.shutdown(wait=True)
@@ -520,22 +523,22 @@ class SyncServerThread(threading.Thread):
             self.timer = None
 
     def _working_sites(self, project_name, sync_config):
-        if self.module.is_project_paused(project_name):
+        if self.addon.is_project_paused(project_name):
             self.log.debug("Both sites same, skipping")
             return None, None
 
-        local_site = self.module.get_active_site(project_name)
-        remote_site = self.module.get_remote_site(project_name)
+        local_site = self.addon.get_active_site(project_name)
+        remote_site = self.addon.get_remote_site(project_name)
         if local_site == remote_site:
             self.log.debug("{}-{} sites same, skipping".format(
                 local_site, remote_site))
             return None, None
 
-        local_site_config = sync_config.get('sites')[local_site]
-        remote_site_config = sync_config.get('sites')[remote_site]
-        if not all([_site_is_working(self.module, project_name, local_site,
+        local_site_config = sync_config.get("sites")[local_site]
+        remote_site_config = sync_config.get("sites")[remote_site]
+        if not all([_site_is_working(self.addon, project_name, local_site,
                                      local_site_config),
-                    _site_is_working(self.module, project_name, remote_site,
+                    _site_is_working(self.addon, project_name, remote_site,
                                      remote_site_config)]):
             self.log.debug(
                 "Some of the sites {} - {} in {} is not working properly".format(  # noqa
@@ -549,7 +552,7 @@ class SyncServerThread(threading.Thread):
 
     def _get_remote_provider_info(self, project_name, remote_site,
                                   site_preset):
-        remote_provider = self.module.get_provider_for_site(site=remote_site)
+        remote_provider = self.addon.get_provider_for_site(site=remote_site)
         handler = lib.factory.get_provider(remote_provider,
                                            project_name,
                                            remote_site,

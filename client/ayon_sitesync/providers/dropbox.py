@@ -3,12 +3,11 @@ import os
 import dropbox
 
 from .abstract_provider import AbstractProvider
-from ..utils import EditableScopes
 
 
 class DropboxHandler(AbstractProvider):
-    CODE = 'dropbox'
-    LABEL = 'Dropbox'
+    CODE = "dropbox"
+    LABEL = "Dropbox"
 
     def __init__(self, project_name, site_name, tree=None, presets=None):
         self.active = False
@@ -56,68 +55,6 @@ class DropboxHandler(AbstractProvider):
             return
 
         super(AbstractProvider, self).__init__()
-
-    @classmethod
-    def get_system_settings_schema(cls):
-        """
-            Returns dict for editable properties on system settings level
-
-
-            Returns:
-                (list) of dict
-        """
-        return []
-
-    @classmethod
-    def get_project_settings_schema(cls):
-        """
-            Returns dict for editable properties on project settings level
-
-
-            Returns:
-                (list) of dict
-        """
-        # {platform} tells that value is multiplatform and only specific OS
-        # should be returned
-        return [
-            {
-                "type": "text",
-                "key": "token",
-                "label": "Access Token"
-            },
-            {
-                "type": "text",
-                "key": "team_folder_name",
-                "label": "Team Folder Name"
-            },
-            {
-                "type": "text",
-                "key": "acting_as_member",
-                "label": "Acting As Member"
-            },
-            # roots could be overridden only on Project level, User cannot
-            {
-                "key": "root",
-                "label": "Roots",
-                "type": "dict-roots",
-                "object_type": {
-                    "type": "path",
-                    "multiplatform": False,
-                    "multipath": False
-                }
-            }
-        ]
-
-    @classmethod
-    def get_local_settings_schema(cls):
-        """
-            Returns dict for editable properties on local settings level
-
-
-            Returns:
-                (dict)
-        """
-        return []
 
     def _get_service(self, token, acting_as_member, team_folder_name):
         dbx = dropbox.DropboxTeam(token)
@@ -167,45 +104,6 @@ class DropboxHandler(AbstractProvider):
         """
         return self.presets.get("enabled") and self.dbx is not None
 
-    @classmethod
-    def get_configurable_items(cls):
-        """
-            Returns filtered dict of editable properties
-
-
-            Returns:
-                (dict)
-        """
-        editable = {
-            'token': {
-                'scope': [EditableScopes.PROJECT],
-                'label': "Access Token",
-                'type': 'text',
-                'namespace': (
-                    '{project_settings}/global/sync_server/sites/{site}/token'
-                )
-            },
-            'team_folder_name': {
-                'scope': [EditableScopes.PROJECT],
-                'label': "Team Folder Name",
-                'type': 'text',
-                'namespace': (
-                    '{project_settings}/global/sync_server/sites/{site}'
-                    '/team_folder_name'
-                )
-            },
-            'acting_as_member': {
-                'scope': [EditableScopes.PROJECT, EditableScopes.LOCAL],
-                'label': "Acting As Member",
-                'type': 'text',
-                'namespace': (
-                    '{project_settings}/global/sync_server/sites/{site}'
-                    '/acting_as_member'
-                )
-            }
-        }
-        return editable
-
     def _path_exists(self, path):
         try:
             entries = self.dbx.files_list_folder(
@@ -221,7 +119,7 @@ class DropboxHandler(AbstractProvider):
         return False
 
     def upload_file(self, source_path, path,
-                    server, project_name, file, representation, site_name,
+                    addon, project_name, file, representation, site_name,
                     overwrite=False):
         """
             Copy file from 'source_path' to 'target_path' on provider.
@@ -233,7 +131,7 @@ class DropboxHandler(AbstractProvider):
             overwrite (boolean): replace existing file
 
             arguments for saving progress:
-            server (SyncServer): server instance to call update_db on
+            addon (SiteSync): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
             representation (dict): complete repre containing 'file'
@@ -286,7 +184,7 @@ class DropboxHandler(AbstractProvider):
                             cursor.offset)
                         cursor.offset = f.tell()
 
-        server.update_db(
+        addon.update_db(
             project_name=project_name,
             new_file_id=None,
             file=file,
@@ -299,7 +197,7 @@ class DropboxHandler(AbstractProvider):
         return path
 
     def download_file(self, source_path, local_path,
-                      server, project_name, file, representation, site_name,
+                      addon, project_name, file, representation, site_name,
                       overwrite=False):
         """
             Download file from provider into local system
@@ -310,7 +208,7 @@ class DropboxHandler(AbstractProvider):
             overwrite (boolean): replace existing file
 
             arguments for saving progress:
-            server (SyncServer): server instance to call update_db on
+            addon (SiteSync): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
             representation (dict): complete repre containing 'file'
@@ -334,7 +232,7 @@ class DropboxHandler(AbstractProvider):
 
         self.dbx.files_download_to_file(local_path, source_path)
 
-        server.update_db(
+        addon.update_db(
             project_name=project_name,
             new_file_id=None,
             file=file,

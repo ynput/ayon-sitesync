@@ -5,10 +5,12 @@ import sys
 import six
 import platform
 
-from openpype.lib import Logger
-from openpype.settings import get_system_settings
-from .abstract_provider import AbstractProvider
-from ..utils import time_function, ResumableError
+from ayon_core.lib import Logger
+from ayon_core.settings import get_studio_settings
+
+from ayon_sitesync.utils import time_function, ResumableError
+from ayon_sitesync.providers.abstract_provider import AbstractProvider
+
 
 log = Logger.get_logger("GDriveHandler")
 
@@ -24,9 +26,9 @@ except (ImportError, SyntaxError):
     # handle imports from Python 2 hosts - in those only basic methods are used
     log.warning("Import failed, imported from Python 2, operations will fail.")
 
-SCOPES = ['https://www.googleapis.com/auth/drive.metadata.readonly',
-          'https://www.googleapis.com/auth/drive.file',
-          'https://www.googleapis.com/auth/drive.readonly']  # for write|delete
+SCOPES = ["https://www.googleapis.com/auth/drive.metadata.readonly",
+          "https://www.googleapis.com/auth/drive.file",
+          "https://www.googleapis.com/auth/drive.readonly"]  # for write|delete
 
 
 class GDriveHandler(AbstractProvider):
@@ -53,10 +55,10 @@ class GDriveHandler(AbstractProvider):
             }
           }
     """
-    CODE = 'gdrive'
-    LABEL = 'Google Drive'
+    CODE = "gdrive"
+    LABEL = "Google Drive"
 
-    FOLDER_STR = 'application/vnd.google-apps.folder'
+    FOLDER_STR = "application/vnd.google-apps.folder"
     MY_DRIVE_STR = 'My Drive'  # name of root folder of regular Google drive
     CHUNK_SIZE = 2097152  # must be divisible by 256! used for upload chunks
 
@@ -126,71 +128,6 @@ class GDriveHandler(AbstractProvider):
             (boolean)
         """
         return self.presets.get("enabled") and self.service is not None
-
-    @classmethod
-    def get_system_settings_schema(cls):
-        """
-            Returns dict for editable properties on system settings level
-
-
-            Returns:
-                (list) of dict
-        """
-        return []
-
-    @classmethod
-    def get_project_settings_schema(cls):
-        """
-            Returns dict for editable properties on project settings level
-
-
-            Returns:
-                (list) of dict
-        """
-        # {platform} tells that value is multiplatform and only specific OS
-        # should be returned
-        editable = [
-            # credentials could be overridden on Project or User level
-            {
-                "type": "path",
-                "key": "credentials_url",
-                "label": "Credentials url",
-                "multiplatform": True,
-                "placeholder": "Credentials url"
-            },
-            # roots could be overridden only on Project level, User cannot
-            {
-                "key": "root",
-                "label": "Roots",
-                "type": "dict-roots",
-                "object_type": {
-                    "type": "path",
-                    "multiplatform": False,
-                    "multipath": False
-                }
-            }
-        ]
-        return editable
-
-    @classmethod
-    def get_local_settings_schema(cls):
-        """
-            Returns dict for editable properties on local settings level
-
-
-            Returns:
-                (dict)
-        """
-        editable = [
-            # credentials could be override on Project or User level
-            {
-                'key': "credentials_url",
-                'label': "Credentials url",
-                'type': 'text',
-                'namespace': '{project_settings}/global/sync_server/sites/{site}/credentials_url/{platform}'  # noqa: E501
-            }
-        ]
-        return editable
 
     def get_roots_config(self, anatomy=None):
         """
@@ -264,7 +201,7 @@ class GDriveHandler(AbstractProvider):
                 return folder_id
 
     def upload_file(self, source_path, path,
-                    server, project_name, file, representation, site_name,
+                    addon, project_name, file, representation, site_name,
                     overwrite=False):
         """
             Uploads single file from 'source_path' to destination 'path'.
@@ -276,7 +213,7 @@ class GDriveHandler(AbstractProvider):
             overwrite (boolean): replace existing file
 
             arguments for saving progress:
-            server (SyncServer): server instance to call update_db on
+            addon (SiteSync): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
             representation (dict): complete repre containing 'file'
@@ -335,7 +272,7 @@ class GDriveHandler(AbstractProvider):
             last_tick = status = response = None
             status_val = 0
             while response is None:
-                if server.is_representation_paused(
+                if addon.is_representation_paused(
                         representation["representationId"],
                         check_parents=True,
                         project_name=project_name):
@@ -343,17 +280,16 @@ class GDriveHandler(AbstractProvider):
                 if status:
                     status_val = float(status.progress())
                 if not last_tick or \
-                        time.time() - last_tick >= server.LOG_PROGRESS_SEC:
+                        time.time() - last_tick >= addon.LOG_PROGRESS_SEC:
                     last_tick = time.time()
                     self.log.debug("Uploaded %d%%." % int(status_val * 100))
-                    server.update_db(project_name=project_name,
-                                     new_file_id=None,
-                                     file=file,
-                                     representation=representation,
-                                     site_name=site_name,
-                                     side="remote",
-                                     progress=status_val
-                                     )
+                    addon.update_db(project_name=project_name,
+                                    new_file_id=None,
+                                    file=file,
+                                    representation=representation,
+                                    site_name=site_name,
+                                    side="remote",
+                                    progress=status_val)
                 status, response = request.next_chunk()
 
         except errors.HttpError as ex:
@@ -373,7 +309,7 @@ class GDriveHandler(AbstractProvider):
         return response['id']
 
     def download_file(self, source_path, local_path,
-                      server, project_name, file, representation, site_name,
+                      addon, project_name, file, representation, site_name,
                       overwrite=False):
         """
             Downloads single file from 'source_path' (remote) to 'local_path'.
@@ -386,7 +322,7 @@ class GDriveHandler(AbstractProvider):
             overwrite (boolean): replace existing file
 
             arguments for saving progress:
-            server (SyncServer): server instance to call update_db on
+            addon (SiteSync): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
             representation (dict): complete repre containing 'file'
@@ -423,7 +359,7 @@ class GDriveHandler(AbstractProvider):
             last_tick = status = response = None
             status_val = 0
             while response is None:
-                if server.is_representation_paused(
+                if addon.is_representation_paused(
                         representation["representationId"],
                         check_parents=True,
                         project_name=project_name):
@@ -431,18 +367,17 @@ class GDriveHandler(AbstractProvider):
                 if status:
                     status_val = float(status.progress())
                 if not last_tick or \
-                        time.time() - last_tick >= server.LOG_PROGRESS_SEC:
+                        time.time() - last_tick >= addon.LOG_PROGRESS_SEC:
                     last_tick = time.time()
                     self.log.debug("Downloaded %d%%." %
                               int(status_val * 100))
-                    server.update_db(project_name=project_name,
-                                     new_file_id=None,
-                                     file=file,
-                                     representation=representation,
-                                     site_name=site_name,
-                                     side="local",
-                                     progress=status_val
-                                     )
+                    addon.update_db(project_name=project_name,
+                                    new_file_id=None,
+                                    file=file,
+                                    representation=representation,
+                                    site_name=site_name,
+                                    side="local",
+                                    progress=status_val)
                 status, response = downloader.next_chunk()
 
         return target_name
@@ -629,28 +564,6 @@ class GDriveHandler(AbstractProvider):
         if not file:
             return False
         return file[0]
-
-    @classmethod
-    def get_presets(cls):
-        """
-            Get presets for this provider
-        Returns:
-            (dictionary) of configured sites
-        """
-        provider_presets = None
-        try:
-            provider_presets = (
-                get_system_settings()["modules"]
-                ["sync_server"]
-                ["providers"]
-                ["gdrive"]
-            )
-        except KeyError:
-            log.info((
-                "Sync Server: There are no presets for Gdrive provider."
-            ).format(str(provider_presets)))
-            return
-        return provider_presets
 
     def _get_gd_service(self, credentials_path):
         """

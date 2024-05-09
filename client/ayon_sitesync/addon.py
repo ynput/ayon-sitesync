@@ -7,38 +7,35 @@ import copy
 import signal
 from collections import deque, defaultdict
 import click
+import platform
+
+from ayon_core.settings import get_studio_settings
+from ayon_core.addon import AYONAddon, ITrayAddon, IPluginPaths
+from ayon_core.lib import get_local_site_id
+
+import ayon_api
+from ayon_api import (
+    get_representation_by_id,
+    get_representations,
+    get_project_names,
+    get_addon_project_settings,
+    get_project_roots_for_site
+)
 
 from .version import __version__
-
-from openpype.client import get_projects
-from openpype.modules import AYONAddon, ITrayModule, IPluginPaths
-from openpype.settings import get_system_settings
-from openpype.lib import get_local_site_id
-from openpype.pipeline import Anatomy
 from .providers.local_drive import LocalDriveHandler
-from .providers import lib
 
 from .utils import (
     time_function,
     SyncStatus,
     SiteAlreadyPresentError,
     SiteSyncStatus,
-    SITE_SYNC_ROOT
 )
 
-from openpype.client import (
-    get_representations,
-    get_representation_by_id,
-    get_versions,
-    get_representations_parents
-)
-
-import ayon_api
-
-SYNC_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+SYNC_ADDON_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
+class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     """
        Synchronization server that is syncing published files from local to
        any of implemented providers (like GDrive, S3 etc.)
@@ -77,31 +74,29 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
     # different limits imposed by its API
     # set 0 to no limit
     REPRESENTATION_LIMIT = 100
-    DEFAULT_SITE = 'studio'
-    LOCAL_SITE = 'local'
+    DEFAULT_SITE = "studio"
+    LOCAL_SITE = "local"
     LOG_PROGRESS_SEC = 5  # how often log progress to DB
     DEFAULT_PRIORITY = 50  # higher is better, allowed range 1 - 1000
 
-    name = "sync_server"
+    name = "sitesync"
     version = __version__
-    v4_name = "sitesync"  # temporary,sync_server should be cleaned in Settings
-    label = "Sync Queue"
 
-    def initialize(self, module_settings):
+    def initialize(self, addon_settings):
         """
-            Called during Module Manager creation.
+            Called during Addon Manager creation.
 
             Collects needed data, checks asyncio presence.
-            Sets 'enabled' according to global settings for the module.
+            Sets 'enabled' according to global settings for the addon.
             Shouldnt be doing any initialization, thats a job for 'tray_init'
         """
 
         # some parts of code need to run sequentially, not in async
         self.lock = None
-        self._sync_system_settings = None
+        self._sync_studio_settings = None
         # settings for all enabled projects for sync
         self._sync_project_settings = None
-        self.sync_server_thread = None  # asyncio requires new thread
+        self.sitesync_thread = None  # asyncio requires new thread
 
         self._paused = False
         self._paused_projects = set()
@@ -113,13 +108,12 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         # projects that long tasks are running on
         self.projects_processed = set()
 
-
     @property
     def endpoint_prefix(self):
-        return "addons/{}/{}".format(self.v4_name, self.version)
+        return "addons/{}/{}".format(self.name, self.version)
 
     def get_plugin_paths(self):
-        return {"publish": os.path.join(SYNC_MODULE_DIR, "plugins", "publish")}
+        return {"publish": os.path.join(SYNC_ADDON_DIR, "plugins", "publish")}
 
     def get_site_icons(self):
         """Icons for sites.
@@ -129,7 +123,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         """
 
         resource_path = os.path.join(
-            SITE_SYNC_ROOT, "providers", "resources"
+            SYNC_ADDON_DIR, "providers", "resources"
         )
         icons = {}
         for file_path in os.listdir(resource_path):
@@ -146,7 +140,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         """Implementation for applications launch hooks.
 
         Returns:
-            (str): full absolut path to directory with hooks for the module
+            (str): full absolut path to directory with hooks for the addon
         """
 
         return os.path.join(
@@ -222,13 +216,18 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
             })
 
         payload_dict = {"files": new_site_files}
-        representation_id = representation_id.replace("-", '')
+        representation_id = representation_id.replace("-", "")
 
         self._set_state_sync_state(project_name, representation_id, site_name,
                                    payload_dict)
 
-    def remove_site(self, project_name, representation_id, site_name,
-                    remove_local_files=False):
+    def remove_site(
+        self,
+        project_name,
+        representation_id,
+        site_name,
+        remove_local_files=False
+    ):
         """
             Removes 'site_name' for particular 'representation_id' on
             'project_name'
@@ -260,7 +259,6 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
             site_name
         )
 
-
         response = ayon_api.delete(endpoint)
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
@@ -280,10 +278,10 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         [
             {
                 'name': '42abbc09-d62a-44a4-815c-a12cd679d2d7',
-                'created_dt': datetime.datetime(2022, 3, 30, 12, 16, 9, 778637)
+                'status': SiteSyncStatus.OK
             },
-            {'name': 'studio'},
-            {'name': 'SFTP'}
+            {'name': 'studio', 'status': SiteSyncStatus.QUEUED},
+            {'name': 'SFTP', 'status': SiteSyncStatus.QUEUED}
         ] -- representation is published locally, artist or Settings have set
         remote site as 'studio'. 'SFTP' is alternate site to 'studio'. Eg.
         whenever file is on 'studio', it is also on 'SFTP'.
@@ -293,7 +291,9 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
             """Create sync site metadata for site with `name`"""
             metadata = {"name": name}
             if created:
-                metadata["created_dt"] = datetime.now()
+                metadata["status"] = SiteSyncStatus.OK
+            else:
+                metadata["status"] = SiteSyncStatus.QUEUED
             return metadata
 
         if (not self.sync_studio_settings["enabled"] or
@@ -520,15 +520,16 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
                 representation_id (string): MongoDB objectId value
                 site_name (string): 'gdrive', 'studio' etc.
         """
-        self.log.info("Pausing SyncServer for {}".format(representation_id))
+        self.log.info("Pausing SiteSync for {}".format(representation_id))
         self._paused_representations.add(representation_id)
         representation = get_representation_by_id(project_name,
                                                   representation_id)
         self.update_db(project_name, representation, site_name, pause=True)
 
     # TODO hook to some trigger - no Sync Queue anymore
-    def unpause_representation(self, project_name,
-                               representation_id, site_name):
+    def unpause_representation(
+        self, project_name, representation_id, site_name
+    ):
         """
             Sets 'representation_id' as unpaused.
 
@@ -539,7 +540,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
                 representation_id (string): MongoDB objectId value
                 site_name (string): 'gdrive', 'studio' etc.
         """
-        self.log.info("Unpausing SyncServer for {}".format(representation_id))
+        self.log.info("Unpausing SiteSync for {}".format(representation_id))
         try:
             self._paused_representations.remove(representation_id)
         except KeyError:
@@ -549,8 +550,9 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
                                                   representation_id)
         self.update_db(project_name, representation, site_name, pause=False)
 
-    def is_representation_paused(self, representation_id,
-                                 check_parents=False, project_name=None):
+    def is_representation_paused(
+        self, representation_id, check_parents=False, project_name=None
+    ):
         """
             Returns if 'representation_id' is paused or not.
 
@@ -580,7 +582,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
             Args:
                 project_name (string): project_name name
         """
-        self.log.info("Pausing SyncServer for {}".format(project_name))
+        self.log.info("Pausing SiteSync for {}".format(project_name))
         self._paused_projects.add(project_name)
 
     # TODO hook to some trigger - no Sync Queue anymore
@@ -593,7 +595,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
             Args:
                 project_name (string):
         """
-        self.log.info("Unpausing SyncServer for {}".format(project_name))
+        self.log.info("Unpausing SiteSync for {}".format(project_name))
         try:
             self._paused_projects.remove(project_name)
         except KeyError:
@@ -622,14 +624,14 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
 
             It won't check anything, not uploading/downloading...
         """
-        self.log.info("Pausing SyncServer")
+        self.log.info("Pausing SiteSync")
         self._paused = True
 
     def unpause_server(self):
         """
             Unpause server
         """
-        self.log.info("Unpausing SyncServer")
+        self.log.info("Unpausing SiteSync")
         self._paused = False
 
     def is_paused(self):
@@ -732,10 +734,10 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
                 ).format(site_name))
             site_name = "local"
 
-        sync_server_settings = self.get_sync_project_setting(project_name)
+        sitesync_settings = self.get_sync_project_setting(project_name)
 
         roots = {}
-        local_project_settings = sync_server_settings["local_setting"]
+        local_project_settings = sitesync_settings["local_setting"]
         if site_name == "local":
             for root_info in local_project_settings["local_roots"]:
                 roots[root_info["name"]] = root_info["path"]
@@ -772,29 +774,26 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
               (ValueError)  Only If 'max_retries' provided if upload/download
         failed too many times to limit infinite loop check.
         """
-        representation = get_representation_by_id(project_name,
-                                                  representation_id,
-                                                  fields=["_id", "files"])
-        if not representation:
+        representation_status = self.get_repre_sync_state(
+            project_name, [representation_id], site_name)
+
+        if not representation_status:
             return False
 
-        on_site = False
-        for file_info in representation.get("files", []):
-            for site in file_info.get("sites", []):
-                if site["name"] != site_name:
-                    continue
+        if site_name == get_local_site_id():
+            status = representation_status["localStatus"]
+        else:
+            status = representation_status["remoteStatus"]
 
-                if max_retries:
-                    tries = self._get_tries_count_from_rec(site)
-                    if tries >= max_retries:
-                        raise ValueError("Failed too many times")
+        if max_retries:
+            tries = status.get("retries", 0)
+            if tries >= max_retries:
+                raise ValueError("Failed too many times")
 
-                if (site.get("progress") or site.get("error") or
-                        not site.get("created_dt")):
-                    return False
-                on_site = True
+        if status.get("progress") or status.get("error"):
+            return False
 
-        return on_site
+        return True
 
     def _reset_timer_with_rest_api(self):
         # POST to webserver sites to add to representations
@@ -803,7 +802,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
             self.log.warning("Couldn't find webserver url")
             return
 
-        rest_api_url = "{}/sync_server/reset_timer".format(
+        rest_api_url = "{}/sitesync/reset_timer".format(
             webserver_url
         )
 
@@ -819,12 +818,11 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         requests.post(rest_api_url)
 
     def get_enabled_projects(self):
-        """Returns list of projects which have SyncServer enabled."""
+        """Returns list of projects which have SiteSync enabled."""
         enabled_projects = []
 
         if self.enabled:
-            for project in get_projects(fields=["name"]):
-                project_name = project["name"]
+            for project_name in get_project_names():
                 if self.is_project_enabled(project_name):
                     enabled_projects.append(project_name)
 
@@ -841,32 +839,34 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         """
         if self.enabled:
             if single:
-                project_settings = ayon_api.get_addon_project_settings(
-                    self.v4_name, self.version, project_name)
+                project_settings = get_addon_project_settings(self.name,
+                                                              self.version,
+                                                              project_name)
             else:
                 project_settings = self.get_sync_project_setting(project_name)
             if project_settings and project_settings.get("enabled"):
                 return True
         return False
 
-    def handle_alternate_site(self, project_name, representation_id,
-                              processed_site, file_id):
+    def handle_alternate_site(
+        self, project_name, representation_id, processed_site, file_id
+    ):
         """
-            For special use cases where one site vendors another.
+        For special use cases where one site vendors another.
 
-            Current use case is sftp site vendoring (exposing) same data as
-            regular site (studio). Each site is accessible for different
-            audience. 'studio' for artists in a studio, 'sftp' for externals.
+        Current use case is sftp site vendoring (exposing) same data as
+        regular site (studio). Each site is accessible for different
+        audience. 'studio' for artists in a studio, 'sftp' for externals.
 
-            Change of file status on one site actually means same change on
-            'alternate' site. (eg. artists publish to 'studio', 'sftp' is using
-            same location >> file is accesible on 'sftp' site right away.
+        Change of file status on one site actually means same change on
+        'alternate' site. (eg. artists publish to 'studio', 'sftp' is using
+        same location >> file is accesible on 'sftp' site right away.
 
-            Args:
-                project_name (str): name of project
-                representation_id (uuid)
-                processed_site (str): real site_name of published/uploaded file
-                file_id (uuid): DB id of file handled
+        Args:
+            project_name (str): name of project
+            representation_id (uuid)
+            processed_site (str): real site_name of published/uploaded file
+            file_id (uuid): DB id of file handled
         """
         sites = self._transform_sites_from_settings(self.sync_studio_settings)
         sites[self.DEFAULT_SITE] = {"provider": "local_drive",
@@ -882,15 +882,15 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
                 alternate_sites.extend(conf_alternative_sites)
                 continue
 
+        if not alternate_sites:
+            return
+
         sync_state = self.get_repre_sync_state(project_name,
                                                [representation_id],
                                                processed_site)
+        # not yet available on processed_site, wont update alternate site yet
         if not sync_state:
-            raise RuntimeError("Cannot find repre with '{}".format(representation_id))  # noqa
-        for file_info in sync_state["files"]:
-            #expose status of remote site, it is expected on the server
-            file_info["status"] = file_info["remoteStatus"]["status"]
-
+            return
         payload_dict = {"files": sync_state["files"]}
 
         alternate_sites = set(alternate_sites)
@@ -898,17 +898,18 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
             self.log.debug("Adding alternate {} to {}".format(
                 alt_site, representation_id))
             self._set_state_sync_state(project_name, representation_id,
-                                       alt_site,
+                                       site_name,
                                        payload_dict)
 
     # TODO - for Loaders
-    def get_repre_info_for_versions(self, project_name, version_ids,
-                                    active_site, remote_site):
+    def get_repre_info_for_versions(
+        self, project_name, version_ids, active_site, remote_site
+    ):
         """Returns representation documents for versions and sites combi
 
         Args:
             project_name (str)
-            version_ids (list): of version[_id]
+            version_ids (list): of version[id]
             active_site (string): 'local', 'studio' etc
             remote_site (string): dtto
         Returns:
@@ -938,11 +939,11 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
                     self._is_available(repre, "remoteStatus")
             else:
                 repinfo_by_version_id[version_id] = {
-                    "_id": version_id,
+                    "id": version_id,
                     "repre_count": 1,
-                    'avail_repre_local': self._is_available(repre,
+                    "avail_repre_local": self._is_available(repre,
                                                             "localStatus"),
-                    'avail_repre_remote': self._is_available(repre,
+                    "avail_repre_remote": self._is_available(repre,
                                                              "remoteStatus"),
                 }
 
@@ -966,7 +967,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         """
             Actual initialization of Sync Server for Tray.
 
-            Called when tray is initialized, it checks if module should be
+            Called when tray is initialized, it checks if addon should be
             enabled. If not, no initialization necessary.
         """
         self.server_init()
@@ -977,11 +978,11 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         if not self.enabled:
             return
 
-        from .sync_server import SyncServerThread
+        from .sitesync import SiteSyncThread
 
         self.lock = threading.Lock()
 
-        self.sync_server_thread = SyncServerThread(self)
+        self.sitesync_thread = SiteSyncThread(self)
 
     def tray_start(self):
         """
@@ -998,29 +999,29 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
 
     def server_start(self):
         if self.enabled:
-            self.sync_server_thread.start()
+            self.sitesync_thread.start()
         else:
             self.log.info("No presets or active providers. " +
-                     "Synchronization not possible.")
+                          "Synchronization not possible.")
 
     def tray_exit(self):
         """
             Stops sync thread if running.
 
-            Called from Module Manager
+            Called from Addon Manager
         """
         self.server_exit()
 
     def server_exit(self):
-        if not self.sync_server_thread:
+        if not self.sitesync_thread:
             return
 
         if not self.is_running:
             return
         try:
             self.log.info("Stopping sync server server")
-            self.sync_server_thread.is_running = False
-            self.sync_server_thread.stop()
+            self.sitesync_thread.is_running = False
+            self.sitesync_thread.stop()
             self.log.info("Sync server stopped")
         except Exception:
             self.log.warning(
@@ -1033,7 +1034,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
 
     @property
     def is_running(self):
-        return self.sync_server_thread.is_running
+        return self.sitesync_thread.is_running
 
     def get_anatomy(self, project_name):
         """
@@ -1045,22 +1046,18 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
             Return:
                 (Anatomy)
         """
-        return self._anatomies.get('project_name') or Anatomy(project_name)
+        from ayon_core.pipeline import Anatomy
+
+        return self._anatomies.get("project_name") or Anatomy(project_name)
 
     @property
     def sync_studio_settings(self):
-        if self._sync_system_settings is None:
-            # Compatibility for openpype and ayon-core
-            system_settings = get_system_settings()
-            if "modules" not in system_settings:
-                self._sync_system_settings = system_settings.get(self.v4_name)
+        if self._sync_studio_settings is None:
+            self._sync_studio_settings = (
+                get_studio_settings().get(self.name)
+            )
 
-            else:
-                self._sync_system_settings = (
-                    system_settings["modules"].get(self.v4_name)
-                )
-
-        return self._sync_system_settings
+        return self._sync_studio_settings
 
     @property
     def sync_project_settings(self):
@@ -1087,28 +1084,30 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         sites = self._transform_sites_from_settings(
             self.sync_studio_settings)
 
-        project_docs = get_projects(fields=["name"])
-        for project_doc in project_docs:
-            project_name = project_doc["name"]
-            proj_settings = ayon_api.get_addon_project_settings(
-                self.v4_name, self.version, project_name)
+        project_names = get_project_names()
+        for project_name in project_names:
+            project_sites = copy.deepcopy(sites)
+            proj_settings = get_addon_project_settings(
+                self.name, self.version, project_name)
 
-            sites.update(self._get_default_site_configs(
+            project_sites.update(self._get_default_site_configs(
                 proj_settings["enabled"], project_name, proj_settings
             ))
 
-            sites.update(self._transform_sites_from_settings(proj_settings))
+            project_sites.update(
+                self._transform_sites_from_settings(proj_settings))
 
-            proj_settings["sites"] = sites
+            proj_settings["sites"] = project_sites
 
             sync_project_settings[project_name] = proj_settings
         if not sync_project_settings:
             self.log.info("No enabled and configured projects for sync.")
         return sync_project_settings
 
-    def get_sync_project_setting(self, project_name, exclude_locals=False,
-                                 cached=True):
-        """ Handles pulling sync_server's settings for enabled 'project_name'
+    def get_sync_project_setting(
+        self, project_name, exclude_locals=False, cached=True
+    ):
+        """ Handles pulling sitesync's settings for enabled 'project_name'
 
             Args:
                 project_name (str): used in project settings
@@ -1143,9 +1142,6 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
                 configured_site = {}
                 site_name = whole_site_info["name"]
                 configured_site["enabled"] = True
-                configured_site["alternative_sites"] = (
-                    whole_site_info["alternative_sites"]
-                )
 
                 provider_specific = whole_site_info[whole_site_info["provider"]]
                 configured_site["root"] = provider_specific.pop("roots",
@@ -1155,8 +1151,29 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
                 sites[site_name] = configured_site
         return sites
 
-    def _get_default_site_configs(self, sync_enabled=True, project_name=None,
-                                  proj_settings=None):
+    def _get_project_roots_for_site(self, project_name, site_name=None):
+        """Returns projects roots and their overrides."""
+        # overrides for Studio site for particular user
+        #TODO temporary to get roots without overrides
+        #ayon_api.get_project_roots_by_site returns only overrides.
+        #Should be replaced when ayon_api implements `siteRoots` method
+        if not site_name:
+            site_name = get_local_site_id()
+        platform_name = platform.system().lower()
+        roots = ayon_api.get(f"projects/{project_name}/siteRoots",
+                             platform=platform_name).data
+        root_overrides = get_project_roots_for_site(project_name,
+                                                    site_name)
+        for key, value in roots.items():
+            override = root_overrides.get(key)
+            if override:
+                roots[key] = override
+
+        return roots
+
+    def _get_default_site_configs(
+        self, sync_enabled=True, project_name=None, proj_settings=None
+    ):
         """
             Returns settings for 'studio' and user's local site
 
@@ -1164,12 +1181,10 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
             eg. value used to push TO LS not to get actual value for syncing.
         """
         local_site_id = get_local_site_id()
-        # overrides for Studio site for particular user
-        roots = ayon_api.get_project_roots_for_site(project_name,
-                                                    local_site_id)
+        roots = self._get_project_roots_for_site(project_name, local_site_id)
         studio_config = {
-            'enabled': True,
-            'provider': 'local_drive',
+            "enabled": True,
+            "provider": "local_drive",
             "root": roots
         }
         all_sites = {self.DEFAULT_SITE: studio_config}
@@ -1205,11 +1220,12 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         for site_config in sync_sett.get("sites"):
             sites[site_config["name"]] = site_config["provider"]
 
-        return sites.get(site, 'N/A')
+        return sites.get(site, "N/A")
 
     @time_function
-    def get_sync_representations(self, project_name, active_site, remote_site,
-                                 limit=10):
+    def get_sync_representations(
+        self, project_name, active_site, remote_site, limit=10
+    ):
         """
             Get representations that should be synced, these could be
             recognised by presence of document in 'files.sites', where key is
@@ -1232,7 +1248,8 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         self.log.debug("Check representations for: {}-{}".format(active_site,
                                                                  remote_site))
 
-        endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name) # noqa
+        endpoint = "{}/{}/state".format(self.endpoint_prefix,
+                                        project_name)
 
         # get to upload
         kwargs = {"localSite": active_site,
@@ -1309,10 +1326,19 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
 
         return SyncStatus.DO_NOTHING
 
-    def update_db(self, project_name, representation, site_name,
-                  new_file_id=None, file=None,
-                  side=None, error=None, progress=None, priority=None,
-                  pause=None):
+    def update_db(
+        self,
+        project_name,
+        representation,
+        site_name,
+        new_file_id=None,
+        file=None,
+        side=None,
+        error=None,
+        progress=None,
+        priority=None,
+        pause=None
+    ):
         """
             Update 'provider' portion of records in DB with success (file_id)
             or error (exception)
@@ -1336,33 +1362,37 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         """
         files_status = []
         for file_info in representation["files"]:
-            status_doc = copy.deepcopy(file_info["{}Status".format(side)])
-            status_doc["fileHash"] = file_info["fileHash"]
-            status_doc["id"] = file_info["id"]
+            status_entity = copy.deepcopy(file_info["{}Status".format(side)])
+            status_entity["fileHash"] = file_info["fileHash"]
+            status_entity["id"] = file_info["id"]
             if file_info["fileHash"] == file["fileHash"]:
                 if new_file_id:
-                    status_doc["status"] = SiteSyncStatus.OK
-                    status_doc.pop("message")
-                    status_doc.pop("retries")
+                    status_entity["status"] = SiteSyncStatus.OK
+                    status_entity.pop("message")
+                    status_entity.pop("retries")
                 elif progress is not None:
-                    status_doc["status"] = SiteSyncStatus.IN_PROGRESS
-                    status_doc["progress"] = progress
+                    status_entity["status"] = SiteSyncStatus.IN_PROGRESS
+                    status_entity["progress"] = progress
                 elif error:
-                    status_doc["status"] = SiteSyncStatus.FAILED
-                    tries = status_doc.get("retries", 0)
+                    status_entity["status"] = SiteSyncStatus.FAILED
+                    tries = status_entity.get("retries", 0)
                     tries += 1
-                    status_doc["retries"] = tries
-                    status_doc["message"] = error
+                    status_entity["retries"] = tries
+                    status_entity["message"] = error
                 elif pause is not None:
                     if pause:
-                        status_doc["pause"] = True
+                        status_entity["pause"] = True
                     else:
-                        status_doc.remove("pause")
-                files_status.append(status_doc)
+                        status_entity.remove("pause")
+                files_status.append(status_entity)
 
         representation_id = representation["representationId"]
 
-        endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
+        endpoint = "{}/{}/state/{}/{}".format(
+            self.endpoint_prefix,
+            project_name,
+            representation_id,
+            site_name)
 
         # get to upload
         kwargs = {
@@ -1379,11 +1409,11 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         if progress is not None or priority is not None:
             return
 
-        status = 'failed'
-        error_str = 'with error {}'.format(error)
+        status = "failed"
+        error_str = "with error {}".format(error)
         if new_file_id:
-            status = 'succeeded with id {}'.format(new_file_id)
-            error_str = ''
+            status = "succeeded with id {}".format(new_file_id)
+            error_str = ""
 
         source_file = file.get("path", "")
 
@@ -1398,8 +1428,14 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
             )
         )
 
-    def reset_site_on_representation(self, project_name, representation_id,
-                                     side=None, file_id=None, site_name=None):
+    def reset_site_on_representation(
+        self,
+        project_name,
+        representation_id,
+        side=None,
+        file_id=None,
+        site_name=None
+    ):
         """
             Reset information about synchronization for particular 'file_id'
             and provider.
@@ -1415,8 +1451,8 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
 
         Args:
             project_name (string): name of project (eg. collection) in DB
-            representation_id(string): _id of representation
-            file_id (string):  file _id in representation
+            representation_id(string): id of representation
+            file_id (string):  file id in representation
             side (string): local or remote side
             site_name (string): for adding new site
 
@@ -1439,7 +1475,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         remote_site = self.get_remote_site(project_name)
 
         if side:
-            if side == 'local':
+            if side == "local":
                 site_name = local_site
             else:
                 site_name = remote_site
@@ -1447,26 +1483,9 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         self.add_site(project_name, representation_id, site_name, file_id,
                       force=True)
 
-    def remove_site(self, project_name, representation, site_name):
-        """
-            Removes 'site_name' for 'representation' if present.
-        """
-        representation_id = representation["_id"]
-        sync_info = self.get_repre_sync_state(project_name, [representation_id],
-                                              site_name)
-        if not sync_info:
-            msg = "Site {} not found".format(site_name)
-            self.log.warning(msg)
-            return
-
-        endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
-
-        response = ayon_api.delete(endpoint)
-        if response.status_code not in [200, 204]:
-            raise RuntimeError("Cannot update status")
-
-    def get_progress_for_repre(self, representation,
-                               local_site_name, remote_site_name=None):
+    def get_progress_for_repre(
+        self, representation, local_site_name, remote_site_name=None
+    ):
         """Calculates average progress for representation.
 
         If site has created_dt >> fully available >> progress == 1
@@ -1481,9 +1500,11 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
                 uploaded yet
         """
         project_name = representation["context"]["project"]["name"]
-        representation_id = representation["_id"]
-        sync_status = self.get_repre_sync_state(project_name, [representation_id],
-                                                local_site_name, remote_site_name)
+        representation_id = representation["id"]
+        sync_status = self.get_repre_sync_state(project_name,
+                                                [representation_id],
+                                                local_site_name,
+                                                remote_site_name)
 
         progress = {local_site_name: -1,
                     remote_site_name: -1}
@@ -1519,14 +1540,23 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
     def _set_state_sync_state(self, project_name, representation_id, site_name,
                               payload_dict):
         """Calls server endpoint to store sync info for 'representation_id'."""
-        endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix, project_name, representation_id, site_name)  # noqa
+        endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix,
+                                              project_name,
+                                              representation_id,
+                                              site_name)
 
         response = ayon_api.post(endpoint, **payload_dict)
         if response.status_code not in [200, 204]:
             raise RuntimeError("Cannot update status")
 
-    def get_repre_sync_state(self, project_name, representation_ids, local_site_name,
-                             remote_site_name=None, **kwargs):
+    def get_repre_sync_state(
+        self,
+        project_name,
+        representation_ids,
+        local_site_name,
+        remote_site_name=None,
+        **kwargs
+    ):
         """Use server endpoint to get synchronization info for repre_id(s).
 
         Args:
@@ -1547,9 +1577,14 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
             if representation["localStatus"]["status"] != -1:
                 return representation
 
-    def get_representations_sync_state(self, project_name, representation_ids,
-                                       local_site_name,remote_site_name=None,
-                                       **kwargs):
+    def get_representations_sync_state(
+        self,
+        project_name,
+        representation_ids,
+        local_site_name,
+        remote_site_name=None,
+        **kwargs
+    ):
         """Use server endpoint to get synchronization info for representations.
 
         Calculates float progress based on progress of all files for repre.
@@ -1600,8 +1635,14 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
 
         return states
             
-    def _get_repres_state(self, project_name, representation_ids, local_site_name,
-                          remote_site_name=None, **kwargs):
+    def _get_repres_state(
+        self,
+        project_name,
+        representation_ids,
+        local_site_name,
+        remote_site_name=None,
+        **kwargs
+    ):
         """Use server endpoint to get synchronization info for representations.
 
         Args:
@@ -1622,7 +1663,8 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         if kwargs:
             payload_dict.update(kwargs)
 
-        endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name)  # noqa
+        endpoint = "{}/{}/state".format(self.endpoint_prefix,
+                                        project_name)
 
         response = ayon_api.get(endpoint, **payload_dict)
         if response.status_code != 200:
@@ -1631,8 +1673,14 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
 
         return response.data["representations"]
     
-    def get_version_availability(self, project_name, version_ids, local_site_name,
-                                 remote_site_name, **kwargs):
+    def get_version_availability(
+        self,
+        project_name,
+        version_ids,
+        local_site_name,
+        remote_site_name,
+        **kwargs
+    ):
         """Returns aggregate state for version_ids
 
         Returns:
@@ -1672,7 +1720,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
 
             Args:
                 project_name (string): project name (must match DB)
-                representation_id (string): MongoDB _id value
+                representation_id (string): uuid value
                 site_name (string): name of configured and active site
 
             Returns:
@@ -1686,16 +1734,16 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
 
         provider_name = self.get_provider_for_site(site=site_name)
 
-        if provider_name == 'local_drive':
-            representation = get_representation_by_id(project_name,
-                                                      representation_id,
-                                                      fields=["files"])
+        if provider_name == "local_drive":
+            representation = get_representation_by_id(
+                project_name, representation_id
+            )
             if not representation:
                 self.log.debug("No repre {} found".format(
                     representation_id))
                 return
 
-            local_file_path = ''
+            local_file_path = ""
             for file in representation.get("files"):
                 local_file_path = self.get_local_file_path(project_name,
                                                            site_name,
@@ -1716,6 +1764,8 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
             folder = None
             try:
                 folder = os.path.dirname(local_file_path)
+                if os.listdir(folder):  # folder is not empty
+                    return
                 os.rmdir(folder)
             except OSError:
                 msg = "folder {} cannot be removed".format(folder)
@@ -1732,10 +1782,10 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         if not self.enabled:
             return
 
-        if self.sync_server_thread is None:
+        if self.sitesync_thread is None:
             self._reset_timer_with_rest_api()
         else:
-            self.sync_server_thread.reset_timer()
+            self.sitesync_thread.reset_timer()
 
     def get_loop_delay(self, project_name):
         """
@@ -1754,7 +1804,7 @@ class SyncServerModule(AYONAddon, ITrayModule, IPluginPaths):
         click_group.add_command(cli_main)
 
 
-@click.group(SyncServerModule.name, help="SyncServer module related commands.")
+@click.group(SiteSyncAddon.name, help="SiteSync addon related commands.")
 def cli_main():
     pass
 
@@ -1772,23 +1822,23 @@ def syncservice(active_site):
     on linux and window service).
     """
 
-    from openpype.modules import ModulesManager
+    from ayon_core.addon import AddonsManager
 
-    os.environ["OPENPYPE_LOCAL_ID"] = active_site
+    os.environ["AYON_SITE_ID"] = active_site
 
     def signal_handler(sig, frame):
         print("You pressed Ctrl+C. Process ended.")
-        sync_server_module.server_exit()
+        sitesync_addon.server_exit()
         sys.exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    manager = ModulesManager()
-    sync_server_module = manager.modules_by_name["sync_server"]
+    manager = AddonsManager()
+    sitesync_addon = manager.addons_by_name["sitesync"]
 
-    sync_server_module.server_init()
-    sync_server_module.server_start()
+    sitesync_addon.server_init()
+    sitesync_addon.server_start()
 
     while True:
         time.sleep(1.0)
