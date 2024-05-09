@@ -2,7 +2,7 @@
 """Package declaring addon version."""
 name = "sitesync"
 title = "SiteSync"
-version = "1.1.0"
+version = "1.1.1-dev.1"
 client_dir = "ayon_sitesync"
 
 ayon_required_addons = {
