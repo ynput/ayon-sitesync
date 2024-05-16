@@ -1859,38 +1859,46 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         provider_name = self.get_provider_for_site(site=site_name)
 
-        if provider_name == "local_drive":
-            representation = get_representation_by_id(
-                project_name, representation_id
+        if provider_name != "local_drive":
+            return
+
+        representation = get_representation_by_id(
+            project_name, representation_id
+        )
+        if not representation:
+            self.log.debug(
+                "Representation with id {} was not found".format(
+                    representation_id
+                )
             )
-            if not representation:
-                self.log.debug("No repre {} found".format(
-                    representation_id))
-                return
+            return
 
-            local_file_path = ""
-            for file in representation.get("files"):
-                local_file_path = self.get_local_file_path(project_name,
-                                                           site_name,
-                                                           file.get("path", "")
-                                                           )
-                try:
-                    self.log.debug("Removing {}".format(local_file_path))
-                    os.remove(local_file_path)
-                except IndexError:
-                    msg = "No file set for {}".format(representation_id)
-                    self.log.debug(msg)
-                    raise ValueError(msg)
-                except OSError:
-                    msg = "File {} cannot be removed".format(file["path"])
-                    self.log.warning(msg)
-                    raise ValueError(msg)
+        for file in representation["files"]:
+            local_file_path = self.get_local_file_path(
+                project_name,
+                site_name,
+                file.get("path")
+            )
+            if local_file_path is None:
+                raise ValueError("Missing local file path")
 
-            folder = None
             try:
-                folder = os.path.dirname(local_file_path)
-                if os.listdir(folder):  # folder is not empty
-                    return
+                self.log.debug("Removing {}".format(local_file_path))
+                os.remove(local_file_path)
+            except IndexError:
+                msg = "No file set for {}".format(representation_id)
+                self.log.debug(msg)
+                raise ValueError(msg)
+            except OSError:
+                msg = "File {} cannot be removed".format(file["path"])
+                self.log.warning(msg)
+                raise ValueError(msg)
+
+            folder = os.path.dirname(local_file_path)
+            if os.listdir(folder):  # folder is not empty
+                continue
+
+            try:
                 os.rmdir(folder)
             except OSError:
                 msg = "folder {} cannot be removed".format(folder)
