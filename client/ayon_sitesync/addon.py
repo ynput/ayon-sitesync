@@ -1794,13 +1794,13 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 Example: {version_id: (local_status, remote_status)}
 
         """
+        version_ids = list(version_ids)
         payload_dict = {
             "localSite": local_site_name,
             "remoteSite": remote_site_name,
             "versionIdsFilter": version_ids
         }
-        if kwargs:
-            payload_dict.update(kwargs)
+        payload_dict.update(kwargs)
 
         endpoint = "{}/{}/state".format(
             self.endpoint_prefix, project_name
@@ -1808,19 +1808,36 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         response = ayon_api.get(endpoint, **payload_dict)
         if response.status_code != 200:
-            msg = "Cannot get sync state for representation ".format(representation_id)  # noqa
-            raise RuntimeError(msg)
-
-        version_statuses = defaultdict(tuple)
-        dummy_tuple = (0, 0)
-        for repre in response.data["representations"]:
-            version_id = repre["versionId"]
-            avail_local = repre["localStatus"]["status"] == SiteSyncStatus.OK
-            avail_remote = repre["remoteStatus"]["status"] == SiteSyncStatus.OK
-            version_statuses[version_id] = (
-                version_statuses.get(version_id, dummy_tuple)[0] + int(avail_local),
-                version_statuses.get(version_id, dummy_tuple)[1] + int(avail_remote)
+            raise RuntimeError(
+                "Cannot get sync state for versions {}".format(
+                    version_ids
+                )
             )
+
+        version_statuses = {
+            version_id: (0, 0)
+            for version_id in version_ids
+        }
+
+        repre_avail_by_version_id = collections.defaultdict(list)
+        for repre_avail in response.data["representations"]:
+            version_id = repre_avail["versionId"]
+            repre_avail_by_version_id[version_id].append(repre_avail)
+
+        for version_id, repre_avails in repre_avail_by_version_id.items():
+            avail_local = sum(
+                int(
+                    repre_avail["localStatus"]["status"] == SiteSyncStatus.OK
+                )
+                for repre_avail in repre_avails
+            )
+            avail_remote = sum(
+                int(
+                    repre_avail["remoteStatus"]["status"] == SiteSyncStatus.OK
+                )
+                for repre_avail in repre_avails
+            )
+            version_statuses[version_id] = (avail_local, avail_remote)
 
         return version_statuses
 
