@@ -266,7 +266,7 @@ def download_last_published_workfile(
                 repre_id,
                 local_site_id,
                 force=True,
-                priority=99
+                # priority=99  TODO add when implemented
             )
     sitesync_addon.reset_timer()
     print("Starting to download:{}".format(last_published_workfile_path))
