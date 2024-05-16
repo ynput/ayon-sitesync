@@ -495,19 +495,21 @@ class SiteSyncThread(threading.Thread):
         self.log.info(f"Processing '{project_name}'")
         preset = self.addon.sync_project_settings[project_name]
 
-        local_site, remote_site = self._working_sites(project_name,
-                                                      preset)
-        if not all([local_site, remote_site]):
+        local_site, remote_site = self._working_sites(
+            project_name, preset
+        )
+        if not local_site or not remote_site:
             return
 
         remote_site_preset = preset.get("sites")[remote_site]
 
-        handler, remote_provider, limit = \
-            self._get_remote_provider_info(project_name,
-                                           remote_site,
-                                           remote_site_preset)
+        handler, remote_provider, limit = self._get_remote_provider_info(
+            project_name,
+            remote_site,
+            remote_site_preset
+        )
 
-        sync_repres = self.addon.get_sync_representations(
+        repre_states = self.addon.get_sync_representations(
             project_name,
             local_site,
             remote_site,
@@ -526,91 +528,106 @@ class SiteSyncThread(threading.Thread):
         # first call to get_provider could be expensive, its
         # building folder tree structure in memory
         # call only if needed, eg. DO_UPLOAD or DO_DOWNLOAD
-        for sync in sync_repres:
-            sync_id = sync["representationId"]
-            if self.addon.is_representation_paused(sync_id):
+        for repre_state in repre_states:
+            repre_id = repre_state["representationId"]
+            # QUESTION Why is not project passed in?
+            # QUESTION Why there is not option to check all representations
+            #    in one batch?
+            if self.addon.is_representation_paused(repre_id):
                 continue
-            files = sync.get("files") or []
-            if files:
-                for file in files:
-                    # skip already processed files
-                    file_path = file.get("path", "")
-                    if file_path in processed_file_path:
-                        continue
-                    status = self.addon.check_status(
-                        file,
-                        local_site,
+            file_states = repre_state.get("files") or []
+            for file_state in file_states:
+                # skip already processed files
+                # WARNING Using empty string for path is dangerous!!!
+                file_path = file_state.get("path", "")
+                if file_path in processed_file_path:
+                    continue
+                status = self.addon.check_status(
+                    file_state,
+                    local_site,
+                    remote_site,
+                    preset.get("config")
+                )
+                if status == SyncStatus.DO_UPLOAD:
+                    tree = handler.get_tree()
+                    task = asyncio.create_task(
+                        upload(
+                            self.addon,
+                            project_name,
+                            file_state,
+                            repre_state,
+                            remote_provider,
+                            remote_site,
+                            tree,
+                            remote_site_preset
+                        )
+                    )
+                    task_files_to_process.append(task)
+                    # store info for exception handlingy
+                    files_processed_info.append((
+                        file_state,
+                        repre_state,
                         remote_site,
-                        preset.get("config"))
-                    if status == SyncStatus.DO_UPLOAD:
-                        tree = handler.get_tree()
-                        task = asyncio.create_task(
-                            upload(self.addon,
-                                   project_name,
-                                   file,
-                                   sync,
-                                   remote_provider,
-                                   remote_site,
-                                   tree,
-                                   remote_site_preset))
-                        task_files_to_process.append(task)
-                        # store info for exception handlingy
-                        files_processed_info.append((file,
-                                                     sync,
-                                                     remote_site,
-                                                     "remote",
-                                                     project_name
-                                                     ))
-                        processed_file_path.add(file_path)
-                    if status == SyncStatus.DO_DOWNLOAD:
-                        tree = handler.get_tree()
-                        task = asyncio.create_task(
-                            download(self.addon,
-                                     project_name,
-                                     file,
-                                     sync,
-                                     remote_provider,
-                                     remote_site,
-                                     tree,
-                                     remote_site_preset))
-                        task_files_to_process.append(task)
+                        "remote",
+                        project_name
+                    ))
+                    processed_file_path.add(file_path)
 
-                        files_processed_info.append((file,
-                                                     sync,
-                                                     local_site,
-                                                     "local",
-                                                     project_name
-                                                     ))
-                        processed_file_path.add(file_path)
+                if status == SyncStatus.DO_DOWNLOAD:
+                    tree = handler.get_tree()
+                    task = asyncio.create_task(
+                        download(
+                            self.addon,
+                            project_name,
+                            file_state,
+                            repre_state,
+                            remote_provider,
+                            remote_site,
+                            tree,
+                            remote_site_preset
+                        )
+                    )
+                    task_files_to_process.append(task)
+
+                    files_processed_info.append((
+                        file_state,
+                        repre_state,
+                        local_site,
+                        "local",
+                        project_name
+                    ))
+                    processed_file_path.add(file_path)
 
         self.log.debug("Sync tasks count {}".format(
             len(task_files_to_process)
         ))
         files_created = await asyncio.gather(
             *task_files_to_process,
-            return_exceptions=True)
-        for file_result, info in zip(files_created,
-                                     files_processed_info):
-            file, representation, site_name, side, project_name = \
-                info
+            return_exceptions=True
+        )
+
+        for file_result, info in zip(files_created, files_processed_info):
+            file_state, representation, site_name, side, project_name = info
             error = None
             if isinstance(file_result, BaseException):
                 error = str(file_result)
-                import traceback
-                self.log.warning(
-                    f"{traceback.format_tb(file_result.__traceback__)}")
+                self.log.warning(error, exc_info=True)
                 file_result = None  # it is exception >> no id >> reset
 
-            self.addon.update_db(project_name=project_name,
-                                 new_file_id=file_result,
-                                 file=file,
-                                 representation=representation,
-                                 site_name=site_name,
-                                 side=side,
-                                 error=error)
+            self.addon.update_db(
+                project_name=project_name,
+                new_file_id=file_result,
+                file=file_state,
+                representation=representation,
+                site_name=site_name,
+                side=side,
+                error=error
+            )
 
             repre_id = representation["representationId"]
-            self.addon.handle_alternate_site(project_name,
-                                             repre_id,
-                                             site_name,
-                                             file["fileHash"])
+            self.addon.handle_alternate_site(
+                project_name,
+                repre_id,
+                site_name,
+                file_state["fileHash"]
+            )
