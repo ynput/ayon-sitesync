@@ -44,8 +44,11 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
         """
         project_name = self.data["project_name"]
         sitesync_addon = self.addons_manager.get("sitesync")
-        if (not sitesync_addon or not sitesync_addon.enabled or
-                not sitesync_addon.is_project_enabled(project_name, True)):
+        if (
+            not sitesync_addon
+            or not sitesync_addon.enabled
+            or not sitesync_addon.is_project_enabled(project_name, True)
+        ):
             self.log.debug("Sync server module is not enabled or available")
             return
 
@@ -110,9 +113,12 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
             self.log.info("Couldn't find published workfile representation")
             return
 
-        max_retries = int((sitesync_addon.sync_project_settings[project_name]
-                                                               ["config"]
-                                                               ["retry_cnt"]))
+        max_retries = int(
+            sitesync_addon.sync_project_settings
+            [project_name]
+            ["config"]
+            ["retry_cnt"]
+        )
 
         # Copy file and substitute path
         last_published_workfile_path = download_last_published_workfile(
@@ -187,8 +193,8 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
         workfile_extensions = host_addon.get_workfile_extensions()
 
         for representation_entity in get_representations(
-                project_name,
-                version_ids=version_ids,
+            project_name,
+            version_ids=version_ids,
         ):
             ext = representation_entity["context"].get("ext")
             ext = f".{ext}"

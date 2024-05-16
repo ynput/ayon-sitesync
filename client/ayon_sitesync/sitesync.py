@@ -56,11 +56,13 @@ async def upload(
         # this part modifies structure on 'remote_site', only single
         # thread can do that at a time, upload/download to prepared
         # structure should be run in parallel
-        remote_handler = lib.factory.get_provider(provider_name,
-                                                  project_name,
-                                                  remote_site_name,
-                                                  tree=tree,
-                                                  presets=preset)
+        remote_handler = lib.factory.get_provider(
+            provider_name,
+            project_name,
+            remote_site_name,
+            tree=tree,
+            presets=preset
+        )
 
         file_path = file.get("path", "")
 
@@ -78,17 +80,18 @@ async def upload(
             raise NotADirectoryError(err)
 
     loop = asyncio.get_running_loop()
-    file_id = await loop.run_in_executor(None,
-                                         remote_handler.upload_file,
-                                         local_file_path,
-                                         remote_file_path,
-                                         addon,
-                                         project_name,
-                                         file,
-                                         representation,
-                                         remote_site_name,
-                                         True
-                                         )
+    file_id = await loop.run_in_executor(
+        None,
+        remote_handler.upload_file,
+        local_file_path,
+        remote_file_path,
+        addon,
+        project_name,
+        file,
+        representation,
+        remote_site_name,
+        True
+    )
 
     return file_id
 
@@ -121,11 +124,13 @@ async def download(
 
     """
     with addon.lock:
-        remote_handler = lib.factory.get_provider(provider_name,
-                                                  project_name,
-                                                  remote_site_name,
-                                                  tree=tree,
-                                                  presets=preset)
+        remote_handler = lib.factory.get_provider(
+            provider_name,
+            project_name,
+            remote_site_name,
+            tree=tree,
+            presets=preset
+        )
 
         file_path = file.get("path", "")
         local_file_path, remote_file_path = resolve_paths(
@@ -138,17 +143,18 @@ async def download(
     local_site = addon.get_active_site(project_name)
 
     loop = asyncio.get_running_loop()
-    file_id = await loop.run_in_executor(None,
-                                         remote_handler.download_file,
-                                         remote_file_path,
-                                         local_file_path,
-                                         addon,
-                                         project_name,
-                                         file,
-                                         representation,
-                                         local_site,
-                                         True
-                                         )
+    file_id = await loop.run_in_executor(
+        None,
+        remote_handler.download_file,
+        remote_file_path,
+        local_file_path,
+        addon,
+        project_name,
+        file,
+        representation,
+        local_site,
+        True
+    )
 
     return file_id
 
@@ -179,7 +185,8 @@ def resolve_paths(
         remote_file_path = remote_handler.resolve_path(file_path)
 
     local_handler = lib.factory.get_provider(
-        "local_drive", project_name, addon.get_active_site(project_name))
+        "local_drive", project_name, addon.get_active_site(project_name)
+    )
     local_file_path = local_handler.resolve_path(file_path)
 
     return local_file_path, remote_file_path
@@ -200,10 +207,12 @@ def _site_is_working(addon, project_name, site_name, site_config):
             (bool)
     """
     provider = addon.get_provider_for_site(site=site_name)
-    handler = lib.factory.get_provider(provider,
-                                       project_name,
-                                       site_name,
-                                       presets=site_config)
+    handler = lib.factory.get_provider(
+        provider,
+        project_name,
+        site_name,
+        presets=site_config
+    )
 
     return handler.is_active()
 
@@ -281,8 +290,9 @@ def download_last_published_workfile(
         )
     )
     for repre_id in representation_ids:
-        if not sitesync_addon.is_representation_on_site(project_name, repre_id,
-                                                        local_site_id):
+        if not sitesync_addon.is_representation_on_site(
+            project_name, repre_id, local_site_id
+        ):
             sitesync_addon.add_site(
                 project_name,
                 repre_id,
@@ -294,7 +304,9 @@ def download_last_published_workfile(
     print("Starting to download:{}".format(last_published_workfile_path))
     # While representation unavailable locally, wait.
     while not sitesync_addon.is_representation_on_site(
-        project_name, workfile_representation["id"], local_site_id,
+        project_name,
+        workfile_representation["id"],
+        local_site_id,
         max_retries=max_retries
     ):
         time.sleep(5)
@@ -521,8 +533,12 @@ class SiteSyncThread(threading.Thread):
                 self.log.info("finished long running")
                 self.addon.projects_processed.remove(task["project_name"])
             await asyncio.sleep(0.5)
-        tasks = [task for task in asyncio.all_tasks() if
-                 task is not asyncio.current_task()]
+
+        tasks = [
+            task
+            for task in asyncio.all_tasks()
+            if task is not asyncio.current_task()
+        ]
         list(map(lambda task: task.cancel(), tasks))  # cancel all the tasks
         results = await asyncio.gather(*tasks, return_exceptions=True)
         self.log.debug(
@@ -558,28 +574,32 @@ class SiteSyncThread(threading.Thread):
 
         local_site_config = sync_config.get("sites")[local_site]
         remote_site_config = sync_config.get("sites")[remote_site]
-        if not all([_site_is_working(self.addon, project_name, local_site,
-                                     local_site_config),
-                    _site_is_working(self.addon, project_name, remote_site,
-                                     remote_site_config)]):
-            self.log.debug(
-                "Some of the sites {} - {} in {} is not working properly".format(  # noqa
-                    local_site, remote_site, project_name
-                )
+        if not all([
+            _site_is_working(
+                self.addon, project_name, local_site, local_site_config
+            ),
+            _site_is_working(
+                self.addon, project_name, remote_site, remote_site_config
             )
+        ]):
+            self.log.debug((
+                "Some of the sites {} - {} in {} is not working properly"
+            ).format(local_site, remote_site, project_name))
 
             return None, None
 
         return local_site, remote_site
 
-    def _get_remote_provider_info(self, project_name, remote_site,
-                                  site_preset):
+    def _get_remote_provider_info(
+        self, project_name, remote_site, site_preset
+    ):
         remote_provider = self.addon.get_provider_for_site(site=remote_site)
-        handler = lib.factory.get_provider(remote_provider,
-                                           project_name,
-                                           remote_site,
-                                           presets=site_preset)
-        limit = lib.factory.get_provider_batch_limit(
-            remote_provider)
+        handler = lib.factory.get_provider(
+            remote_provider,
+            project_name,
+            remote_site,
+            presets=site_preset
+        )
+        limit = lib.factory.get_provider_batch_limit(remote_provider)
 
         return handler, remote_provider, limit

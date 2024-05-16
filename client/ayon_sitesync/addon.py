@@ -1026,8 +1026,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if self.enabled:
             self.sitesync_thread.start()
         else:
-            self.log.info("No presets or active providers. " +
-                          "Synchronization not possible.")
+            self.log.info(
+                "SiteSync is not enabled. Site Sync server was not started."
+            )
 
     def tray_exit(self):
         """Stops sync thread if running.
@@ -1110,19 +1111,20 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         project_names = get_project_names()
         for project_name in project_names:
             project_sites = copy.deepcopy(sites)
-            proj_settings = get_addon_project_settings(
+            project_settings = get_addon_project_settings(
                 self.name, self.version, project_name)
 
             project_sites.update(self._get_default_site_configs(
-                proj_settings["enabled"], project_name, proj_settings
+                project_settings["enabled"], project_name, project_settings
             ))
 
             project_sites.update(
-                self._transform_sites_from_settings(proj_settings))
+                self._transform_sites_from_settings(project_settings))
 
-            proj_settings["sites"] = project_sites
+            project_settings["sites"] = project_sites
 
-            sync_project_settings[project_name] = proj_settings
+            sync_project_settings[project_name] = project_settings
+
         if not sync_project_settings:
             self.log.info("No enabled and configured projects for sync.")
         return sync_project_settings
@@ -1140,7 +1142,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 fresh values needed for Local settings (without overrides)
 
         Returns:
-            (dict): settings dictionary for the enabled project,
+            dict: settings dictionary for the enabled project,
                 empty if no settings or sync is disabled
 
         """
@@ -1150,10 +1152,11 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             return self._prepare_sync_project_settings(exclude_locals)\
                 [project_name]
 
-        if not self.sync_project_settings or \
-               not self.sync_project_settings.get(project_name):
+        if (
+            not self.sync_project_settings
+            or not self.sync_project_settings.get(project_name)
+        ):
             self.set_sync_project_settings(exclude_locals)
-
         return self.sync_project_settings.get(project_name)
 
     def _transform_sites_from_settings(self, settings):
@@ -1162,33 +1165,35 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         It processes both System and Project Settings as they have same format.
         """
         sites = {}
-        if self.enabled:
-            for whole_site_info in settings.get("sites", []):
-                configured_site = {}
-                site_name = whole_site_info["name"]
-                configured_site["enabled"] = True
+        if not self.enabled:
+            return sites
 
-                provider_specific = whole_site_info[whole_site_info["provider"]]
-                configured_site["root"] = provider_specific.pop("roots",
-                                                                None)
-                configured_site.update(provider_specific)
+        for site_info in settings.get("sites", []):
+            provider_specific = site_info[site_info["provider"]]
+            configured_site = {
+                "enabled": True,
+                "root": provider_specific.pop("roots", None)
+            }
+            configured_site.update(provider_specific)
 
-                sites[site_name] = configured_site
+            site_name = site_info["name"]
+            sites[site_name] = configured_site
         return sites
 
     def _get_project_roots_for_site(self, project_name, site_name=None):
         """Returns projects roots and their overrides."""
         # overrides for Studio site for particular user
-        #TODO temporary to get roots without overrides
-        #ayon_api.get_project_roots_by_site returns only overrides.
-        #Should be replaced when ayon_api implements `siteRoots` method
+        # TODO temporary to get roots without overrides
+        # ayon_api.get_project_roots_by_site returns only overrides.
+        # Should be replaced when ayon_api implements `siteRoots` method
         if not site_name:
             site_name = get_local_site_id()
         platform_name = platform.system().lower()
-        roots = ayon_api.get(f"projects/{project_name}/siteRoots",
-                             platform=platform_name).data
-        root_overrides = get_project_roots_for_site(project_name,
-                                                    site_name)
+        roots = ayon_api.get(
+            f"projects/{project_name}/siteRoots",
+            platform=platform_name
+        ).data
+        root_overrides = get_project_roots_for_site(project_name, site_name)
         for key, value in roots.items():
             override = root_overrides.get(key)
             if override:
@@ -1197,7 +1202,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         return roots
 
     def _get_default_site_configs(
-        self, sync_enabled=True, project_name=None, proj_settings=None
+        self, sync_enabled=True, project_name=None, project_settings=None
     ):
         """Settings for 'studio' and user's local site
 
@@ -1219,10 +1224,12 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         }
         all_sites = {self.DEFAULT_SITE: studio_config}
         if sync_enabled:
-            roots = proj_settings["local_setting"]["local_roots"]
-            local_site_dict = {"enabled": True,
-                               "provider": "local_drive",
-                               "root": roots}
+            roots = project_settings["local_setting"]["local_roots"]
+            local_site_dict = {
+                "enabled": True,
+                "provider": "local_drive",
+                "root": roots
+            }
             all_sites[local_site_id] = local_site_dict
             # duplicate values for normalized local name
             all_sites["local"] = local_site_dict
@@ -1230,17 +1237,24 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
     def get_provider_for_site(self, project_name=None, site=None):
         """Get provider name for site (unique name across all projects)."""
-        sites = {self.DEFAULT_SITE: "local_drive",
-                 self.LOCAL_SITE: "local_drive",
-                 get_local_site_id(): "local_drive"}
+        sites = {
+            self.DEFAULT_SITE: "local_drive",
+            self.LOCAL_SITE: "local_drive",
+            get_local_site_id(): "local_drive"
+        }
 
         if site in sites.keys():
             return sites[site]
 
-        if project_name:  # backward compatibility
+        # backward compatibility
+        if project_name:
             proj_settings = self.get_sync_project_setting(project_name)
-            provider = proj_settings.get("sites", {}).get(site, {}).\
-                get("provider")
+            provider = (
+                proj_settings
+                .get("sites", {})
+                .get(site, {})
+                .get("provider")
+            )
             if provider:
                 return provider
 
@@ -1274,36 +1288,45 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             list[dict]: Representation states.
 
         """
-        self.log.debug("Check representations for: {}-{}".format(active_site,
-                                                                 remote_site))
+        self.log.debug("Check representations for: {}-{}".format(
+            active_site, remote_site
+        ))
 
-        endpoint = "{}/{}/state".format(self.endpoint_prefix,
-                                        project_name)
+        endpoint = "{}/{}/state".format(
+            self.endpoint_prefix, project_name
+        )
 
         # get to upload
-        kwargs = {"localSite": active_site,
-                  "remoteSite": remote_site,
-                  "localStatusFilter": [SiteSyncStatus.OK],
-                  "remoteStatusFilter": [SiteSyncStatus.QUEUED,
-                                         SiteSyncStatus.FAILED]}
+        kwargs = {
+            "localSite": active_site,
+            "remoteSite": remote_site,
+            "localStatusFilter": [SiteSyncStatus.OK],
+            "remoteStatusFilter": [
+                SiteSyncStatus.QUEUED, SiteSyncStatus.FAILED
+            ]
+        }
 
         response = ayon_api.get(endpoint, **kwargs)
         if response.status_code not in [200, 204]:
             raise RuntimeError(
-                "Cannot get representations for sync with code {}"
-                .format(response.status_code))
-        representations = response.data["representations"]
+                "Cannot get representations for sync with code {}".format(
+                    response.status_code
+                )
+            )
+
+        repre_states = response.data["representations"]
 
         # get to download
-        if len(representations) < limit:
-            kwargs["localStatusFilter"] = [SiteSyncStatus.QUEUED,
-                                           SiteSyncStatus.FAILED]
+        if len(repre_states) < limit:
+            kwargs["localStatusFilter"] = [
+                SiteSyncStatus.QUEUED, SiteSyncStatus.FAILED
+            ]
             kwargs["remoteStatusFilter"] = [SiteSyncStatus.OK]
 
             response = ayon_api.get(endpoint, **kwargs)
-            representations.extend(response.data["representations"])
+            repre_states.extend(response.data["representations"])
 
-        return representations
+        return repre_states
 
     def check_status(self, file, local_site, remote_site, config_preset):
         """Check synchronization status of a file.
@@ -1343,15 +1366,19 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         local_status = file["localStatus"]["status"]
         remote_status = file["remoteStatus"]["status"]
 
-        if (local_status != SiteSyncStatus.OK and
-                remote_status == SiteSyncStatus.OK):
-            retries = file["localStatus"]["retries"]
+        if (
+            local_status != SiteSyncStatus.OK
+            and remote_status == SiteSyncStatus.OK
+        ):
+            retries = file_info["localStatus"]["retries"]
             if retries < int(config_preset["retry_cnt"]):
                 return SyncStatus.DO_DOWNLOAD
 
-        if (remote_status != SiteSyncStatus.OK and
-                local_status == SiteSyncStatus.OK):
-            retries = file["remoteStatus"]["retries"]
+        if (
+            remote_status != SiteSyncStatus.OK
+            and local_status == SiteSyncStatus.OK
+        ):
+            retries = file_info["remoteStatus"]["retries"]
             if retries < int(config_preset["retry_cnt"]):
                 return SyncStatus.DO_UPLOAD
 
@@ -1447,9 +1474,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         source_file = file.get("path", "")
 
         self.log.debug(
-            (
-                "File for {} - {source_file} process {status} {error_str}"
-            ).format(
+            "File for {} - {source_file} process {status} {error_str}".format(
                 representation_id,
                 status=status,
                 source_file=source_file,
@@ -1490,18 +1515,21 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 not 'force'
             ValueError - other errors (repre not found, misconfiguration)
         """
-        representation = get_representation_by_id(project_name,
-                                                  representation_id)
+        representation = get_representation_by_id(
+            project_name, representation_id
+        )
         if not representation:
-            raise ValueError("Representation {} not found in {}".
-                             format(representation_id, project_name))
+            raise ValueError(
+                "Representation {} not found in {}".format(
+                    representation_id, project_name
+                )
+            )
 
         if side and site_name:
-            raise ValueError("Misconfiguration, only one of side and " +
-                             "site_name arguments should be passed.")
-
-        local_site = self.get_active_site(project_name)
-        remote_site = self.get_remote_site(project_name)
+            raise ValueError(
+                "Misconfiguration, only one of side and"
+                " site_name arguments should be passed."
+            )
 
         if side:
             if side == "local":
@@ -1535,8 +1563,10 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                                                 local_site_name,
                                                 remote_site_name)
 
-        progress = {local_site_name: -1,
-                    remote_site_name: -1}
+        progress = {
+            local_site_name: -1,
+            remote_site_name: -1
+        }
         if not sync_status:
             return progress
 
@@ -1559,20 +1589,24 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                     progress[site_name] = 0
 
         # for example 13 fully avail. files out of 26 >> 13/26 = 0.5
-        avg_progress = {}
-        avg_progress[local_site_name] = \
-            progress[local_site_name] / max(files[local_site_name], 1)
-        avg_progress[remote_site_name] = \
-            progress[remote_site_name] / max(files[remote_site_name], 1)
-        return avg_progress
+        return {
+            local_site_name: (
+                progress[local_site_name] / max(files[local_site_name], 1)
+            ),
+            remote_site_name: (
+                progress[remote_site_name] / max(files[remote_site_name], 1)
+            )
+        }
 
     def _set_state_sync_state(self, project_name, representation_id, site_name,
                               payload_dict):
         """Calls server endpoint to store sync info for 'representation_id'."""
-        endpoint = "{}/{}/state/{}/{}".format(self.endpoint_prefix,
-                                              project_name,
-                                              representation_id,
-                                              site_name)
+        endpoint = "{}/{}/state/{}/{}".format(
+            self.endpoint_prefix,
+            project_name,
+            representation_id,
+            site_name
+        )
 
         response = ayon_api.post(endpoint, **payload_dict)
         if response.status_code not in [200, 204]:
@@ -1634,11 +1668,13 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             dict[str, tuple[float, float]]: Progress by representation id.
 
         """
-        representations = self._get_repres_state(project_name,
-                                                 representation_ids,
-                                                 local_site_name,
-                                                 remote_site_name,
-                                                 **kwargs)
+        repre_states = self._get_repres_state(
+            project_name,
+            representation_ids,
+            local_site_name,
+            remote_site_name,
+            **kwargs
+        )
         states = {}
         repre_local_progress = repre_remote_progress = 0
         no_of_files = 0
@@ -1698,13 +1734,17 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if kwargs:
             payload_dict.update(kwargs)
 
-        endpoint = "{}/{}/state".format(self.endpoint_prefix,
-                                        project_name)
+        endpoint = "{}/{}/state".format(
+            self.endpoint_prefix, project_name
+        )
 
         response = ayon_api.get(endpoint, **payload_dict)
         if response.status_code != 200:
-            msg = "Cannot get sync state for representation ".format(representation_id)  # noqa
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "Cannot get sync state for representations {}".format(
+                    representation_ids
+                )
+            )
 
         return response.data["representations"]
     
@@ -1739,7 +1779,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if kwargs:
             payload_dict.update(kwargs)
 
-        endpoint = "{}/{}/state".format(self.endpoint_prefix, project_name)  # noqa
+        endpoint = "{}/{}/state".format(
+            self.endpoint_prefix, project_name
+        )
 
         response = ayon_api.get(endpoint, **payload_dict)
         if response.status_code != 200:
@@ -1770,8 +1812,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """
         my_local_site = get_local_site_id()
         if my_local_site != site_name:
-            self.log.warning("Cannot remove non local file for {}".
-                             format(site_name))
+            self.log.warning(
+                "Cannot remove non local file for {}".format(site_name)
+            )
             return
 
         provider_name = self.get_provider_for_site(site=site_name)
