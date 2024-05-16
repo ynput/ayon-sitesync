@@ -1334,7 +1334,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         return repre_states
 
-    def check_status(self, file, local_site, remote_site, config_preset):
+    def check_status(self, file_state, local_site, remote_site, config_preset):
         """Check synchronization status of a file.
 
         The file is on representation status is checked for single 'provider'.
@@ -1353,7 +1353,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             case only user has the data and must U/D.
 
         Args:
-            file_info (dict): File info from site sync database.
+            file_state (dict): File info from site sync database.
             local_site (str): Local site of compare (usually 'studio').
             remote_site (str): Remote site (gdrive etc).
             config_preset (dict): Config about active site, retries.
@@ -1369,14 +1369,14 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             )
             return SyncStatus.DO_NOTHING
 
-        local_status = file["localStatus"]["status"]
-        remote_status = file["remoteStatus"]["status"]
+        local_status = file_state["localStatus"]["status"]
+        remote_status = file_state["remoteStatus"]["status"]
 
         if (
             local_status != SiteSyncStatus.OK
             and remote_status == SiteSyncStatus.OK
         ):
-            retries = file_info["localStatus"]["retries"]
+            retries = file_state["localStatus"]["retries"]
             if retries < int(config_preset["retry_cnt"]):
                 return SyncStatus.DO_DOWNLOAD
 
@@ -1384,7 +1384,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             remote_status != SiteSyncStatus.OK
             and local_status == SiteSyncStatus.OK
         ):
-            retries = file_info["remoteStatus"]["retries"]
+            retries = file_state["remoteStatus"]["retries"]
             if retries < int(config_preset["retry_cnt"]):
                 return SyncStatus.DO_UPLOAD
 
@@ -1393,7 +1393,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     def update_db(
         self,
         project_name,
-        representation,
+        repre_status,
         site_name,
         new_file_id=None,
         file=None,
@@ -1408,7 +1408,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         Args:
             project_name (str): Project name. Force to db connection as
                 each file might come from different collection.
-            representation (dict): Representation entity.
+            repre_status (dict): Representation status from sitesync database.
             site_name (str): Site name.
             new_file_id (Optional[str]): File id of new file.
             file (dict[str, Any]): info about processed file (pulled from DB)
@@ -1423,11 +1423,13 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             None
         """
         files_status = []
-        for file_info in representation["files"]:
-            status_entity = copy.deepcopy(file_info["{}Status".format(side)])
-            status_entity["fileHash"] = file_info["fileHash"]
-            status_entity["id"] = file_info["id"]
-            if file_info["fileHash"] == file["fileHash"]:
+        for file_status in repre_status["files"]:
+            status_entity = copy.deepcopy(
+                file_status["{}Status".format(side)]
+            )
+            status_entity["fileHash"] = file_status["fileHash"]
+            status_entity["id"] = file_status["id"]
+            if file_status["fileHash"] == file["fileHash"]:
                 if new_file_id:
                     status_entity["status"] = SiteSyncStatus.OK
                     status_entity.pop("message")
@@ -1448,7 +1450,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                         status_entity.remove("pause")
                 files_status.append(status_entity)
 
-        representation_id = representation["representationId"]
+        representation_id = repre_status["representationId"]
 
         endpoint = "{}/{}/state/{}/{}".format(
             self.endpoint_prefix,
@@ -1539,12 +1541,13 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         if side:
             if side == "local":
-                site_name = local_site
+                site_name = self.get_active_site(project_name)
             else:
-                site_name = remote_site
+                site_name = self.get_remote_site(project_name)
 
-        self.add_site(project_name, representation_id, site_name, file_id,
-                      force=True)
+        self.add_site(
+            project_name, representation_id, site_name, file_id, force=True
+        )
 
     def get_progress_for_repre(
         self,
