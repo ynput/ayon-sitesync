@@ -197,9 +197,11 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             return
 
         if not force:
-            existing = self.get_repre_sync_state(project_name,
-                                           [representation_id],
-                                           site_name)
+            existing = self.get_repre_sync_state(
+                project_name,
+                representation_id,
+                site_name
+            )
             if existing:
                 failure = True
                 if file_id:
@@ -251,8 +253,11 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if not self.get_sync_project_setting(project_name):
             raise ValueError("Project not configured")
 
-        sync_info = self.get_repre_sync_state(project_name, [representation_id],
-                                              site_name)
+        sync_info = self.get_repre_sync_state(
+            project_name,
+            representation_id,
+            site_name
+        )
         if not sync_info:
             msg = "Site {} not found".format(site_name)
             self.log.warning(msg)
@@ -790,8 +795,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         """
         representation_status = self.get_repre_sync_state(
-            project_name, [representation_id], site_name)
-
+            project_name, representation_id, site_name)
         if not representation_status:
             return False
 
@@ -901,9 +905,11 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if not alternate_sites:
             return
 
-        sync_state = self.get_repre_sync_state(project_name,
-                                               [representation_id],
-                                               processed_site)
+        sync_state = self.get_repre_sync_state(
+            project_name,
+            representation_id,
+            processed_site
+        )
         # not yet available on processed_site, wont update alternate site yet
         if not sync_state:
             return
@@ -1558,10 +1564,12 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """
         project_name = representation["context"]["project"]["name"]
         representation_id = representation["id"]
-        sync_status = self.get_repre_sync_state(project_name,
-                                                [representation_id],
-                                                local_site_name,
-                                                remote_site_name)
+        sync_status = self.get_repre_sync_state(
+            project_name,
+            representation_id,
+            local_site_name,
+            remote_site_name
+        )
 
         progress = {
             local_site_name: -1,
@@ -1615,7 +1623,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     def get_repre_sync_state(
         self,
         project_name,
-        representation_ids,
+        representation_id,
         local_site_name,
         remote_site_name=None,
         **kwargs
@@ -1626,22 +1634,25 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             Logic of this
 
         Args:
-            project_name (str):
-            representation_ids (list): even single repre should be in []
+            project_name (str): Project name.
+            representation_id (str): Representation id.
             local_site_name (str)
             remote_site_name (str)
             all other parameters for `Get Site Sync State` endpoint if
                 necessary
+
         """
-        representations = self._get_repres_state(project_name,
-                                                 representation_ids,
-                                                 local_site_name,
-                                                 remote_site_name,
-                                                 **kwargs)
-        if representations:
-            representation = representations[0]
-            if representation["localStatus"]["status"] != -1:
-                return representation
+        repre_states = self._get_repres_state(
+            project_name,
+            {representation_id},
+            local_site_name,
+            remote_site_name,
+            **kwargs
+        )
+        if repre_states:
+            repre_state = repre_states[0]
+            if repre_state["localStatus"]["status"] != -1:
+                return repre_state
 
     def get_representations_sync_state(
         self,
