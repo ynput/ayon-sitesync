@@ -1696,32 +1696,35 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             **kwargs
         )
         states = {}
-        repre_local_progress = repre_remote_progress = 0
-        no_of_files = 0
-        for repre in representations:
-            for file_info in repre["files"]:
-                no_of_files += 1
-                repre_local_progress += file_info["localStatus"].get("progress", 0)
-                repre_remote_progress += file_info["remoteStatus"].get("progress", 0)
+        for repre_state in repre_states:
+            repre_files_count = len(repre_state["files"])
 
-            repre_local_status = repre["localStatus"]["status"]
+            repre_local_status = repre_state["localStatus"]["status"]
+            repre_local_progress = 0
             if repre_local_status == SiteSyncStatus.OK:
                 repre_local_progress = 1
             elif repre_local_status == SiteSyncStatus.IN_PROGRESS:
-                repre_local_progress = repre_local_progress / no_of_files
-            else:
-                repre_local_progress = 0
+                local_sum = sum(
+                    file_info["localStatus"].get("progress", 0)
+                    for file_info in repre_state["files"]
+                )
+                repre_local_progress = local_sum / repre_files_count
 
-            repre_remote_status = repre["remoteStatus"]["status"]
+            repre_remote_status = repre_state["remoteStatus"]["status"]
+            repre_remote_progress = 0
             if repre_remote_status == SiteSyncStatus.OK:
                 repre_remote_progress = 1
             elif repre_remote_status == SiteSyncStatus.IN_PROGRESS:
-                repre_remote_progress = repre_remote_progress / no_of_files
-            else:
-                repre_remote_progress = 0
+                remote_sum = sum(
+                    file_info["remoteStatus"].get("progress", 0)
+                    for file_info in repre_state["files"]
+                )
+                repre_remote_progress = remote_sum / repre_files_count
 
-            states[repre["representationId"]] = (repre_local_progress,
-                                                 repre_remote_progress)
+            states[repre_state["representationId"]] = (
+                repre_local_progress,
+                repre_remote_progress
+            )
 
         return states
             
