@@ -127,7 +127,8 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
             task_name,
             workfile_representation,
             max_retries,
-            anatomy=anatomy
+            anatomy=anatomy,
+            sitesync_addon=sitesync_addon,
         )
         if not last_published_workfile_path:
             self.log.debug(
