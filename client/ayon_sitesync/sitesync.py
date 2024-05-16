@@ -16,31 +16,39 @@ from .providers import lib
 from .utils import SyncStatus, ResumableError, get_linked_representation_id
 
 
-async def upload(addon, project_name, file, representation, provider_name,
-                 remote_site_name, tree=None, preset=None):
-    """
-        Upload single 'file' of a 'representation' to 'provider'.
-        Source url is taken from 'file' portion, where {root} placeholder
-        is replaced by 'representation.Context.root'
-        Provider could be one of implemented in provider.py.
+async def upload(
+    addon,
+    project_name,
+    file,
+    representation,
+    provider_name,
+    remote_site_name,
+    tree=None,
+    preset=None
+):
+    """Upload representation file.
 
-        Updates MongoDB, fills in id of file from provider (ie. file_id
+    Upload single 'file' of a 'representation' to 'provider'.
+    Source url is taken from 'file' portion, where {root} placeholder
+    is replaced by 'representation.Context.root'
+    Provider could be one of implemented in provider.py.
+
+    Updates database, fills in id of file from provider (ie. file_id
         from GDrive), 'created_dt' - time of upload
 
-        'provider_name' doesn't have to match to 'site_name', single
-        provider (GDrive) might have multiple sites ('projectA',
-        'projectB')
+    Value of 'provider_name' doesn't have to match to 'site_name', single
+    provider (GDrive) might have multiple sites ('projectA', 'projectB')
 
     Args:
         addon (SiteSyncAddon): object to run SiteSyncAddon API
-        project_name (str): source db
-        file (dictionary): of file from representation in Mongo
+        project_name (str): Project name.
+        file (dict[str, Any]): of file from representation in Mongo
         representation (dictionary): of representation
-        provider_name (string): gdrive, gdc etc.
-        site_name (string): site on provider, single provider(gdrive) could
-            have multiple sites (different accounts, credentials)
-        tree (dictionary): injected memory structure for performance
-        preset (dictionary): site config ('credentials_url', 'root'...)
+        provider_name (str): gdrive, gdc etc.
+        remote_site_name (string): Site on provider, single provider(gdrive)
+            could have multiple sites (different accounts, credentials)
+        tree (Optional[dict]): Injected memory structure for performance.
+        preset (Optional[dict]): site config ('credentials_url', 'root'...)
 
     """
     # create ids sequentially, upload file in parallel later
@@ -85,24 +93,32 @@ async def upload(addon, project_name, file, representation, provider_name,
     return file_id
 
 
-async def download(addon, project_name, file, representation, provider_name,
-                   remote_site_name, tree=None, preset=None):
-    """
-        Downloads file to local folder denoted in representation.Context.
+async def download(
+    addon,
+    project_name,
+    file,
+    representation,
+    provider_name,
+    remote_site_name,
+    tree=None,
+    preset=None
+):
+    """Downloads file to local folder denoted in representation.Context.
 
     Args:
-        addon (SiteSyncAddon): object to run SiteSyncAddon API
-        project_name (str): source
-        file (dictionary) : info about processed file
-        representation (dictionary):  repr that 'file' belongs to
-        provider_name (string):  'gdrive' etc
-        site_name (string): site on provider, single provider(gdrive) could
-            have multiple sites (different accounts, credentials)
-        tree (dictionary): injected memory structure for performance
-        preset (dictionary): site config ('credentials_url', 'root'...)
+        addon (SiteSyncAddon): SiteSyncAddon object.
+        project_name (str): Project name.
+        file (dict) : Info about processed file.
+        representation (dict):  repr that 'file' belongs to
+        provider_name (str):  'gdrive' etc
+        remote_site_name (str): site on provider, single provider(gdrive)
+            could have multiple sites (different accounts, credentials)
+        tree (Optional[dict]): Injected memory structure for performance.
+        preset (Optional[dict]): Site config ('credentials_url', 'root'...).
 
-        Returns:
-        (string) - 'name' of local file
+    Returns:
+        str: Name of local file
+
     """
     with addon.lock:
         remote_handler = lib.factory.get_provider(provider_name,
@@ -137,22 +153,26 @@ async def download(addon, project_name, file, representation, provider_name,
     return file_id
 
 
-def resolve_paths(addon, file_path, project_name,
-                  remote_site_name=None, remote_handler=None):
-    """
-        Returns tuple of local and remote file paths with {root}
-        placeholders replaced with proper values from Settings or Anatomy
+def resolve_paths(
+    addon, file_path, project_name, remote_site_name=None, remote_handler=None
+):
+    """Resolve local and remote full path.
 
-        Ejected here because of Python 2 hosts (GDriveHandler is an issue)
+    Returns tuple of local and remote file paths with {root}
+    placeholders replaced with proper values from Settings or Anatomy
 
-        Args:
-            addon (SiteSyncAddon): object to run SiteSyncAddon API
-            file_path(string): path with {root}
-            project_name(string): project name
-            remote_site_name(string): remote site
-            remote_handler(AbstractProvider): implementation
-        Returns:
-            (string, string) - proper absolute paths, remote path is optional
+    Ejected here because of Python 2 hosts (GDriveHandler is an issue)
+
+    Args:
+        addon (SiteSyncAddon): object to run SiteSyncAddon API
+        file_path (str): File path with {root}.
+        project_name (str): Project name.
+        remote_site_name (Optional[str]): Remote site name.
+        remote_handler (Optional[AbstractProvider]): implementation
+
+    Returns:
+        tuple[str, str]: Proper absolute paths, remote path is optional.
+
     """
     remote_file_path = ""
     if remote_handler:
@@ -195,7 +215,7 @@ def download_last_published_workfile(
     workfile_representation: dict,
     max_retries: int,
     anatomy: Anatomy = None,
-) -> str:
+) -> Union[str, None]:
     """Download the last published workfile
 
     Args:
@@ -204,13 +224,13 @@ def download_last_published_workfile(
         task_name (str): Task name.
         workfile_representation (dict): Workfile representation.
         max_retries (int): complete file failure only after so many attempts
-        anatomy (Anatomy, optional): Anatomy (Used for optimization).
+        anatomy (Optional[Anatomy]): Project anatomy, used for optimization.
             Defaults to None.
 
     Returns:
-        str: last published workfile path localized
-    """
+        Union[str, None]: last published workfile path localized
 
+    """
     if not anatomy:
         anatomy = Anatomy(project_name)
 
@@ -219,7 +239,9 @@ def download_last_published_workfile(
     if not sitesync_addon or not sitesync_addon.enabled:
         print("Site sync addon is disabled or unavailable.")
         return
+        Union[str, None]: last published workfile path localized
 
+    """
     if not workfile_representation:
         print(
             "Not published workfile for task '{}' and host '{}'.".format(

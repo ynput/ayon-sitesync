@@ -36,36 +36,37 @@ SYNC_ADDON_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
-    """
-       Synchronization server that is syncing published files from local to
-       any of implemented providers (like GDrive, S3 etc.)
-       Runs in the background and checks all representations, looks for files
-       that are marked to be in different location than 'studio' (temporary),
-       checks if 'created_dt' field is present denoting successful sync
-       with provider destination.
-       Sites structure is created during publish OR by calling 'add_site'
-       method.
+    """Addon handling sync of representation files between sites.
 
-       State of synchronization is being persisted on the server
-       in `sitesync_files_status` table.
+    Synchronization server that is syncing published files from local to
+    any of implemented providers (like GDrive, S3 etc.)
+    Runs in the background and checks all representations, looks for files
+    that are marked to be in different location than 'studio' (temporary),
+    checks if 'created_dt' field is present denoting successful sync
+    with provider destination.
+    Sites structure is created during publish OR by calling 'add_site'
+    method.
 
-       By default it will always contain 1 record with
-       "name" ==  self.presets["active_site"] per representation_id with state
-       of all its files
+    State of synchronization is being persisted on the server
+    in `sitesync_files_status` table.
 
-        Each Tray app has assigned its own  self.presets["local_id"]
-        used in sites as a name.
-        Tray is searching only for records where name matches its
-        self.presets["active_site"] + self.presets["remote_site"].
-        "active_site" could be storage in studio ('studio'), or specific
-        "local_id" when user is working disconnected from home.
-        If the local record has its "created_dt" filled, it is a source and
-        process will try to upload the file to all defined remote sites.
+    By default it will always contain 1 record with
+    "name" ==  self.presets["active_site"] per representation_id with state
+    of all its files
 
-        Remote files "id" is real id that could be used in appropriate API.
-        Local files have "id" too, for conformity, contains just file name.
-        It is expected that multiple providers will be implemented in separate
-        classes and registered in 'providers.py'.
+    Each Tray app has assigned its own  self.presets["local_id"]
+    used in sites as a name.
+    Tray is searching only for records where name matches its
+    self.presets["active_site"] + self.presets["remote_site"].
+    "active_site" could be storage in studio ('studio'), or specific
+    "local_id" when user is working disconnected from home.
+    If the local record has its "created_dt" filled, it is a source and
+    process will try to upload the file to all defined remote sites.
+
+    Remote files "id" is real id that could be used in appropriate API.
+    Local files have "id" too, for conformity, contains just file name.
+    It is expected that multiple providers will be implemented in separate
+    classes and registered in 'providers.py'.
 
     """
     # limit querying DB to look for X number of representations that should
@@ -83,12 +84,11 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     version = __version__
 
     def initialize(self, addon_settings):
-        """
-            Called during Addon Manager creation.
+        """Called during Addon Manager creation.
 
-            Collects needed data, checks asyncio presence.
-            Sets 'enabled' according to global settings for the addon.
-            Shouldnt be doing any initialization, thats a job for 'tray_init'
+        Collects needed data, checks asyncio presence.
+        Sets 'enabled' according to global settings for the addon.
+        Shouldn't be doing any initialization, that's a job for 'tray_init'
         """
 
         # some parts of code need to run sequentially, not in async
@@ -120,8 +120,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         Returns:
             dict[str, str]: Path to icon by site.
-        """
 
+        """
         resource_path = os.path.join(
             SYNC_ADDON_DIR, "providers", "resources"
         )
@@ -140,19 +140,25 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """Implementation for applications launch hooks.
 
         Returns:
-            (str): full absolut path to directory with hooks for the addon
-        """
+            str: full absolut path to directory with hooks for the addon
 
+        """
         return os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
             "launch_hooks"
         )
 
-    """ Start of Public API """
-    def add_site(self, project_name, representation_id, site_name=None,
-                 file_id=None, force=False, status=SiteSyncStatus.QUEUED):
-        """
-        Adds new site to representation to be synced.
+    # --- Public API ---
+    def add_site(
+        self,
+        project_name,
+        representation_id,
+        site_name=None,
+        file_id=None,
+        force=False,
+        status=SiteSyncStatus.QUEUED
+    ):
+        """Adds new site to representation to be synced.
 
         'project_name' must have synchronization enabled (globally or
         project only)
@@ -162,18 +168,19 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         Use 'force' to reset existing site.
 
         Args:
-            project_name (string): project name (must match DB)
-            representation_id (string): MongoDB _id value
-            site_name (string): name of configured and active site
-            file_id (uuid): add file to site info
-            force (bool): reset site if exists
-            status (SiteSyncStatus): current status,
+            project_name (str): Project name.
+            representation_id (str): Representation id.
+            site_name (str): Site name of configured site.
+            file_id (str): File id.
+            force (bool): Reset site if exists.
+            status (SiteSyncStatus): Current status,
                 default SiteSyncStatus.QUEUED
 
-        Throws:
-            SiteAlreadyPresentError - if adding already existing site and
+        Raises:
+            SiteAlreadyPresentError: If adding already existing site and
                 not 'force'
-            ValueError - other errors (repre not found, misconfiguration)
+            ValueError: other errors (repre not found, misconfiguration)
+
         """
         if not self.get_sync_project_setting(project_name):
             raise ValueError("Project not configured")
@@ -228,19 +235,18 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         site_name,
         remove_local_files=False
     ):
-        """
-            Removes 'site_name' for particular 'representation_id' on
-            'project_name'
+        """Removes site for particular representation in project.
 
-            Args:
-                project_name (string): project name (must match DB)
-                representation_id (string): MongoDB _id value
-                site_name (string): name of configured and active site
-                remove_local_files (bool): remove only files for 'local_id'
-                    site
+        Args:
+            project_name (str): project name (must match DB)
+            representation_id (str): MongoDB _id value
+            site_name (str): name of configured and active site
+            remove_local_files (bool): remove only files for 'local_id'
+                site
 
-            Returns:
-                throws ValueError if any issue
+        Raises:
+            ValueError: Throws if any issue.
+
         """
         if not self.get_sync_project_setting(project_name):
             raise ValueError("Project not configured")
@@ -380,10 +386,13 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         If `site` has alternative site, it means that alt_site has 'site' as
         alternative site
+
         Args:
             conf_sites (dict)
+
         Returns:
-            (dict): {'site': [alternative sites]...}
+            dict[str, list[str]]: {'site': [alternative sites]...}
+
         """
         alt_site_pairs = defaultdict(set)
         for site_name, site_info in conf_sites.items():
@@ -446,8 +455,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         updated with site name and file modified date.
 
         Args:
-            project_name (string): project name
-            site_name (string): active site name
+            project_name (str): project name
+            site_name (str): active site name
             reset_missing (bool): if True reset site in DB if missing
                 physically
         """
@@ -510,15 +519,19 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                                                               reset_missing))
 
     # TODO hook to some trigger - no Sync Queue anymore
-    def pause_representation(self, project_name, representation_id, site_name):
-        """
-            Sets 'representation_id' as paused, eg. no syncing should be
+    def pause_representation(
+        self, project_name, representation_id, site_name
+    ):
+        """Pause sync of representation entity on site.
+
+        Sets 'representation_id' as paused, eg. no syncing should be
             happening on it.
 
-            Args:
-                project_name (string): project name
-                representation_id (string): MongoDB objectId value
-                site_name (string): 'gdrive', 'studio' etc.
+        Args:
+            project_name (str): Project name.
+            representation_id (str): Representation id.
+            site_name (str): Site name 'gdrive', 'studio' etc.
+
         """
         self.log.info("Pausing SiteSync for {}".format(representation_id))
         self._paused_representations.add(representation_id)
@@ -530,15 +543,14 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     def unpause_representation(
         self, project_name, representation_id, site_name
     ):
-        """
-            Sets 'representation_id' as unpaused.
+        """Unpause sync of representation entity on site.
 
-            Does not fail or warn if repre wasn't paused.
+        Does not fail or warn if repre wasn't paused.
 
-            Args:
-                project_name (string): project name
-                representation_id (string): MongoDB objectId value
-                site_name (string): 'gdrive', 'studio' etc.
+        Args:
+            project_name (str): Project name.
+            representation_id (str): Representation id.
+            site_name (str): Site name 'gdrive', 'studio' etc.
         """
         self.log.info("Unpausing SiteSync for {}".format(representation_id))
         try:
@@ -553,18 +565,19 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     def is_representation_paused(
         self, representation_id, check_parents=False, project_name=None
     ):
-        """
-            Returns if 'representation_id' is paused or not.
+        """Is representation paused.
 
-            Args:
-                representation_id (string): MongoDB objectId value
-                check_parents (bool): check if parent project or server itself
-                    are not paused
-                project_name (string): project to check if paused
+        Args:
+            representation_id (str): Representation id.
+            check_parents (bool): Check if parent project or server itself
+                are not paused.
+            project_name (str): Project to check if paused.
 
-                if 'check_parents', 'project_name' should be set too
-            Returns:
-                (bool)
+            if 'check_parents', 'project_name' should be set too
+
+        Returns:
+            bool: Is representation paused now.
+
         """
         condition = representation_id in self._paused_representations
         if check_parents and project_name:
@@ -575,25 +588,24 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
     # TODO hook to some trigger - no Sync Queue anymore
     def pause_project(self, project_name):
-        """
-            Sets 'project_name' as paused, eg. no syncing should be
-            happening on all representation inside.
+        """Pause sync of whole project.
 
-            Args:
-                project_name (string): project_name name
+        Args:
+            project_name (str): Project name.
+
         """
         self.log.info("Pausing SiteSync for {}".format(project_name))
         self._paused_projects.add(project_name)
 
     # TODO hook to some trigger - no Sync Queue anymore
     def unpause_project(self, project_name):
-        """
-            Sets 'project_name' as unpaused
+        """Unpause sync of whole project.
 
-            Does not fail or warn if project wasn't paused.
+        Does not fail or warn if project wasn't paused.
 
-            Args:
-                project_name (string):
+        Args:
+            project_name (str): Project name.
+
         """
         self.log.info("Unpausing SiteSync for {}".format(project_name))
         try:
@@ -602,15 +614,16 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             pass
 
     def is_project_paused(self, project_name, check_parents=False):
-        """
-            Returns if 'project_name' is paused or not.
+        """Is project sync paused.
 
-            Args:
-                project_name (string):
-                check_parents (bool): check if server itself
-                    is not paused
-            Returns:
-                (bool)
+        Args:
+            project_name (str):
+            check_parents (bool): check if server itself
+                is not paused
+
+        Returns:
+            bool: Is project paused.
+
         """
         condition = project_name in self._paused_projects
         if check_parents:
@@ -619,18 +632,15 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
     # TODO hook to some trigger - no Sync Queue anymore
     def pause_server(self):
-        """
-            Pause sync server
+        """Pause sync server.
 
-            It won't check anything, not uploading/downloading...
+        It won't check anything, not uploading/downloading...
         """
         self.log.info("Pausing SiteSync")
         self._paused = True
 
     def unpause_server(self):
-        """
-            Unpause server
-        """
+        """Unpause server sync."""
         self.log.info("Unpausing SiteSync")
         self._paused = False
 
@@ -692,9 +702,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
     # remote site
     def get_remote_site(self, project_name):
-        """
-            Returns remote (theirs) site for 'project_name' from settings
-        """
+        """Remote (theirs) site for project from settings."""
         sync_project_settings = self.get_sync_project_setting(project_name)
         remote_site = (
                 sync_project_settings["local_setting"].get("remote_site") or
@@ -745,11 +753,16 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         return roots
 
     def get_local_normalized_site(self, site_name):
-        """
-            Return 'site_name' or 'local' if 'site_name' is local id.
+        """Normlize local site name.
 
-            In some places Settings or Local Settings require 'local' instead
-            of real site name.
+         Return 'local' if 'site_name' is local id.
+
+        In some places Settings or Local Settings require 'local' instead
+        of real site name.
+
+        Returns:
+            str: Normalized site name.
+
         """
         if site_name == get_local_site_id():
             site_name = self.LOCAL_SITE
@@ -759,7 +772,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     def is_representation_on_site(
         self, project_name, representation_id, site_name, max_retries=None
     ):
-        """Checks if 'representation_id' has all files avail. on 'site_name'
+        """Check if representation has all files available on site.
 
         Args:
             project_name (str)
@@ -767,12 +780,14 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             site_name (str)
             max_retries (int) (optional) - provide only if method used in while
                 loop to bail out
+
         Returns:
-            (bool): True if 'representation_id' has all files correctly on the
-            'site_name'
+            bool: True if representation has all files correctly on the site.
+
         Raises:
-              (ValueError)  Only If 'max_retries' provided if upload/download
-        failed too many times to limit infinite loop check.
+              ValueError  Only If 'max_retries' provided if upload/download
+                failed too many times to limit infinite loop check.
+
         """
         representation_status = self.get_repre_sync_state(
             project_name, [representation_id], site_name)
@@ -860,13 +875,14 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         Change of file status on one site actually means same change on
         'alternate' site. (eg. artists publish to 'studio', 'sftp' is using
-        same location >> file is accesible on 'sftp' site right away.
+        same location >> file is accessible on 'sftp' site right away.
 
         Args:
-            project_name (str): name of project
-            representation_id (uuid)
-            processed_site (str): real site_name of published/uploaded file
-            file_id (uuid): DB id of file handled
+            project_name (str): Project name.
+            representation_id (str): Representation id.
+            processed_site (str): Real site_name of published/uploaded file
+            file_id (str): File id of file handled.
+
         """
         sites = self._transform_sites_from_settings(self.sync_studio_settings)
         sites[self.DEFAULT_SITE] = {"provider": "local_drive",
@@ -905,13 +921,14 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     def get_repre_info_for_versions(
         self, project_name, version_ids, active_site, remote_site
     ):
-        """Returns representation documents for versions and sites combi
+        """Returns representation for versions and sites combi
 
         Args:
-            project_name (str)
-            version_ids (list): of version[id]
-            active_site (string): 'local', 'studio' etc
-            remote_site (string): dtto
+            project_name (str): Project name
+            version_ids (Iterable[str]): Version ids.
+            active_site (str): 'local', 'studio' etc
+            remote_site (str): dtto
+
         Returns:
 
         """
@@ -951,12 +968,25 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     """ End of Public API """
 
     def _is_available(self, repre, status):
-        """Helper to decide if repre is download/uploaded on site"""
+        """Helper to decide if repre is download/uploaded on site.
+
+        Returns:
+            int: 1 if available, 0 if not.
+
+        """
         return int(repre[status]["status"] == SiteSyncStatus.OK)
 
     def get_local_file_path(self, project_name, site_name, file_path):
-        """
-            Externalized for app
+        """Externalized for app.
+
+        Args:
+            project_name (str): Project name.
+            site_name (str): Site name.
+            file_path (str): File path from other site.
+
+        Returns:
+            str: Resolved local path.
+
         """
         handler = LocalDriveHandler(project_name, site_name)
         local_file_path = handler.resolve_path(file_path)
@@ -964,11 +994,10 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         return local_file_path
 
     def tray_init(self):
-        """
-            Actual initialization of Sync Server for Tray.
+        """Initialization of Site Sync Server for Tray.
 
-            Called when tray is initialized, it checks if addon should be
-            enabled. If not, no initialization necessary.
+        Called when tray is initialized, it checks if addon should be
+        enabled. If not, no initialization necessary.
         """
         self.server_init()
 
@@ -985,15 +1014,11 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         self.sitesync_thread = SiteSyncThread(self)
 
     def tray_start(self):
-        """
-            Triggered when Tray is started.
+        """Triggered when Tray is started.
 
-            Checks if configuration presets are available and if there is
-            any provider ('gdrive', 'S3') that is activated
-            (eg. has valid credentials).
-
-        Returns:
-            None
+        Checks if configuration presets are available and if there is
+        any provider ('gdrive', 'S3') that is activated
+        (eg. has valid credentials).
         """
         self.server_start()
 
@@ -1005,10 +1030,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                           "Synchronization not possible.")
 
     def tray_exit(self):
-        """
-            Stops sync thread if running.
+        """Stops sync thread if running.
 
-            Called from Addon Manager
+        Called from Addon Manager
         """
         self.server_exit()
 
@@ -1037,14 +1061,13 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         return self.sitesync_thread.is_running
 
     def get_anatomy(self, project_name):
-        """
-            Get already created or newly created anatomy for project
+        """Get already created or newly created anatomy for project
 
-            Args:
-                project_name (string):
+        Args:
+            project_name (str): Project name.
 
-            Return:
-                (Anatomy)
+        Return:
+            Anatomy: Project anatomy object.
         """
         from ayon_core.pipeline import Anatomy
 
@@ -1109,15 +1132,17 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     ):
         """ Handles pulling sitesync's settings for enabled 'project_name'
 
-            Args:
-                project_name (str): used in project settings
-                exclude_locals (bool): ignore overrides from Local Settings
-                cached (bool): use pre-cached values, or return fresh ones
-                    cached values needed for single loop (with all overrides)
-                    fresh values needed for Local settings (without overrides)
-            Returns:
-                (dict): settings dictionary for the enabled project,
-                    empty if no settings or sync is disabled
+        Args:
+            project_name (str): used in project settings
+            exclude_locals (bool): ignore overrides from Local Settings
+            cached (bool): use pre-cached values, or return fresh ones
+                cached values needed for single loop (with all overrides)
+                fresh values needed for Local settings (without overrides)
+
+        Returns:
+            (dict): settings dictionary for the enabled project,
+                empty if no settings or sync is disabled
+
         """
         # presets set already, do not call again and again
         # self.log.debug("project preset {}".format(self.presets))
@@ -1174,11 +1199,16 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     def _get_default_site_configs(
         self, sync_enabled=True, project_name=None, proj_settings=None
     ):
-        """
-            Returns settings for 'studio' and user's local site
+        """Settings for 'studio' and user's local site
 
-            Returns base values from setting, not overridden by Local Settings,
-            eg. value used to push TO LS not to get actual value for syncing.
+        Returns base values from setting, not overridden by Local Settings,
+        eg. value used to push TO LS not to get actual value for syncing.
+
+        Args:
+            sync_enabled (Optional[bool]): Is sync enabled.
+            project_name (Optional[str]): Project name.
+            project_settings (Optional[dict]): Project settings.
+
         """
         local_site_id = get_local_site_id()
         roots = self._get_project_roots_for_site(project_name, local_site_id)
@@ -1199,9 +1229,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         return all_sites
 
     def get_provider_for_site(self, project_name=None, site=None):
-        """
-            Return provider name for site (unique name across all projects.
-        """
+        """Get provider name for site (unique name across all projects)."""
         sites = {self.DEFAULT_SITE: "local_drive",
                  self.LOCAL_SITE: "local_drive",
                  get_local_site_id(): "local_drive"}
@@ -1236,14 +1264,15 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             better performance. Goal is to get as few representations as
             possible.
         Args:
-            project_name (string):
-            active_site (string): identifier of current active site (could be
+            project_name (str):
+            active_site (str): identifier of current active site (could be
                 'local_0' when working from home, 'studio' when working in the
                 studio (default)
-            remote_site (string): identifier of remote site I want to sync to
+            remote_site (str): identifier of remote site I want to sync to
 
         Returns:
-            (list) of dictionaries
+            list[dict]: Representation states.
+
         """
         self.log.debug("Check representations for: {}-{}".format(active_site,
                                                                  remote_site))
@@ -1277,15 +1306,15 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         return representations
 
     def check_status(self, file, local_site, remote_site, config_preset):
-        """
-            Check synchronization status for single 'file' of single
-            'representation' by single 'provider'.
+        """Check synchronization status of a file.
+
+        The file is on representation status is checked for single 'provider'.
             (Eg. check if 'scene.ma' of lookdev.v10 should be synced to GDrive
 
-            Always is comparing local record, eg. site with
-            'name' == self.presets[PROJECT_NAME]['config']["active_site"]
+        Always is comparing local record, eg. site with
+            'name' == self.presets[PROJECT_NAME]["config"]["active_site"]
 
-            This leads to trigger actual upload or download, there is
+        This leads to trigger actual upload or download, there is
             a use case 'studio' <> 'remote' where user should publish
             to 'studio', see progress in Tray GUI, but do not do
             physical upload/download
@@ -1295,12 +1324,14 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             case only user has the data and must U/D.
 
         Args:
-            file (dictionary):  of file from representation in Mongo
-            local_site (string):  - local side of compare (usually 'studio')
-            remote_site (string):  - gdrive etc.
-            config_preset (dict): config about active site, retries
+            file_info (dict): File info from site sync database.
+            local_site (str): Local site of compare (usually 'studio').
+            remote_site (str): Remote site (gdrive etc).
+            config_preset (dict): Config about active site, retries.
+
         Returns:
-            (string) - one of SyncStatus
+            int: Sync status value of representation.
+
         """
         if get_local_site_id() not in (local_site, remote_site):
             # don't do upload/download for studio sites
@@ -1339,19 +1370,17 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         priority=None,
         pause=None
     ):
-        """
-            Update 'provider' portion of records in DB with success (file_id)
-            or error (exception)
+        """Update 'provider' portion of records in DB.
 
         Args:
-            project_name (string): name of project - force to db connection as
-              each file might come from different collection
-            new_file_id (string):
-            file (dictionary): info about processed file (pulled from DB)
-            representation (dict): representation from DB
-            site_name (str):
-            side (string): 'local' | 'remote'
-            error (string): exception message
+            project_name (str): Project name. Force to db connection as
+                each file might come from different collection.
+            representation (dict): Representation entity.
+            site_name (str): Site name.
+            new_file_id (Optional[str]): File id of new file.
+            file (dict[str, Any]): info about processed file (pulled from DB)
+            side (str): 'local' | 'remote'
+            error (str): exception message
             progress (float): 0-1 of progress of upload/download
             priority (int): 0-100 set priority
             pause (bool): stop synchronizing (only before starting of download,
@@ -1450,11 +1479,11 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             Should be used when repre should be synced to new site.
 
         Args:
-            project_name (string): name of project (eg. collection) in DB
-            representation_id(string): id of representation
-            file_id (string):  file id in representation
-            side (string): local or remote side
-            site_name (string): for adding new site
+            project_name (str): name of project (eg. collection) in DB
+            representation_id (str): Representation id.
+            file_id (str): File id in representation.
+            side (str): Local or remote side.
+            site_name (str): for adding new site
 
         Raises:
             SiteAlreadyPresentError - if adding already existing site and
@@ -1557,7 +1586,10 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         remote_site_name=None,
         **kwargs
     ):
-        """Use server endpoint to get synchronization info for repre_id(s).
+        """Use server endpoint to get synchronization info for representation.
+
+        Warning:
+            Logic of this
 
         Args:
             project_name (str):
@@ -1596,9 +1628,11 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             local_site_name (str)
             remote_site_name (str)
             all other parameters for `Get Site Sync State` endpoint if
-                necessary
+                necessary.
+
         Returns:
-            (dict) {repre_id: (float, float)}
+            dict[str, tuple[float, float]]: Progress by representation id.
+
         """
         representations = self._get_repres_state(project_name,
                                                  representation_ids,
@@ -1643,15 +1677,16 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         remote_site_name=None,
         **kwargs
     ):
-        """Use server endpoint to get synchronization info for representations.
+        """Use server endpoint to get sync info for representations.
 
         Args:
-            project_name (str):
-            representation_ids (list): even single repre should be in []
-            local_site_name (str)
-            remote_site_name (str)
-            all other parameters for `Get Site Sync State` endpoint if
+            project_name (str): Project name.
+            representation_ids (Iterable[str]): Representation ids.
+            local_site_name (str): Local site name.
+            remote_site_name (str): Remote site name.
+            kwargs: All other parameters for `Get Site Sync State` endpoint if
                 necessary
+
         """
         if not remote_site_name:
             remote_site_name = local_site_name
@@ -1681,10 +1716,20 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         remote_site_name,
         **kwargs
     ):
-        """Returns aggregate state for version_ids
+        """Returns aggregated state for version ids.
+
+        Args:
+            project_name (str): Project name.
+            version_ids (Iterable[str]): Version ids.
+            local_site_name (str): Local site name.
+            remote_site_name (str): Remote site name.
+            kwargs: All other parameters for `Get Site Sync State` endpoint if
+                necessary.
 
         Returns:
-            (dict): {version_id: (local_status, remote_status)}
+            dict[str, tuple[float, float]]: Status by version id.
+                Example: {version_id: (local_status, remote_status)}
+
         """
         payload_dict = {
             "localSite": local_site_name,
@@ -1715,16 +1760,13 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         return version_statuses
 
     def _remove_local_file(self, project_name, representation_id, site_name):
-        """
-            Removes all local files for 'site_name' of 'representation_id'
+        """Removes all local files for 'site_name' of 'representation_id'
 
-            Args:
-                project_name (string): project name (must match DB)
-                representation_id (string): uuid value
-                site_name (string): name of configured and active site
+        Args:
+            project_name (str): Project name.
+            representation_id (str): Representation id.
+            site_name (str): name of configured and active site
 
-            Returns:
-                only logs, catches IndexError and OSError
         """
         my_local_site = get_local_site_id()
         if my_local_site != site_name:
@@ -1791,12 +1833,15 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """
             Return count of seconds before next synchronization loop starts
             after finish of previous loop.
+
         Returns:
             (int): in seconds
         """
         if not project_name:
             return 60
 
+        # TODO this is used in global loop it should not be based on
+        #   project settings.
         ld = self.sync_project_settings[project_name]["config"]["loop_delay"]
         return int(ld)
 
