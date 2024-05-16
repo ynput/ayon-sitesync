@@ -6,6 +6,7 @@ import threading
 import copy
 import signal
 from collections import deque, defaultdict
+import collections
 import click
 import platform
 
@@ -113,7 +114,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         return "addons/{}/{}".format(self.name, self.version)
 
     def get_plugin_paths(self):
-        return {"publish": os.path.join(SYNC_ADDON_DIR, "plugins", "publish")}
+        return {
+            "publish": os.path.join(SYNC_ADDON_DIR, "plugins", "publish")
+        }
 
     def get_site_icons(self):
         """Icons for sites.
@@ -188,8 +191,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if not site_name:
             site_name = self.DEFAULT_SITE
 
-        representation = get_representation_by_id(project_name,
-                                                  representation_id)
+        representation = get_representation_by_id(
+            project_name, representation_id
+        )
 
         files = representation.get("files", [])
         if not files:
@@ -214,21 +218,23 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                     self.log.info(msg)
                     raise SiteAlreadyPresentError(msg)
 
-        new_site_files = []
-        for repre_file in files:
-            new_site_files.append({
+        new_site_files = [
+            {
                 "size": repre_file["size"],
                 "status": status,
                 "timestamp": datetime.now().timestamp(),
                 "id": repre_file["id"],
                 "fileHash": repre_file["hash"]
-            })
+            }
+            for repre_file in files
+        ]
 
         payload_dict = {"files": new_site_files}
         representation_id = representation_id.replace("-", "")
 
-        self._set_state_sync_state(project_name, representation_id, site_name,
-                                   payload_dict)
+        self._set_state_sync_state(
+            project_name, representation_id, site_name, payload_dict
+        )
 
     def remove_site(
         self,
@@ -300,15 +306,16 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         def create_metadata(name, created=True):
             """Create sync site metadata for site with `name`"""
-            metadata = {"name": name}
             if created:
-                metadata["status"] = SiteSyncStatus.OK
+                status = SiteSyncStatus.OK
             else:
-                metadata["status"] = SiteSyncStatus.QUEUED
-            return metadata
+                status = SiteSyncStatus.QUEUED
+            return {"name": name, "status": status}
 
-        if (not self.sync_studio_settings["enabled"] or
-                not self.sync_project_settings[project_name]["enabled"]):
+        if (
+            not self.sync_studio_settings["enabled"]
+            or not self.sync_project_settings[project_name]["enabled"]
+        ):
             return [create_metadata(self.DEFAULT_SITE)]
 
         local_site = self.get_active_site(project_name)
@@ -317,12 +324,13 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         # Attached sites metadata by site name
         # That is the local site, remote site, the always accesible sites
         # and their alternate sites (alias of sites with different protocol)
-        attached_sites = dict()
-        attached_sites[local_site] = create_metadata(local_site)
-
+        attached_sites = {
+            local_site: create_metadata(local_site)
+        }
         if remote_site and remote_site not in attached_sites:
-            attached_sites[remote_site] = create_metadata(remote_site,
-                                                          created=False)
+            attached_sites[remote_site] = create_metadata(
+                remote_site, created=False
+            )
 
         attached_sites = self._add_alternative_sites(attached_sites)
         # add skeleton for sites where it should be always synced to
@@ -341,9 +349,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         as a local id must be running.
         Example is dropbox site serving as a backup solution
         """
+        sync_settings = self.get_sync_project_setting(project_name)
         always_accessible_sites = (
-            self.get_sync_project_setting(project_name)["config"].
-            get("always_accessible_on", [])
+            sync_settings["config"].get("always_accessible_on", [])
         )
         return [site.strip() for site in always_accessible_sites]
 
@@ -363,9 +371,10 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         for site_name in additional_sites.keys():
             # Get alternate sites (stripped names) for this site name
-            alt_sites = alt_site_pairs.get(site_name)
-            alt_sites = [site.strip() for site in alt_sites]
-            alt_sites = set(alt_sites)
+            alt_sites = {
+                site.strip()
+                for site in alt_site_pairs.get(site_name)
+            }
 
             # If no alternative sites we don't need to add
             if not alt_sites:
@@ -373,8 +382,14 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
             # Take a copy of data of the first alternate site that is already
             # defined as an attached site to match the same state.
-            match_meta = next((attached_sites[site] for site in alt_sites
-                               if site in attached_sites), None)
+            match_meta = next(
+                (
+                    attached_sites[site]
+                    for site in alt_sites
+                    if site in attached_sites
+                ),
+                None
+            )
             if not match_meta:
                 continue
 
@@ -419,8 +434,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
                 for alt_alt_site in alt_site_pairs[alt_site]:
                     if (
-                            alt_alt_site != site_name
-                            and alt_alt_site not in alt_sites
+                        alt_alt_site != site_name
+                        and alt_alt_site not in alt_sites
                     ):
                         alt_sites.add(alt_alt_site)
                         sites_queue.append(alt_alt_site)
@@ -465,63 +480,73 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             reset_missing (bool): if True reset site in DB if missing
                 physically
         """
-        self.log.debug("Validation of {} for {} started".format(project_name,
-                                                                site_name))
-        representations = list(get_representations(project_name))
-        if not representations:
+        self.log.debug("Validation of {} for {} started".format(
+            project_name, site_name
+        ))
+        repre_entities = list(get_representations(project_name))
+        if not repre_entities:
             self.log.debug("No repre found")
             return
 
         sites_added = 0
         sites_reset = 0
-        for repre in representations:
-            repre_id = repre["_id"]
-            for repre_file in repre.get("files", []):
+        for repre_entity in repre_entities:
+            repre_id = repre_entity["id"]
+            for repre_file in repre_entity.get("files", []):
                 try:
-                    is_on_site = site_name in [site["name"]
-                                               for site in repre_file["sites"]
-                                               if (site.get("created_dt") and
-                                               not site.get("error"))]
+                    is_on_site = site_name in [
+                        site["name"]
+                        for site in repre_file["sites"]
+                        if (site.get("created_dt") and not site.get("error"))
+                    ]
                 except (TypeError, AttributeError):
                     self.log.debug("Structure error in {}".format(repre_id))
                     continue
 
                 file_path = repre_file.get("path", "")
-                local_file_path = self.get_local_file_path(project_name,
-                                                           site_name,
-                                                           file_path)
+                local_file_path = self.get_local_file_path(
+                    project_name, site_name, file_path
+                )
 
-                file_exists = (local_file_path and
-                               os.path.exists(local_file_path))
+                file_exists = (
+                    local_file_path and os.path.exists(local_file_path)
+                )
                 if not is_on_site:
                     if file_exists:
-                        self.log.debug(
-                            "Adding site {} for {}".format(site_name,
-                                                           repre_id))
-
-                        created_dt = datetime.fromtimestamp(
-                            os.path.getmtime(local_file_path))
-                        self.add_site(project_name, repre,
-                                      site_name=site_name,
-                                      file_id=repre_file["_id"],
-                                      force=True)
+                        self.log.debug("Adding site {} for {}".format(
+                            site_name, repre_id
+                        ))
+                        self.add_site(
+                            project_name,
+                            repre_entity,
+                            site_name=site_name,
+                            file_id=repre_file["_id"],
+                            force=True
+                        )
                         sites_added += 1
                 else:
                     if not file_exists and reset_missing:
-                        self.log.debug("Resetting site {} for {}".
-                                       format(site_name, repre_id))
+                        self.log.debug(
+                            "Resetting site {} for {}".format(
+                                site_name, repre_id
+                            ))
                         self.reset_site_on_representation(
-                            project_name, repre_id, site_name=site_name,
-                            file_id=repre_file["_id"])
+                            project_name,
+                            repre_id,
+                            site_name=site_name,
+                            file_id=repre_file["_id"]
+                        )
                         sites_reset += 1
 
         if sites_added % 100 == 0:
             self.log.debug("Sites added {}".format(sites_added))
 
-        self.log.debug("Validation of {} for {} ended".format(project_name,
-                                                              site_name))
-        self.log.info("Sites added {}, sites reset {}".format(sites_added,
-                                                              reset_missing))
+        self.log.debug("Validation of {} for {} ended".format(
+            project_name, site_name
+        ))
+        self.log.info("Sites added {}, sites reset {}".format(
+            sites_added, reset_missing
+        ))
 
     # TODO hook to some trigger - no Sync Queue anymore
     def pause_representation(
@@ -540,9 +565,10 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """
         self.log.info("Pausing SiteSync for {}".format(representation_id))
         self._paused_representations.add(representation_id)
-        representation = get_representation_by_id(project_name,
-                                                  representation_id)
-        self.update_db(project_name, representation, site_name, pause=True)
+        repre_entity = get_representation_by_id(
+            project_name, representation_id
+        )
+        self.update_db(project_name, repre_entity, site_name, pause=True)
 
     # TODO hook to some trigger - no Sync Queue anymore
     def unpause_representation(
@@ -563,9 +589,10 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         except KeyError:
             pass
         # self.paused_representations is not persistent
-        representation = get_representation_by_id(project_name,
-                                                  representation_id)
-        self.update_db(project_name, representation, site_name, pause=False)
+        repre_entity = get_representation_by_id(
+            project_name, representation_id
+        )
+        self.update_db(project_name, repre_entity, site_name, pause=False)
 
     def is_representation_paused(
         self, representation_id, check_parents=False, project_name=None
@@ -584,12 +611,14 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             bool: Is representation paused now.
 
         """
-        condition = representation_id in self._paused_representations
+        is_paused = representation_id in self._paused_representations
         if check_parents and project_name:
-            condition = condition or \
-                self.is_project_paused(project_name) or \
-                self.is_paused()
-        return condition
+            is_paused = (
+                is_paused
+                or self.is_project_paused(project_name)
+                or self.is_paused()
+            )
+        return is_paused
 
     # TODO hook to some trigger - no Sync Queue anymore
     def pause_project(self, project_name):
@@ -630,10 +659,10 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             bool: Is project paused.
 
         """
-        condition = project_name in self._paused_projects
+        is_paused = project_name in self._paused_projects
         if check_parents:
-            condition = condition or self.is_paused()
-        return condition
+            is_paused = is_paused or self.is_paused()
+        return is_paused
 
     # TODO hook to some trigger - no Sync Queue anymore
     def pause_server(self):
@@ -652,21 +681,6 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     def is_paused(self):
         """ Is server paused """
         return self._paused
-
-    def get_active_site(self, project_name):
-        """
-            Returns active (mine) site for 'project_name' from settings
-
-            Returns:
-                (string) ['studio' - if Site Sync disabled
-                          get_local_site_id - if 'local'
-                          any other site name from local settings or
-                          project settings (site could be forced from PS)
-        """
-        active_site_type = self.get_active_site_type(project_name)
-        if active_site_type == self.LOCAL_SITE:
-            return get_local_site_id()
-        return active_site_type
 
     def get_active_site_type(self, project_name, local_settings=None):
         """Active site which is defined by artist.
@@ -699,19 +713,37 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if not sync_project_settings["enabled"]:
             return "studio"
 
-        active_site = (
-                sync_project_settings["local_setting"].get("active_site") or
-                sync_project_settings["config"]["active_site"])
+        return (
+            sync_project_settings["local_setting"].get("active_site")
+            or sync_project_settings["config"]["active_site"]
+        )
 
-        return active_site
+    def get_active_site(self, project_name):
+        """Returns active (mine) site for project from settings.
+
+        Output logic:
+            - 'studio' if Site Sync is disabled
+            - value from 'get_local_site_id' if active site is 'local'
+            - any other site name from local settings
+                or project settings (site could be forced from PS)
+
+        Returns:
+            str: Site name.
+
+        """
+        active_site_type = self.get_active_site_type(project_name)
+        if active_site_type == self.LOCAL_SITE:
+            return get_local_site_id()
+        return active_site_type
 
     # remote site
     def get_remote_site(self, project_name):
         """Remote (theirs) site for project from settings."""
         sync_project_settings = self.get_sync_project_setting(project_name)
         remote_site = (
-                sync_project_settings["local_setting"].get("remote_site") or
-                sync_project_settings["config"]["remote_site"])
+            sync_project_settings["local_setting"].get("remote_site")
+            or sync_project_settings["config"]["remote_site"]
+        )
         if remote_site == self.LOCAL_SITE:
             return get_local_site_id()
 
@@ -858,9 +890,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """
         if self.enabled:
             if single:
-                project_settings = get_addon_project_settings(self.name,
-                                                              self.version,
-                                                              project_name)
+                project_settings = get_addon_project_settings(
+                    self.name, self.version, project_name
+                )
             else:
                 project_settings = self.get_sync_project_setting(project_name)
             if project_settings and project_settings.get("enabled"):
@@ -889,8 +921,10 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         """
         sites = self._transform_sites_from_settings(self.sync_studio_settings)
-        sites[self.DEFAULT_SITE] = {"provider": "local_drive",
-                                    "alternative_sites": []}
+        sites[self.DEFAULT_SITE] = {
+            "provider": "local_drive",
+            "alternative_sites": []
+        }
 
         alternate_sites = []
         for site_name, site_info in sites.items():
@@ -919,9 +953,12 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         for alt_site in alternate_sites:
             self.log.debug("Adding alternate {} to {}".format(
                 alt_site, representation_id))
-            self._set_state_sync_state(project_name, representation_id,
-                                       site_name,
-                                       payload_dict)
+            self._set_state_sync_state(
+                project_name,
+                representation_id,
+                site_name,
+                payload_dict
+            )
 
     # TODO - for Loaders
     def get_repre_info_for_versions(
@@ -938,40 +975,50 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         Returns:
 
         """
-        endpoint = "{}/projects/{}/sitesync/state".format(self.endpoint_prefix,
-                                                          project_name)
+        version_ids = set(version_ids)
+        endpoint = "{}/projects/{}/sitesync/state".format(
+            self.endpoint_prefix, project_name
+        )
 
         # get to upload
-        kwargs = {"localSite": active_site,
-                  "remoteSite": remote_site,
-                  "versionIdFilter": version_ids}
+        kwargs = {
+            "localSite": active_site,
+            "remoteSite": remote_site,
+            "versionIdFilter": list(version_ids)
+        }
 
         # kwargs["representationId"] = "94dca33a-7705-11ed-8c0a-34e12d91d510"
 
         response = ayon_api.get(endpoint, **kwargs)
-        representations = response.data.get("representations", [])
-        repinfo_by_version_id = defaultdict(dict)
-        for repre in representations:
-            version_id = repre["versionId"]
-            repre_info = repinfo_by_version_id.get(version_id)
-            if repre_info:
-                repinfo_by_version_id[version_id]["repre_count"] += 1
-                repinfo_by_version_id[version_id]["avail_repre_local"] += \
-                    self._is_available(repre, "localStatus")
-                repinfo_by_version_id[version_id]["avail_repre_remote"] += \
-                    self._is_available(repre, "remoteStatus")
-            else:
-                repinfo_by_version_id[version_id] = {
-                    "id": version_id,
-                    "repre_count": 1,
-                    "avail_repre_local": self._is_available(repre,
-                                                            "localStatus"),
-                    "avail_repre_remote": self._is_available(repre,
-                                                             "remoteStatus"),
-                }
+        repre_states = response.data.get("representations", [])
+        repre_info_by_version_id = {
+            version_id: {
+                "id": version_id,
+                "repre_count": 0,
+                "avail_repre_local": 0,
+                "avail_repre_remote": 0,
+            }
+            for version_id in version_ids
+        }
+        repre_states_by_version_id = collections.defaultdict(list)
+        for repre_state in repre_states:
+            version_id = repre_state["versionId"]
+            repre_states_by_version_id[version_id].append(repre_state)
 
-        return repinfo_by_version_id.values()
-    """ End of Public API """
+        for version_id, repre_states in repre_states_by_version_id.items():
+            repre_info = repre_info_by_version_id[version_id]
+            repre_info["repre_count"] = len(repre_states)
+            repre_info["avail_repre_local"] = sum(
+                self._is_available(repre_state, "localStatus")
+                for repre_state in repre_states
+            )
+            repre_info["avail_repre_remote"] = sum(
+                self._is_available(repre_state, "remoteStatus")
+                for repre_state in repre_states
+            )
+
+        return list(repre_info_by_version_id.values())
+    # --- End of Public API ---
 
     def _is_available(self, repre, status):
         """Helper to decide if repre is download/uploaded on site.
