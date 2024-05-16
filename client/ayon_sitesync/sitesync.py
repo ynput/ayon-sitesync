@@ -193,18 +193,19 @@ def resolve_paths(
 
 
 def _site_is_working(addon, project_name, site_name, site_config):
-    """
-        Confirm that 'site_name' is configured correctly for 'project_name'.
+    """Confirm that 'site_name' is configured correctly for 'project_name'.
 
-        Must be here as lib.factory access doesn't work in Python 2 hosts.
+    Must be here as lib.factory access doesn't work in Python 2 hosts.
 
-        Args:
-            addon (SiteSyncAddon)
-            project_name(string):
-            site_name(string):
-            site_config (dict): configuration for site from Settings
-        Returns
-            (bool)
+    Args:
+        addon (SiteSyncAddon): SiteSyncAddon object.
+        project_name (str): Project name.
+        site_name (str): Site name.
+        site_config (dict): Configuration for site from Settings.
+
+    Returns
+        bool: Site is working.
+
     """
     provider = addon.get_provider_for_site(site=site_name)
     handler = lib.factory.get_provider(

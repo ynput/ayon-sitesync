@@ -1606,8 +1606,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             )
         }
 
-    def _set_state_sync_state(self, project_name, representation_id, site_name,
-                              payload_dict):
+    def _set_state_sync_state(
+        self, project_name, representation_id, site_name, payload_dict
+    ):
         """Calls server endpoint to store sync info for 'representation_id'."""
         endpoint = "{}/{}/state/{}/{}".format(
             self.endpoint_prefix,
