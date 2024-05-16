@@ -3,8 +3,9 @@ import os
 import asyncio
 import threading
 import concurrent.futures
-import traceback
 import time
+
+from typing import Union
 
 from ayon_core.lib import get_local_site_id
 from ayon_core.addon import AddonsManager
@@ -225,6 +226,7 @@ def download_last_published_workfile(
     workfile_representation: dict,
     max_retries: int,
     anatomy: Anatomy = None,
+    sitesync_addon=None,
 ) -> Union[str, None]:
     """Download the last published workfile
 
@@ -236,19 +238,10 @@ def download_last_published_workfile(
         max_retries (int): complete file failure only after so many attempts
         anatomy (Optional[Anatomy]): Project anatomy, used for optimization.
             Defaults to None.
+        sitesync_addon (Optional[SiteSyncAddon]): Addons manager,
+            used for optimization.
 
     Returns:
-        Union[str, None]: last published workfile path localized
-
-    """
-    if not anatomy:
-        anatomy = Anatomy(project_name)
-
-    # Get sync server addon
-    sitesync_addon = AddonsManager().addons_by_name.get("sitesync")
-    if not sitesync_addon or not sitesync_addon.enabled:
-        print("Site sync addon is disabled or unavailable.")
-        return
         Union[str, None]: last published workfile path localized
 
     """
@@ -258,13 +251,25 @@ def download_last_published_workfile(
                 task_name, host_name
             )
         )
-        return
+        return None
+
+    if sitesync_addon is None:
+        addons_manager = AddonsManager()
+        sitesync_addon = addons_manager.addons_by_name.get("sitesync")
+
+    # Get sync server addon
+    if not sitesync_addon or not sitesync_addon.enabled:
+        print("Site sync addon is disabled or unavailable.")
+        return None
+
+    if not anatomy:
+        anatomy = Anatomy(project_name)
 
     last_published_workfile_path = get_representation_path_with_anatomy(
         workfile_representation, anatomy
     )
     if not last_published_workfile_path:
-        return
+        return None
 
     # If representation isn't available on remote site, then return.
     remote_site = sitesync_addon.get_remote_site(project_name)
@@ -278,7 +283,7 @@ def download_last_published_workfile(
                 task_name, remote_site
             )
         )
-        return
+        return None
 
     # Get local site
     local_site_id = get_local_site_id()

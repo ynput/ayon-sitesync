@@ -1547,7 +1547,10 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                       force=True)
 
     def get_progress_for_repre(
-        self, representation, local_site_name, remote_site_name=None
+        self,
+        representation,
+        local_site_name,
+        remote_site_name=None
     ):
         """Calculates average progress for representation.
 
@@ -1578,13 +1581,15 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if not sync_status:
             return progress
 
-        mapping = {"localStatus": local_site_name,
-                   "remoteStatus": remote_site_name}
+        mapping = {
+            "localStatus": local_site_name,
+            "remoteStatus": remote_site_name
+        }
         files = {local_site_name: 0, remote_site_name: 0}
-        doc_files = sync_status.get("files") or []
-        for doc_file in doc_files:
+        file_states = sync_status.get("files") or []
+        for file_state in file_states:
             for status in mapping.keys():
-                status_info = doc_file[status]
+                status_info = file_state[status]
                 site_name = mapping[status]
                 files[site_name] += 1
                 norm_progress = max(progress[site_name], 0)
