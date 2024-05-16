@@ -1078,7 +1078,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """
         from ayon_core.pipeline import Anatomy
 
-        return self._anatomies.get("project_name") or Anatomy(project_name)
+        return self._anatomies.get(project_name) or Anatomy(project_name)
 
     @property
     def sync_studio_settings(self):
