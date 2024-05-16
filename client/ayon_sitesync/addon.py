@@ -1,6 +1,8 @@
+
 import os
 import sys
 import time
+import inspect
 from datetime import datetime
 import threading
 import copy
@@ -1596,26 +1598,13 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             project_name, representation_id, site_name, file_id, force=True
         )
 
-    def get_progress_for_repre(
+    def _get_progress_for_repre_new(
         self,
+        project_name,
         representation,
         local_site_name,
         remote_site_name=None
     ):
-        """Calculates average progress for representation.
-
-        If site has created_dt >> fully available >> progress == 1
-
-        Could be calculated in aggregate if it would be too slow
-
-        Returns:
-            (dict) with active and remote sites progress
-            {'studio': 1.0, 'gdrive': -1} - gdrive site is not present
-                -1 is used to highlight the site should be added
-            {'studio': 1.0, 'gdrive': 0.0} - gdrive site is present, not
-                uploaded yet
-        """
-        project_name = representation["context"]["project"]["name"]
         representation_id = representation["id"]
         sync_status = self.get_repre_sync_state(
             project_name,
@@ -1660,6 +1649,54 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 progress[remote_site_name] / max(files[remote_site_name], 1)
             )
         }
+
+    def _get_progress_for_repe_old(
+        self,
+        representation,
+        local_site_name,
+        remote_site_name=None
+    ):
+        return self._get_progress_for_repre_new(
+            representation["context"]["project"]["name"],
+            representation,
+            local_site_name,
+            remote_site_name
+        )
+
+    def get_progress_for_repre(self, *args, **kwargs):
+        """Calculates average progress for representation.
+
+        If site has created_dt >> fully available >> progress == 1
+
+        Could be calculated in aggregate if it would be too slow
+
+        Returns:
+            (dict) with active and remote sites progress
+            {'studio': 1.0, 'gdrive': -1} - gdrive site is not present
+                -1 is used to highlight the site should be added
+            {'studio': 1.0, 'gdrive': 0.0} - gdrive site is present, not
+                uploaded yet
+
+        """
+        sig_new = inspect.signature(self._get_progress_for_repe_new)
+        sig_old = inspect.signature(self._get_progress_for_repe_old)
+        try:
+            sig_new.bind(*args, **kwargs)
+            return self._get_progress_for_repe_new(*args, **kwargs)
+        except TypeError:
+            pass
+
+        try:
+            sig_old.bind(*args, **kwargs)
+            print(
+                "Using old signature of 'get_progress_for_repre'"
+                " please add project name as first argument."
+            )
+            return self._get_progress_for_repe_old(*args, **kwargs)
+        except TypeError:
+            pass
+
+        return self._get_progress_for_repe_new(*args, **kwargs)
 
     def _set_state_sync_state(
         self, project_name, representation_id, site_name, payload_dict
