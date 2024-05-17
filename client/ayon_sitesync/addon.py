@@ -789,10 +789,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             if tries >= max_retries:
                 raise ValueError("Failed too many times")
 
-        if status.get("progress") or status.get("error"):
-            return False
-
-        return True
+        return status["status"] == SiteSyncStatus.OK
 
     def _reset_timer_with_rest_api(self):
         # POST to webserver sites to add to representations
