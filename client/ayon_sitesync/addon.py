@@ -6,11 +6,10 @@ import threading
 import copy
 import signal
 from collections import deque, defaultdict
-import click
 import platform
 
 from ayon_core.settings import get_studio_settings
-from ayon_core.addon import AYONAddon, ITrayAddon, IPluginPaths
+from ayon_core.addon import AYONAddon, ITrayAddon, IPluginPaths, click_wrap
 from ayon_core.lib import get_local_site_id
 
 import ayon_api
@@ -1801,44 +1800,46 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         return int(ld)
 
     def cli(self, click_group):
-        click_group.add_command(cli_main)
+        main = click_wrap.group(
+            self._cli_main,
+            name=self.name,
+            help="SiteSync addon related commands."
+        )
 
+        main.command(
+            self._cli_command_syncservice,
+            name="syncservice",
+            help="Launch Site Sync under entered site."
+        ).option(
+            "-a",
+            "--active_site",
+            help="Name of active site",
+            required=True
+        )
+        click_group.add_command(main.to_click_obj())
 
-@click.group(SiteSyncAddon.name, help="SiteSync addon related commands.")
-def cli_main():
-    pass
+    def _cli_main(self):
+        pass
 
+    def _cli_command_syncservice(self, active_site):
+        """Launch sync server under entered site.
 
-@cli_main.command()
-@click.option(
-    "-a",
-    "--active_site",
-    required=True,
-    help="Name of active stie")
-def syncservice(active_site):
-    """Launch sync server under entered site.
+        This should be ideally used by system service (such us systemd or upstart
+        on linux and window service).
+        """
 
-    This should be ideally used by system service (such us systemd or upstart
-    on linux and window service).
-    """
+        os.environ["AYON_SITE_ID"] = active_site
 
-    from ayon_core.addon import AddonsManager
+        def signal_handler(sig, frame):
+            print("You pressed Ctrl+C. Process ended.")
+            self.server_exit()
+            sys.exit(0)
 
-    os.environ["AYON_SITE_ID"] = active_site
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
 
-    def signal_handler(sig, frame):
-        print("You pressed Ctrl+C. Process ended.")
-        sitesync_addon.server_exit()
-        sys.exit(0)
+        self.server_init()
+        self.server_start()
 
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-    manager = AddonsManager()
-    sitesync_addon = manager.addons_by_name["sitesync"]
-
-    sitesync_addon.server_init()
-    sitesync_addon.server_start()
-
-    while True:
-        time.sleep(1.0)
+        while True:
+            time.sleep(1.0)
