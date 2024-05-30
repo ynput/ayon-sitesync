@@ -736,6 +736,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         sitesync_settings = self.get_sync_project_setting(project_name)
 
         roots = {}
+        if not sitesync_settings["enabled"]:
+            return roots
         local_project_settings = sitesync_settings["local_setting"]
         if site_name == "local":
             for root_info in local_project_settings["local_roots"]:
