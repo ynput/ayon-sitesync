@@ -312,7 +312,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             attached_sites[remote_site] = create_metadata(remote_site,
                                                           created=False)
 
-        attached_sites = self._add_alternative_sites(attached_sites)
+        attached_sites = self._add_alternative_sites(
+            project_name, attached_sites)
         # add skeleton for sites where it should be always synced to
         # usually it would be a backup site which is handled by separate
         # background process
@@ -335,7 +336,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         )
         return [site.strip() for site in always_accessible_sites]
 
-    def _add_alternative_sites(self, attached_sites):
+    def _add_alternative_sites(self, project_name, attached_sites):
         """Add skeleton document for alternative sites
 
         Each new configured site in System Setting could serve as a alternative
@@ -344,12 +345,12 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         Example is sftp site serving studio files via sftp protocol, physically
         file is only in studio, sftp server has this location mounted.
         """
-        additional_sites = self._transform_sites_from_settings(
-            self.sync_studio_settings)
+        sync_project_settings = self.get_sync_project_setting(project_name)
+        all_sites = sync_project_settings["sites"]
 
-        alt_site_pairs = self._get_alt_site_pairs(additional_sites)
+        alt_site_pairs = self._get_alt_site_pairs(all_sites)
 
-        for site_name in additional_sites.keys():
+        for site_name in all_sites.keys():
             # Get alternate sites (stripped names) for this site name
             alt_sites = alt_site_pairs.get(site_name)
             alt_sites = [site.strip() for site in alt_sites]
@@ -889,6 +890,10 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         # not yet available on processed_site, wont update alternate site yet
         if not sync_state:
             return
+        for file_info in sync_state["files"]:
+            # expose status of remote site, it is expected on the server
+            file_info["status"] = file_info["remoteStatus"]["status"]
+
         payload_dict = {"files": sync_state["files"]}
 
         alternate_sites = set(alternate_sites)
@@ -896,7 +901,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             self.log.debug("Adding alternate {} to {}".format(
                 alt_site, representation_id))
             self._set_state_sync_state(project_name, representation_id,
-                                       site_name,
+                                       alt_site,
                                        payload_dict)
 
     # TODO - for Loaders
@@ -1140,6 +1145,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 configured_site = {}
                 site_name = whole_site_info["name"]
                 configured_site["enabled"] = True
+                configured_site["alternative_sites"] = (
+                    whole_site_info["alternative_sites"]
+                )
 
                 provider_specific = whole_site_info[whole_site_info["provider"]]
                 configured_site["root"] = provider_specific.pop("roots",
