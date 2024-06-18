@@ -59,11 +59,11 @@ class EditableScopes:
 
 
 def get_linked_representation_id(
-        project_name,
-        repre_entity,
-        link_type,
-        max_depth=None
-    ):
+    project_name,
+    repre_entity,
+    link_type,
+    max_depth=None
+):
     """Returns list of linked ids of particular type (if provided).
 
     One of representation document or representation id must be passed.
