@@ -8,12 +8,11 @@ import threading
 import copy
 import signal
 from collections import deque, defaultdict
-import collections
-import click
+
 import platform
 
 from ayon_core.settings import get_studio_settings
-from ayon_core.addon import AYONAddon, ITrayAddon, IPluginPaths
+from ayon_core.addon import AYONAddon, ITrayAddon, IPluginPaths, click_wrap
 from ayon_core.lib import get_local_site_id
 
 import ayon_api
@@ -334,7 +333,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 remote_site, created=False
             )
 
-        attached_sites = self._add_alternative_sites(attached_sites)
+        attached_sites = self._add_alternative_sites(
+            project_name, attached_sites)
         # add skeleton for sites where it should be always synced to
         # usually it would be a backup site which is handled by separate
         # background process
@@ -357,7 +357,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         )
         return [site.strip() for site in always_accessible_sites]
 
-    def _add_alternative_sites(self, attached_sites):
+    def _add_alternative_sites(self, project_name, attached_sites):
         """Add skeleton document for alternative sites
 
         Each new configured site in System Setting could serve as a alternative
@@ -366,12 +366,12 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         Example is sftp site serving studio files via sftp protocol, physically
         file is only in studio, sftp server has this location mounted.
         """
-        additional_sites = self._transform_sites_from_settings(
-            self.sync_studio_settings)
+        sync_project_settings = self.get_sync_project_setting(project_name)
+        all_sites = sync_project_settings["sites"]
 
-        alt_site_pairs = self._get_alt_site_pairs(additional_sites)
+        alt_site_pairs = self._get_alt_site_pairs(all_sites)
 
-        for site_name in additional_sites.keys():
+        for site_name in all_sites.keys():
             # Get alternate sites (stripped names) for this site name
             alt_sites = {
                 site.strip()
@@ -784,6 +784,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         sitesync_settings = self.get_sync_project_setting(project_name)
 
         roots = {}
+        if not sitesync_settings["enabled"]:
+            return roots
         local_project_settings = sitesync_settings["local_setting"]
         if site_name == "local":
             for root_info in local_project_settings["local_roots"]:
@@ -843,10 +845,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             if tries >= max_retries:
                 raise ValueError("Failed too many times")
 
-        if status.get("progress") or status.get("error"):
-            return False
-
-        return True
+        return status["status"] == SiteSyncStatus.OK
 
     def _reset_timer_with_rest_api(self):
         # POST to webserver sites to add to representations
@@ -949,16 +948,21 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         # not yet available on processed_site, wont update alternate site yet
         if not sync_state:
             return
+        for file_info in sync_state["files"]:
+            # expose status of remote site, it is expected on the server
+            file_info["status"] = file_info["remoteStatus"]["status"]
+
         payload_dict = {"files": sync_state["files"]}
 
         alternate_sites = set(alternate_sites)
         for alt_site in alternate_sites:
             self.log.debug("Adding alternate {} to {}".format(
                 alt_site, representation_id))
+
             self._set_state_sync_state(
                 project_name,
                 representation_id,
-                site_name,
+                alt_site,
                 payload_dict
             )
 
@@ -1002,7 +1006,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             }
             for version_id in version_ids
         }
-        repre_states_by_version_id = collections.defaultdict(list)
+        repre_states_by_version_id = defaultdict(list)
         for repre_state in repre_states:
             version_id = repre_state["versionId"]
             repre_states_by_version_id[version_id].append(repre_state)
@@ -1223,15 +1227,18 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if not self.enabled:
             return sites
 
-        for site_info in settings.get("sites", []):
-            provider_specific = site_info[site_info["provider"]]
+        for whole_site_info in settings.get("sites", []):
+            site_name = whole_site_info["name"]
+            provider_specific = copy.deepcopy(
+                whole_site_info[whole_site_info["provider"]]
+            )
             configured_site = {
                 "enabled": True,
+                "alternative_sites": whole_site_info["alternative_sites"],
                 "root": provider_specific.pop("roots", None)
             }
             configured_site.update(provider_specific)
 
-            site_name = site_info["name"]
             sites[site_name] = configured_site
         return sites
 
@@ -1903,7 +1910,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             for version_id in version_ids
         }
 
-        repre_avail_by_version_id = collections.defaultdict(list)
+        repre_avail_by_version_id = defaultdict(list)
         for repre_avail in response.data["representations"]:
             version_id = repre_avail["versionId"]
             repre_avail_by_version_id[version_id].append(repre_avail)
@@ -2021,44 +2028,46 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         return int(ld)
 
     def cli(self, click_group):
-        click_group.add_command(cli_main)
+        main = click_wrap.group(
+            self._cli_main,
+            name=self.name,
+            help="SiteSync addon related commands."
+        )
 
+        main.command(
+            self._cli_command_syncservice,
+            name="syncservice",
+            help="Launch Site Sync under entered site."
+        ).option(
+            "-a",
+            "--active_site",
+            help="Name of active site",
+            required=True
+        )
+        click_group.add_command(main.to_click_obj())
 
-@click.group(SiteSyncAddon.name, help="SiteSync addon related commands.")
-def cli_main():
-    pass
+    def _cli_main(self):
+        pass
 
+    def _cli_command_syncservice(self, active_site):
+        """Launch sync server under entered site.
 
-@cli_main.command()
-@click.option(
-    "-a",
-    "--active_site",
-    required=True,
-    help="Name of active stie")
-def syncservice(active_site):
-    """Launch sync server under entered site.
+        This should be ideally used by system service (such us systemd or upstart
+        on linux and window service).
+        """
 
-    This should be ideally used by system service (such us systemd or upstart
-    on linux and window service).
-    """
+        os.environ["AYON_SITE_ID"] = active_site
 
-    from ayon_core.addon import AddonsManager
+        def signal_handler(sig, frame):
+            print("You pressed Ctrl+C. Process ended.")
+            self.server_exit()
+            sys.exit(0)
 
-    os.environ["AYON_SITE_ID"] = active_site
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
 
-    def signal_handler(sig, frame):
-        print("You pressed Ctrl+C. Process ended.")
-        sitesync_addon.server_exit()
-        sys.exit(0)
+        self.server_init()
+        self.server_start()
 
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-    manager = AddonsManager()
-    sitesync_addon = manager.addons_by_name["sitesync"]
-
-    sitesync_addon.server_init()
-    sitesync_addon.server_start()
-
-    while True:
-        time.sleep(1.0)
+        while True:
+            time.sleep(1.0)
