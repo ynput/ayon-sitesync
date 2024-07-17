@@ -796,7 +796,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
     def _reset_timer_with_rest_api(self):
         # POST to webserver sites to add to representations
-        webserver_url = os.environ.get("OPENPYPE_WEBSERVER_URL")
+        webserver_url = os.environ.get("AYON_WEBSERVER_URL")
         if not webserver_url:
             self.log.warning("Couldn't find webserver url")
             return
