@@ -2,19 +2,18 @@ from __future__ import annotations
 from typing import Any, Type
 from nxtools import logging
 import os
-from fastapi import Depends, Path, Query, Response
+from fastapi import Path, Query, Response
 
 from ayon_server.addons import BaseServerAddon
 
 from ayon_server.access.utils import folder_access_list
-from ayon_server.api import (
-    dep_current_user, 
-    dep_project_name, 
-    dep_representation_id, 
+from ayon_server.api.dependencies import (
+    CurrentUser,
+    ProjectName,
+    RepresentationID, 
 )
 
 from ayon_server.entities.representation import RepresentationEntity
-from ayon_server.entities.user import UserEntity
 from ayon_server.lib.postgres import Postgres
 from ayon_server.utils import SQLTool
 
@@ -76,8 +75,8 @@ class SiteSync(BaseServerAddon):
 
     async def get_site_sync_params(
         self,
-        project_name: str = Depends(dep_project_name),
-        user: UserEntity = Depends(dep_current_user),
+        project_name: ProjectName,
+        user: CurrentUser,
     ) -> SiteSyncParamsModel:
 
         access_list = await folder_access_list(user, project_name, "read")
@@ -113,9 +112,9 @@ class SiteSync(BaseServerAddon):
 
     async def get_user_sites(
         self,
-        project_name: str = Depends(dep_project_name),
-        user: UserEntity = Depends(dep_current_user),
-    ) -> {}:
+        project_name: ProjectName,
+        user: CurrentUser,
+    ) -> dict[str, list[str]]:
         sites = {"active_site": [], "remote_site": []}
         site_infos = await Postgres.fetch("select id, data from sites")
         for site_info in site_infos:
@@ -139,8 +138,8 @@ class SiteSync(BaseServerAddon):
     #
     async def get_site_sync_state(
         self,
-        project_name: str = Depends(dep_project_name),
-        user: UserEntity = Depends(dep_current_user),
+        project_name: ProjectName,
+        user: CurrentUser,
         representationIds: list[str] | None = Query(
             None,
             description="Filter by representation ids",
@@ -396,9 +395,11 @@ class SiteSync(BaseServerAddon):
     async def set_site_sync_representation_state(
         self,
         post_data: RepresentationStateModel,
-        project_name: str = Depends(dep_project_name),
-        representation_id: str = Depends(dep_representation_id),
+        project_name: ProjectName,
+        representation_id: RepresentationID,
         site_name: str = Path(...),  # TODO: add regex validator/dependency here! Important!
+
+        # TODO: add CurrentUser dependency here! This endpoint is public now!
     ) -> Response:
         """Adds site information to representation.
 
@@ -498,9 +499,9 @@ class SiteSync(BaseServerAddon):
 
     async def remove_site_sync_representation_state(
         self,
-        project_name: str = Depends(dep_project_name),
-        user: UserEntity = Depends(dep_current_user),
-        representation_id: str = Depends(dep_representation_id),
+        project_name: ProjectName,
+        user: CurrentUser,
+        representation_id: RepresentationID,
         site_name: str = Path(...),  # TODO: add regex validator/dependency here! Important!
     ) -> Response:
         await check_sync_status_table(project_name)
@@ -539,7 +540,7 @@ def get_overal_status(files: dict) -> StatusEnum:
     return StatusEnum.NOT_AVAILABLE
 
 
-async def check_sync_status_table(project_name):
+async def check_sync_status_table(project_name: str) -> None:
     """Checks for existence of `sitesync_files_status` table, creates if not."""
     await Postgres.execute(
         f"CREATE TABLE IF NOT EXISTS project_{project_name}.sitesync_files_status ("
