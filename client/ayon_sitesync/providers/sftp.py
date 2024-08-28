@@ -115,9 +115,17 @@ class SFTPHandler(AbstractProvider):
 
         return os.path.basename(path)
 
-    def upload_file(self, source_path, target_path,
-                    addon, project_name, file, representation, site,
-                    overwrite=False):
+    def upload_file(
+        self,
+        source_path,
+        target_path,
+        addon,
+        project_name,
+        file,
+        representation,
+        site,
+        overwrite=False
+    ):
         """
             Uploads single file from 'source_path' to destination 'path'.
             It creates all folders on the path if are not existing.
@@ -160,9 +168,17 @@ class SFTPHandler(AbstractProvider):
         conn = self._get_conn()
         conn.put(source_path, target_path)
 
-    def download_file(self, source_path, target_path,
-                      addon, project_name, file, representation, site,
-                      overwrite=False):
+    def download_file(
+        self,
+        source_path,
+        target_path,
+        addon,
+        project_name,
+        file,
+        representation,
+        site,
+        overwrite=False
+    ):
         """
             Downloads single file from 'source_path' (remote) to 'target_path'.
             It creates all folders on the local_path if are not existing.
@@ -305,8 +321,17 @@ class SFTPHandler(AbstractProvider):
                 pysftp.exceptions.ConnectionException):
             self.log.warning("Couldn't connect", exc_info=True)
 
-    def _mark_progress(self, project_name, file, representation, server,
-                       site_name, source_path, target_path, direction):
+    def _mark_progress(
+        self,
+        project_name,
+        file,
+        repre_status,
+        server,
+        site_name,
+        source_path,
+        target_path,
+        direction
+    ):
         """
             Updates progress field in DB by values 0-1.
 
@@ -328,14 +353,15 @@ class SFTPHandler(AbstractProvider):
                 status_val = target_file_size / source_file_size
                 last_tick = time.time()
                 self.log.debug(direction + "ed %d%%." % int(status_val * 100))
-                server.update_db(project_name=project_name,
-                                 new_file_id=None,
-                                 file=file,
-                                 representation=representation,
-                                 site_name=site_name,
-                                 side=side,
-                                 progress=status_val
-                                 )
+                server.update_db(
+                    project_name=project_name,
+                    new_file_id=None,
+                    file=file,
+                    repre_status=repre_status,
+                    site_name=site_name,
+                    side=side,
+                    progress=status_val
+                )
             try:
                 if direction == "upload":
                     target_file_size = self.conn.stat(target_path).st_size

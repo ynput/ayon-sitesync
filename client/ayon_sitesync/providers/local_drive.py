@@ -30,9 +30,18 @@ class LocalDriveHandler(AbstractProvider):
     def is_active(self):
         return True
 
-    def upload_file(self, source_path, target_path,
-                    server, project_name, file, representation, site,
-                    overwrite=False, direction="Upload"):
+    def upload_file(
+        self,
+        source_path,
+        target_path,
+        server,
+        project_name,
+        file,
+        representation,
+        site,
+        overwrite=False,
+        direction="Upload"
+    ):
         """
             Copies file from 'source_path' to 'target_path'
         """
@@ -44,8 +53,16 @@ class LocalDriveHandler(AbstractProvider):
             thread = threading.Thread(target=self._copy,
                                       args=(source_path, target_path))
             thread.start()
-            self._mark_progress(project_name, file, representation, server,
-                                site, source_path, target_path, direction)
+            self._mark_progress(
+                project_name,
+                file,
+                representation,
+                server,
+                site,
+                source_path,
+                target_path,
+                direction
+            )
         else:
             if os.path.exists(target_path):
                 raise ValueError("File {} exists, set overwrite".
@@ -59,10 +76,17 @@ class LocalDriveHandler(AbstractProvider):
         """
             Download a file form 'source_path' to 'local_path'
         """
-        return self.upload_file(source_path, local_path,
-                                server, project_name, file,
-                                representation, site,
-                                overwrite, direction="Download")
+        return self.upload_file(
+            source_path,
+            local_path,
+            server,
+            project_name,
+            file,
+            representation,
+            site,
+            overwrite,
+            direction="Download"
+        )
 
     def delete_file(self, path):
         """
@@ -140,8 +164,17 @@ class LocalDriveHandler(AbstractProvider):
         except shutil.SameFileError:
             print("same files, skipping")
 
-    def _mark_progress(self, project_name, file, representation, server,
-                       site_name, source_path, target_path, direction):
+    def _mark_progress(
+        self,
+        project_name,
+        file,
+        repre_status,
+        server,
+        site_name,
+        source_path,
+        target_path,
+        direction
+    ):
         """
             Updates progress field in DB by values 0-1.
 
@@ -162,7 +195,7 @@ class LocalDriveHandler(AbstractProvider):
                 server.update_db(project_name=project_name,
                                  new_file_id=None,
                                  file=file,
-                                 representation=representation,
+                                 repre_status=repre_status,
                                  site_name=site_name,
                                  side=side,
                                  progress=status_val

@@ -59,7 +59,7 @@ class GDriveHandler(AbstractProvider):
     LABEL = "Google Drive"
 
     FOLDER_STR = "application/vnd.google-apps.folder"
-    MY_DRIVE_STR = 'My Drive'  # name of root folder of regular Google drive
+    MY_DRIVE_STR = "My Drive"  # name of root folder of regular Google drive
     CHUNK_SIZE = 2097152  # must be divisible by 256! used for upload chunks
 
     def __init__(self, project_name, site_name, tree=None, presets=None):
@@ -143,7 +143,7 @@ class GDriveHandler(AbstractProvider):
         """
         # GDrive roots cannot be locally overridden
         # TODO implement multiple roots
-        return {"root": {"work": self.presets['root']}}
+        return {"root": {"work": self.presets["root"]}}
 
     def get_tree(self):
         """
@@ -172,36 +172,36 @@ class GDriveHandler(AbstractProvider):
         folder_id = self.folder_path_exists(path)
         if folder_id:
             return folder_id
-        parts = path.split('/')
+        parts = path.split("/")
         folders_to_create = []
 
         while parts:
             folders_to_create.append(parts.pop())
-            path = '/'.join(parts)
+            path = "/".join(parts)
             path = path.strip()
             folder_id = self.folder_path_exists(path)  # lowest common path
             if folder_id:
                 while folders_to_create:
                     new_folder_name = folders_to_create.pop()
                     folder_metadata = {
-                        'name': new_folder_name,
-                        'mimeType': 'application/vnd.google-apps.folder',
-                        'parents': [folder_id]
+                        "name": new_folder_name,
+                        "mimeType": "application/vnd.google-apps.folder",
+                        "parents": [folder_id]
                     }
                     folder = self.service.files().create(
                         body=folder_metadata,
                         supportsAllDrives=True,
-                        fields='id').execute()
+                        fields="id").execute()
                     folder_id = folder["id"]
 
-                    new_path_key = path + '/' + new_folder_name
+                    new_path_key = path + "/" + new_folder_name
                     self.get_tree()[new_path_key] = {"id": folder_id}
 
                     path = new_path_key
                 return folder_id
 
     def upload_file(self, source_path, path,
-                    addon, project_name, file, representation, site_name,
+                    addon, project_name, file, repre_status, site_name,
                     overwrite=False):
         """
             Uploads single file from 'source_path' to destination 'path'.
@@ -216,7 +216,7 @@ class GDriveHandler(AbstractProvider):
             addon (SiteSync): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
-            representation (dict): complete repre containing 'file'
+            repre_status (dict): complete repre containing 'file'
             site_name (str): site name
 
         Returns:
@@ -244,28 +244,32 @@ class GDriveHandler(AbstractProvider):
             raise NotADirectoryError("Folder {} doesn't exists".format(path))
 
         file_metadata = {
-            'name': target_name
+            "name": target_name
         }
         media = MediaFileUpload(source_path,
-                                mimetype='application/octet-stream',
+                                mimetype="application/octet-stream",
                                 chunksize=self.CHUNK_SIZE,
                                 resumable=True)
 
         try:
             if not target_file:
                 # update doesnt like parent
-                file_metadata['parents'] = [folder_id]
+                file_metadata["parents"] = [folder_id]
 
-                request = self.service.files().create(body=file_metadata,
-                                                      supportsAllDrives=True,
-                                                      media_body=media,
-                                                      fields='id')
+                request = self.service.files().create(
+                    body=file_metadata,
+                    supportsAllDrives=True,
+                    media_body=media,
+                    fields="id"
+                )
             else:
-                request = self.service.files().update(fileId=target_file["id"],
-                                                      body=file_metadata,
-                                                      supportsAllDrives=True,
-                                                      media_body=media,
-                                                      fields='id')
+                request = self.service.files().update(
+                    fileId=target_file["id"],
+                    body=file_metadata,
+                    supportsAllDrives=True,
+                    media_body=media,
+                    fields="id"
+                )
 
             media.stream()
             self.log.debug("Start Upload! {}".format(source_path))
@@ -273,7 +277,7 @@ class GDriveHandler(AbstractProvider):
             status_val = 0
             while response is None:
                 if addon.is_representation_paused(
-                        representation["representationId"],
+                        repre_status["representationId"],
                         check_parents=True,
                         project_name=project_name):
                     raise ValueError("Paused during process, please redo.")
@@ -286,18 +290,18 @@ class GDriveHandler(AbstractProvider):
                     addon.update_db(project_name=project_name,
                                     new_file_id=None,
                                     file=file,
-                                    representation=representation,
+                                    repre_status=repre_status,
                                     site_name=site_name,
                                     side="remote",
                                     progress=status_val)
                 status, response = request.next_chunk()
 
         except errors.HttpError as ex:
-            if ex.resp['status'] == '404':
+            if ex.resp["status"] == "404":
                 return False
-            if ex.resp['status'] == '403':
+            if ex.resp["status"] == "403":
                 # real permission issue
-                if 'has not granted' in ex._get_reason().strip():
+                if "has not granted" in ex._get_reason().strip():
                     raise PermissionError(ex._get_reason().strip())
 
                 self.log.warning(
@@ -306,11 +310,19 @@ class GDriveHandler(AbstractProvider):
                 time.sleep(60)
                 return False
             raise
-        return response['id']
+        return response["id"]
 
-    def download_file(self, source_path, local_path,
-                      addon, project_name, file, representation, site_name,
-                      overwrite=False):
+    def download_file(
+        self,
+        source_path,
+        local_path,
+        addon,
+        project_name,
+        file,
+        repre_status,
+        site_name,
+        overwrite=False
+    ):
         """
             Downloads single file from 'source_path' (remote) to 'local_path'.
             It creates all folders on the local_path if are not existing.
@@ -325,7 +337,7 @@ class GDriveHandler(AbstractProvider):
             addon (SiteSync): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
-            representation (dict): complete repre containing 'file'
+            repre_status (dict): complete repre containing 'file'
             site_name (str): site name
 
         Returns:
@@ -360,7 +372,7 @@ class GDriveHandler(AbstractProvider):
             status_val = 0
             while response is None:
                 if addon.is_representation_paused(
-                        representation["representationId"],
+                        repre_status["representationId"],
                         check_parents=True,
                         project_name=project_name):
                     raise ValueError("Paused during process, please redo.")
@@ -369,15 +381,16 @@ class GDriveHandler(AbstractProvider):
                 if not last_tick or \
                         time.time() - last_tick >= addon.LOG_PROGRESS_SEC:
                     last_tick = time.time()
-                    self.log.debug("Downloaded %d%%." %
-                              int(status_val * 100))
-                    addon.update_db(project_name=project_name,
-                                    new_file_id=None,
-                                    file=file,
-                                    representation=representation,
-                                    site_name=site_name,
-                                    side="local",
-                                    progress=status_val)
+                    self.log.debug("Downloaded %d%%." % int(status_val * 100))
+                    addon.update_db(
+                        project_name=project_name,
+                        new_file_id=None,
+                        file=file,
+                        repre_status=repre_status,
+                        site_name=site_name,
+                        side="local",
+                        progress=status_val
+                    )
                 status, response = downloader.next_chunk()
 
         return target_name
@@ -400,16 +413,16 @@ class GDriveHandler(AbstractProvider):
         if not folder_id:
             raise ValueError("Not valid folder path {}".format(path))
 
-        fields = 'nextPageToken, files(id, name, parents)'
+        fields = "nextPageToken, files(id, name, parents)"
         q = self._handle_q("'{}' in parents ".format(folder_id))
         response = self.service.files().list(
             q=q,
             corpora="allDrives",
             includeItemsFromAllDrives=True,
             supportsAllDrives=True,
-            pageSize='1',
+            pageSize="1",
             fields=fields).execute()
-        children = response.get('files', [])
+        children = response.get("files", [])
         if children and not force:
             raise ValueError("Folder {} is not empty, use 'force'".
                              format(path))
@@ -454,7 +467,7 @@ class GDriveHandler(AbstractProvider):
         """
         folders = []
         page_token = None
-        fields = 'nextPageToken, files(id, name, parents)'
+        fields = "nextPageToken, files(id, name, parents)"
         while True:
             q = self._handle_q("mimeType='application/vnd.google-apps.folder'")
             response = self.service.files().list(
@@ -465,8 +478,8 @@ class GDriveHandler(AbstractProvider):
                 supportsAllDrives=True,
                 fields=fields,
                 pageToken=page_token).execute()
-            folders.extend(response.get('files', []))
-            page_token = response.get('nextPageToken', None)
+            folders.extend(response.get("files", []))
+            page_token = response.get("nextPageToken", None)
             if page_token is None:
                 break
 
@@ -481,7 +494,7 @@ class GDriveHandler(AbstractProvider):
         """
         files = []
         page_token = None
-        fields = 'nextPageToken, files(id, name, parents)'
+        fields = "nextPageToken, files(id, name, parents)"
         while True:
             q = self._handle_q("")
             response = self.service.files().list(
@@ -491,8 +504,8 @@ class GDriveHandler(AbstractProvider):
                 supportsAllDrives=True,
                 fields=fields,
                 pageToken=page_token).execute()
-            files.extend(response.get('files', []))
-            page_token = response.get('nextPageToken', None)
+            files.extend(response.get("files", []))
+            page_token = response.get("nextPageToken", None)
             if page_token is None:
                 break
 
@@ -512,7 +525,7 @@ class GDriveHandler(AbstractProvider):
 
         root, ext = os.path.splitext(file_path)
         if not ext:
-            file_path += '/'
+            file_path += "/"
 
         dir_path = os.path.dirname(file_path)
 
@@ -554,13 +567,13 @@ class GDriveHandler(AbstractProvider):
             corpora="allDrives",
             includeItemsFromAllDrives=True,
             supportsAllDrives=True,
-            fields='nextPageToken, files(id, name, parents, '
-                   'mimeType, modifiedTime,size,md5Checksum)').execute()
-        if len(response.get('files')) > 1:
+            fields="nextPageToken, files(id, name, parents, "
+                   "mimeType, modifiedTime,size,md5Checksum)").execute()
+        if len(response.get("files")) > 1:
             raise ValueError("Too many files returned for {} in {}"
                              .format(file_name, folder_id))
 
-        file = response.get('files', [])
+        file = response.get("files", [])
         if not file:
             return False
         return file[0]
@@ -579,7 +592,7 @@ class GDriveHandler(AbstractProvider):
             creds = service_account.Credentials.from_service_account_file(
                 credentials_path,
                 scopes=SCOPES)
-            service = build('drive', 'v3',
+            service = build("drive", "v3",
                             credentials=creds, cache_discovery=False)
         except Exception:
             log.error("Connection failed, " +
@@ -605,7 +618,7 @@ class GDriveHandler(AbstractProvider):
             for path in config_roots.values():
                 if self.MY_DRIVE_STR in path:
                     roots[self.MY_DRIVE_STR] = self.service.files()\
-                                                   .get(fileId='root')\
+                                                   .get(fileId="root")\
                                                    .execute()
                 else:
                     shared_drives = []
@@ -615,12 +628,12 @@ class GDriveHandler(AbstractProvider):
                         response = self.service.drives().list(
                             pageSize=100,
                             pageToken=page_token).execute()
-                        shared_drives.extend(response.get('drives', []))
-                        page_token = response.get('nextPageToken', None)
+                        shared_drives.extend(response.get("drives", []))
+                        page_token = response.get("nextPageToken", None)
                         if page_token is None:
                             break
 
-                    folders = path.split('/')
+                    folders = path.split("/")
                     if len(folders) < 2:
                         raise ValueError("Wrong root folder definition {}".
                                          format(path))
@@ -632,7 +645,7 @@ class GDriveHandler(AbstractProvider):
                                 "id": shared_drive["id"]}
             if self.MY_DRIVE_STR not in roots:  # add My Drive always
                 roots[self.MY_DRIVE_STR] = self.service.files() \
-                    .get(fileId='root').execute()
+                    .get(fileId="root").execute()
         except errors.HttpError:
             self.log.warning("HttpError in sync loop, "
                         "trying next loop",
@@ -747,7 +760,7 @@ class GDriveHandler(AbstractProvider):
         return " and ".join(parts)
 
 
-if __name__ == '__main__':
-    gd = GDriveHandler('gdrive')
+if __name__ == "__main__":
+    gd = GDriveHandler("gdrive")
     print(gd.root)
     print(gd.get_tree())

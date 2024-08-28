@@ -36,9 +36,17 @@ class AbstractProvider:
         """
 
     @abc.abstractmethod
-    def upload_file(self, source_path, path,
-                    addon, project_name, file, representation, site,
-                    overwrite=False):
+    def upload_file(
+        self,
+        source_path,
+        path,
+        addon,
+        project_name,
+        file,
+        repre_status,
+        site,
+        overwrite=False
+    ):
         """
             Copy file from 'source_path' to 'target_path' on provider.
             Use 'overwrite' boolean to rewrite existing file on provider
@@ -52,7 +60,7 @@ class AbstractProvider:
             addon (SiteSyncAddon): addon instance to call update_db on
             project_name (str): name of project_name
             file (dict): info about uploaded file (matches structure from db)
-            representation (dict): complete repre containing 'file'
+            repre_status (dict): complete repre containing 'file'
             site (str): site name
         Returns:
             (string) file_id of created/modified file ,
@@ -61,9 +69,17 @@ class AbstractProvider:
         pass
 
     @abc.abstractmethod
-    def download_file(self, source_path, local_path,
-                      addon, project_name, file, representation, site,
-                      overwrite=False):
+    def download_file(
+        self,
+        source_path,
+        local_path,
+        addon,
+        project_name,
+        file,
+        repre_status,
+        site,
+        overwrite=False
+    ):
         """
             Download file from provider into local system
 
@@ -76,7 +92,7 @@ class AbstractProvider:
             addon (SiteSyncAddon): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
-            representation (dict): complete repre containing 'file'
+            repre_status (dict): complete repre containing 'file'
             site (str): site name
         Returns:
             (string) file_id of created/modified file ,
