@@ -192,14 +192,15 @@ class LocalDriveHandler(AbstractProvider):
                 status_val = target_file_size / source_file_size
                 last_tick = time.time()
                 log.debug(direction + "ed %d%%." % int(status_val * 100))
-                server.update_db(project_name=project_name,
-                                 new_file_id=None,
-                                 file=file,
-                                 repre_status=repre_status,
-                                 site_name=site_name,
-                                 side=side,
-                                 progress=status_val
-                                 )
+                server.update_db(
+                    project_name=project_name,
+                    new_file_id=None,
+                    file=file,
+                    repre_status=repre_status,
+                    site_name=site_name,
+                    side=side,
+                    progress=status_val
+                )
             try:
                 target_file_size = os.path.getsize(target_path)
             except FileNotFoundError:
