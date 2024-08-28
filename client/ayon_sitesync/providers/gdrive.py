@@ -6,7 +6,6 @@ import six
 import platform
 
 from ayon_core.lib import Logger
-from ayon_core.settings import get_studio_settings
 
 from ayon_sitesync.utils import time_function, ResumableError
 from ayon_sitesync.providers.abstract_provider import AbstractProvider
@@ -287,13 +286,15 @@ class GDriveHandler(AbstractProvider):
                         time.time() - last_tick >= addon.LOG_PROGRESS_SEC:
                     last_tick = time.time()
                     self.log.debug("Uploaded %d%%." % int(status_val * 100))
-                    addon.update_db(project_name=project_name,
-                                    new_file_id=None,
-                                    file=file,
-                                    repre_status=repre_status,
-                                    site_name=site_name,
-                                    side="remote",
-                                    progress=status_val)
+                    addon.update_db(
+                        project_name=project_name,
+                        new_file_id=None,
+                        file=file,
+                        repre_status=repre_status,
+                        site_name=site_name,
+                        side="remote",
+                        progress=status_val
+                    )
                 status, response = request.next_chunk()
 
         except errors.HttpError as ex:
@@ -372,9 +373,10 @@ class GDriveHandler(AbstractProvider):
             status_val = 0
             while response is None:
                 if addon.is_representation_paused(
-                        repre_status["representationId"],
-                        check_parents=True,
-                        project_name=project_name):
+                    repre_status["representationId"],
+                    check_parents=True,
+                    project_name=project_name
+                ):
                     raise ValueError("Paused during process, please redo.")
                 if status:
                     status_val = float(status.progress())
