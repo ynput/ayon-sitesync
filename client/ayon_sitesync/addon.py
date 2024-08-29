@@ -496,10 +496,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         repre_states = self.get_representations_sync_state(
             project_name, repre_ids, site_name, site_name)
 
-        repres = get_representations(
-            project_name, representation_ids=repre_ids
-        )
-        for repre_entity in repres:
+        for repre_entity in repre_entities:
             repre_id = repre_entity["id"]
             is_on_site = False
             repre_state = repre_states.get(repre_id)
