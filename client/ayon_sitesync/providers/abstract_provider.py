@@ -86,14 +86,13 @@ class AbstractProvider:
         Args:
             source_path (string): absolute path on provider
             local_path (string): absolute path with or without name of the file
-            overwrite (boolean): replace existing file
-
-            arguments for saving progress:
             addon (SiteSyncAddon): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
-            repre_status (dict): complete repre containing 'file'
+            repre_status (dict): complete representation containing
+                sync progress
             site (str): site name
+            overwrite (boolean): replace existing file
         Returns:
             (string) file_id of created/modified file ,
                 throws FileExistsError, FileNotFoundError exceptions
