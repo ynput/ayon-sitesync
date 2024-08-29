@@ -122,8 +122,8 @@ class SFTPHandler(AbstractProvider):
         addon,
         project_name,
         file,
-        representation,
-        site,
+        repre_status,
+        site_name,
         overwrite=False
     ):
         """
@@ -131,16 +131,15 @@ class SFTPHandler(AbstractProvider):
             It creates all folders on the path if are not existing.
 
         Args:
-            source_path (string):
-            target_path (string): absolute path with or without name of a file
-            overwrite (boolean): replace existing file
-
-            arguments for saving progress:
-            addon (SiteSync): addon instance to call update_db on
+            source_path (string): absolute path on provider
+            target_path (string): absolute path with or without name of the file
+            addon (SiteSyncAddon): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
-            representation (dict): complete repre containing 'file'
-            site (str): site name
+            repre_status (dict): complete representation containing
+                sync progress
+            site_name (str): site name
+            overwrite (boolean): replace existing file
 
         Returns:
             (string) file_id of created/modified file ,
@@ -158,8 +157,16 @@ class SFTPHandler(AbstractProvider):
         thread = threading.Thread(target=self._upload,
                                   args=(source_path, target_path))
         thread.start()
-        self._mark_progress(project_name, file, representation, addon,
-                            site, source_path, target_path, "upload")
+        self._mark_progress(
+            project_name,
+            file,
+            repre_status,
+            addon,
+            site_name,
+            source_path,
+            target_path,
+            "upload"
+        )
 
         return os.path.basename(target_path)
 
@@ -175,8 +182,8 @@ class SFTPHandler(AbstractProvider):
         addon,
         project_name,
         file,
-        representation,
-        site,
+        repre_status,
+        site_name,
         overwrite=False
     ):
         """
@@ -186,15 +193,14 @@ class SFTPHandler(AbstractProvider):
 
         Args:
             source_path (string): absolute path on provider
-            target_path (string): absolute path with or without name of a file
-            overwrite (boolean): replace existing file
-
-            arguments for saving progress:
-            addon (SiteSync): addon instance to call update_db on
+            target_path (string): absolute path with or without name of the file
+            addon (SiteSyncAddon): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
-            representation (dict): complete repre containing 'file'
-            site (str): site name
+            repre_status (dict): complete representation containing
+                sync progress
+            site_name (str): site name
+            overwrite (boolean): replace existing file
 
         Returns:
             (string) file_id of created/modified file ,
@@ -212,8 +218,16 @@ class SFTPHandler(AbstractProvider):
         thread = threading.Thread(target=self._download,
                                   args=(source_path, target_path))
         thread.start()
-        self._mark_progress(project_name, file, representation, addon,
-                            site, source_path, target_path, "download")
+        self._mark_progress(
+            project_name,
+            file,
+            repre_status,
+            addon,
+            site_name,
+            source_path,
+            target_path,
+            "download"
+        )
 
         return os.path.basename(target_path)
 

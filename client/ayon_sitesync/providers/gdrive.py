@@ -199,24 +199,31 @@ class GDriveHandler(AbstractProvider):
                     path = new_path_key
                 return folder_id
 
-    def upload_file(self, source_path, path,
-                    addon, project_name, file, repre_status, site_name,
-                    overwrite=False):
+    def upload_file(
+        self,
+        source_path,
+        target_path,
+        addon,
+        project_name,
+        file,
+        repre_status,
+        site_name,
+        overwrite=False
+    ):
         """
             Uploads single file from 'source_path' to destination 'path'.
             It creates all folders on the path if are not existing.
 
         Args:
-            source_path (string):
-            path (string): absolute path with or without name of the file
-            overwrite (boolean): replace existing file
-
-            arguments for saving progress:
-            addon (SiteSync): addon instance to call update_db on
+            source_path (string): absolute path on provider
+            target_path (string): absolute path with or without name of the file
+            addon (SiteSyncAddon): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
-            repre_status (dict): complete repre containing 'file'
+            repre_status (dict): complete representation containing
+                sync progress
             site_name (str): site name
+            overwrite (boolean): replace existing file
 
         Returns:
             (string) file_id of created/modified file ,
@@ -226,21 +233,22 @@ class GDriveHandler(AbstractProvider):
             raise FileNotFoundError("Source file {} doesn't exist."
                                     .format(source_path))
 
-        root, ext = os.path.splitext(path)
+        root, ext = os.path.splitext(target_path)
         if ext:
             # full path
-            target_name = os.path.basename(path)
-            path = os.path.dirname(path)
+            target_name = os.path.basename(target_path)
+            target_path = os.path.dirname(target_path)
         else:
             target_name = os.path.basename(source_path)
-        target_file = self.file_path_exists(path + "/" + target_name)
+        target_file = self.file_path_exists(target_path + "/" + target_name)
         if target_file and not overwrite:
             raise FileExistsError("File already exists, "
                                   "use 'overwrite' argument")
 
-        folder_id = self.folder_path_exists(path)
+        folder_id = self.folder_path_exists(target_path)
         if not folder_id:
-            raise NotADirectoryError("Folder {} doesn't exists".format(path))
+            raise NotADirectoryError(
+                "Folder {} doesn't exists".format(target_path))
 
         file_metadata = {
             "name": target_name
@@ -332,14 +340,13 @@ class GDriveHandler(AbstractProvider):
         Args:
             source_path (string): absolute path on provider
             local_path (string): absolute path with or without name of the file
-            overwrite (boolean): replace existing file
-
-            arguments for saving progress:
-            addon (SiteSync): addon instance to call update_db on
+            addon (SiteSyncAddon): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
-            repre_status (dict): complete repre containing 'file'
+            repre_status (dict): complete representation containing
+                sync progress
             site_name (str): site name
+            overwrite (boolean): replace existing file
 
         Returns:
             (string) file_id of created/modified file ,
