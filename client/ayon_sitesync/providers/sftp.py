@@ -115,24 +115,31 @@ class SFTPHandler(AbstractProvider):
 
         return os.path.basename(path)
 
-    def upload_file(self, source_path, target_path,
-                    addon, project_name, file, representation, site,
-                    overwrite=False):
+    def upload_file(
+        self,
+        source_path,
+        target_path,
+        addon,
+        project_name,
+        file,
+        repre_status,
+        site_name,
+        overwrite=False
+    ):
         """
             Uploads single file from 'source_path' to destination 'path'.
             It creates all folders on the path if are not existing.
 
         Args:
-            source_path (string):
-            target_path (string): absolute path with or without name of a file
-            overwrite (boolean): replace existing file
-
-            arguments for saving progress:
-            addon (SiteSync): addon instance to call update_db on
+            source_path (string): absolute path on provider
+            target_path (string): absolute path with or without name of the file
+            addon (SiteSyncAddon): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
-            representation (dict): complete repre containing 'file'
-            site (str): site name
+            repre_status (dict): complete representation containing
+                sync progress
+            site_name (str): site name
+            overwrite (boolean): replace existing file
 
         Returns:
             (string) file_id of created/modified file ,
@@ -150,8 +157,16 @@ class SFTPHandler(AbstractProvider):
         thread = threading.Thread(target=self._upload,
                                   args=(source_path, target_path))
         thread.start()
-        self._mark_progress(project_name, file, representation, addon,
-                            site, source_path, target_path, "upload")
+        self._mark_progress(
+            project_name,
+            file,
+            repre_status,
+            addon,
+            site_name,
+            source_path,
+            target_path,
+            "upload"
+        )
 
         return os.path.basename(target_path)
 
@@ -160,9 +175,17 @@ class SFTPHandler(AbstractProvider):
         conn = self._get_conn()
         conn.put(source_path, target_path)
 
-    def download_file(self, source_path, target_path,
-                      addon, project_name, file, representation, site,
-                      overwrite=False):
+    def download_file(
+        self,
+        source_path,
+        target_path,
+        addon,
+        project_name,
+        file,
+        repre_status,
+        site_name,
+        overwrite=False
+    ):
         """
             Downloads single file from 'source_path' (remote) to 'target_path'.
             It creates all folders on the local_path if are not existing.
@@ -170,15 +193,14 @@ class SFTPHandler(AbstractProvider):
 
         Args:
             source_path (string): absolute path on provider
-            target_path (string): absolute path with or without name of a file
-            overwrite (boolean): replace existing file
-
-            arguments for saving progress:
-            addon (SiteSync): addon instance to call update_db on
+            target_path (string): absolute path with or without name of the file
+            addon (SiteSyncAddon): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
-            representation (dict): complete repre containing 'file'
-            site (str): site name
+            repre_status (dict): complete representation containing
+                sync progress
+            site_name (str): site name
+            overwrite (boolean): replace existing file
 
         Returns:
             (string) file_id of created/modified file ,
@@ -196,8 +218,16 @@ class SFTPHandler(AbstractProvider):
         thread = threading.Thread(target=self._download,
                                   args=(source_path, target_path))
         thread.start()
-        self._mark_progress(project_name, file, representation, addon,
-                            site, source_path, target_path, "download")
+        self._mark_progress(
+            project_name,
+            file,
+            repre_status,
+            addon,
+            site_name,
+            source_path,
+            target_path,
+            "download"
+        )
 
         return os.path.basename(target_path)
 
@@ -305,8 +335,17 @@ class SFTPHandler(AbstractProvider):
                 pysftp.exceptions.ConnectionException):
             self.log.warning("Couldn't connect", exc_info=True)
 
-    def _mark_progress(self, project_name, file, representation, server,
-                       site_name, source_path, target_path, direction):
+    def _mark_progress(
+        self,
+        project_name,
+        file,
+        repre_status,
+        server,
+        site_name,
+        source_path,
+        target_path,
+        direction
+    ):
         """
             Updates progress field in DB by values 0-1.
 
@@ -328,14 +367,15 @@ class SFTPHandler(AbstractProvider):
                 status_val = target_file_size / source_file_size
                 last_tick = time.time()
                 self.log.debug(direction + "ed %d%%." % int(status_val * 100))
-                server.update_db(project_name=project_name,
-                                 new_file_id=None,
-                                 file=file,
-                                 representation=representation,
-                                 site_name=site_name,
-                                 side=side,
-                                 progress=status_val
-                                 )
+                server.update_db(
+                    project_name=project_name,
+                    new_file_id=None,
+                    file=file,
+                    repre_status=repre_status,
+                    site_name=site_name,
+                    side=side,
+                    progress=status_val
+                )
             try:
                 if direction == "upload":
                     target_file_size = self.conn.stat(target_path).st_size

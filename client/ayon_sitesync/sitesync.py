@@ -607,7 +607,7 @@ class SiteSyncThread(threading.Thread):
         )
 
         for file_result, info in zip(files_created, files_processed_info):
-            file_state, representation, site_name, side, project_name = info
+            file_state, repre_status, site_name, side, project_name = info
             error = None
             if isinstance(file_result, BaseException):
                 error = str(file_result)
@@ -618,13 +618,13 @@ class SiteSyncThread(threading.Thread):
                 project_name=project_name,
                 new_file_id=file_result,
                 file=file_state,
-                representation=representation,
+                repre_status=repre_status,
                 site_name=site_name,
                 side=side,
                 error=error
             )
 
-            repre_id = representation["representationId"]
+            repre_id = repre_status["representationId"]
             self.addon.handle_alternate_site(
                 project_name,
                 repre_id,

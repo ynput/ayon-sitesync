@@ -118,24 +118,31 @@ class DropboxHandler(AbstractProvider):
 
         return False
 
-    def upload_file(self, source_path, path,
-                    addon, project_name, file, representation, site_name,
-                    overwrite=False):
+    def upload_file(
+        self,
+        source_path,
+        target_path,
+        addon,
+        project_name,
+        file,
+        repre_status,
+        site_name,
+        overwrite=False
+    ):
         """
             Copy file from 'source_path' to 'target_path' on provider.
             Use 'overwrite' boolean to rewrite existing file on provider
 
         Args:
-            source_path (string):
-            path (string): absolute path with or without name of the file
-            overwrite (boolean): replace existing file
-
-            arguments for saving progress:
-            addon (SiteSync): addon instance to call update_db on
+            source_path (string): absolute path on provider
+            target_path (string): absolute path with or without name of the file
+            addon (SiteSyncAddon): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
-            representation (dict): complete repre containing 'file'
+            repre_status (dict): complete representation containing
+                sync progress
             site_name (str): site name
+            overwrite (boolean): replace existing file
         Returns:
             (string) file_id of created file, raises exception
         """
@@ -145,7 +152,7 @@ class DropboxHandler(AbstractProvider):
                 "Source file {} doesn't exist.".format(source_path)
             )
 
-        if self._path_exists(path) and not overwrite:
+        if self._path_exists(target_path) and not overwrite:
             raise FileExistsError(
                 "File already exists, use 'overwrite' argument"
             )
@@ -160,7 +167,7 @@ class DropboxHandler(AbstractProvider):
             CHUNK_SIZE = 50 * 1024 * 1024
 
             if file_size <= CHUNK_SIZE:
-                self.dbx.files_upload(f.read(), path, mode=mode)
+                self.dbx.files_upload(f.read(), target_path, mode=mode)
             else:
                 upload_session_start_result = \
                     self.dbx.files_upload_session_start(f.read(CHUNK_SIZE))
@@ -169,7 +176,7 @@ class DropboxHandler(AbstractProvider):
                     session_id=upload_session_start_result.session_id,
                     offset=f.tell())
 
-                commit = dropbox.files.CommitInfo(path=path, mode=mode)
+                commit = dropbox.files.CommitInfo(path=target_path, mode=mode)
 
                 while f.tell() < file_size:
                     if (file_size - f.tell()) <= CHUNK_SIZE:
@@ -188,31 +195,38 @@ class DropboxHandler(AbstractProvider):
             project_name=project_name,
             new_file_id=None,
             file=file,
-            representation=representation,
+            repre_status=repre_status,
             site_name=site_name,
             side="remote",
             progress=100
         )
 
-        return path
+        return target_path
 
-    def download_file(self, source_path, local_path,
-                      addon, project_name, file, representation, site_name,
-                      overwrite=False):
+    def download_file(
+        self,
+        source_path,
+        local_path,
+        addon,
+        project_name,
+        file,
+        repre_status,
+        site_name,
+        overwrite=False
+    ):
         """
             Download file from provider into local system
 
         Args:
             source_path (string): absolute path on provider
             local_path (string): absolute path with or without name of the file
-            overwrite (boolean): replace existing file
-
-            arguments for saving progress:
-            addon (SiteSync): addon instance to call update_db on
+            addon (SiteSyncAddon): addon instance to call update_db on
             project_name (str):
             file (dict): info about uploaded file (matches structure from db)
-            representation (dict): complete repre containing 'file'
+            repre_status (dict): complete representation containing
+                sync progress
             site_name (str): site name
+            overwrite (boolean): replace existing file
         Returns:
             None
         """
@@ -236,7 +250,7 @@ class DropboxHandler(AbstractProvider):
             project_name=project_name,
             new_file_id=None,
             file=file,
-            representation=representation,
+            repre_status=repre_status,
             site_name=site_name,
             side="local",
             progress=100

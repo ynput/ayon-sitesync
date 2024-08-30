@@ -480,7 +480,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             project_name (str): project name
             site_name (str): active site name
             reset_missing (bool): if True reset site in DB if missing
-                physically
+                physically to be resynched
         """
         self.log.debug("Validation of {} for {} started".format(
             project_name, site_name
@@ -492,19 +492,17 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         sites_added = 0
         sites_reset = 0
+        repre_ids = [repre["id"] for repre in repre_entities]
+        repre_states = self.get_representations_sync_state(
+            project_name, repre_ids, site_name, site_name)
+
         for repre_entity in repre_entities:
             repre_id = repre_entity["id"]
+            is_on_site = False
+            repre_state = repre_states.get(repre_id)
+            if repre_state:
+                is_on_site = repre_state[0] == SiteSyncStatus.OK
             for repre_file in repre_entity.get("files", []):
-                try:
-                    is_on_site = site_name in [
-                        site["name"]
-                        for site in repre_file["sites"]
-                        if (site.get("created_dt") and not site.get("error"))
-                    ]
-                except (TypeError, AttributeError):
-                    self.log.debug("Structure error in {}".format(repre_id))
-                    continue
-
                 file_path = repre_file.get("path", "")
                 local_file_path = self.get_local_file_path(
                     project_name, site_name, file_path
@@ -515,15 +513,17 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 )
                 if not is_on_site:
                     if file_exists:
-                        self.log.debug("Adding site {} for {}".format(
-                            site_name, repre_id
-                        ))
+                        self.log.debug(
+                            f"Adding presence on site '{site_name}' for "
+                            f"'{repre_id}'"
+                        )
                         self.add_site(
                             project_name,
-                            repre_entity,
+                            repre_id,
                             site_name=site_name,
-                            file_id=repre_file["_id"],
-                            force=True
+                            file_id=repre_file["id"],
+                            force=True,
+                            status=SiteSyncStatus.OK
                         )
                         sites_added += 1
                 else:
