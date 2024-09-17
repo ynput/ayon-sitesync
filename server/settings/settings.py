@@ -3,9 +3,8 @@ from pydantic import Field, validator
 from ayon_server.settings import (
     BaseSettingsModel,
     ensure_unique_names,
-    normalize_name)
-
-from ayon_server.settings.anatomy.roots import Root
+    normalize_name,
+)
 
 from .providers.local_drive import LocalDriveSubmodel
 from .providers.gdrive import GoogleDriveSubmodel
