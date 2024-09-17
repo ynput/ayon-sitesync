@@ -1,3 +1,4 @@
+import typing
 from pydantic import Field, validator
 
 from ayon_server.settings import (
@@ -10,6 +11,9 @@ from .providers.local_drive import LocalDriveSubmodel
 from .providers.gdrive import GoogleDriveSubmodel
 from .providers.dropbox import DropboxSubmodel
 from .providers.sftp import SFTPSubmodel
+
+if typing.TYPE_CHECKING:
+    from ayon_server.addons import BaseServerAddon
 
 
 class GeneralSubmodel(BaseSettingsModel):
