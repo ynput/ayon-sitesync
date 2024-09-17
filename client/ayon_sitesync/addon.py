@@ -1818,7 +1818,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             )
 
         return states
-            
+
     def _get_repres_state(
         self,
         project_name,
@@ -1861,7 +1861,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             )
 
         return response.data["representations"]
-    
+
     def get_version_availability(
         self,
         project_name,
