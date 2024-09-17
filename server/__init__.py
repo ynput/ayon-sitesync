@@ -518,7 +518,7 @@ class SiteSync(BaseServerAddon):
                     site_name,
                 )
 
-                result = await conn.fetch(*query)
+                await conn.fetch(*query)
 
                 return Response(status_code=204)
 
