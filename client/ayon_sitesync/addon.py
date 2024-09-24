@@ -1657,7 +1657,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             )
         }
 
-    def _get_progress_for_repe_old(
+    def _get_progress_for_repre_old(
         self,
         representation,
         local_site_name,
@@ -1685,11 +1685,11 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 uploaded yet
 
         """
-        sig_new = inspect.signature(self._get_progress_for_repe_new)
-        sig_old = inspect.signature(self._get_progress_for_repe_old)
+        sig_new = inspect.signature(self._get_progress_for_repre_new)
+        sig_old = inspect.signature(self._get_progress_for_repre_old)
         try:
             sig_new.bind(*args, **kwargs)
-            return self._get_progress_for_repe_new(*args, **kwargs)
+            return self._get_progress_for_repre_new(*args, **kwargs)
         except TypeError:
             pass
 
@@ -1699,11 +1699,11 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 "Using old signature of 'get_progress_for_repre'"
                 " please add project name as first argument."
             )
-            return self._get_progress_for_repe_old(*args, **kwargs)
+            return self._get_progress_for_repre_old(*args, **kwargs)
         except TypeError:
             pass
 
-        return self._get_progress_for_repe_new(*args, **kwargs)
+        return self._get_progress_for_repre_new(*args, **kwargs)
 
     def _set_state_sync_state(
         self, project_name, representation_id, site_name, payload_dict
