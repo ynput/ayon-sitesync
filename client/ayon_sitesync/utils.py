@@ -110,7 +110,7 @@ def get_linked_representation_id(
             project_name,
             versions_to_check,
             link_types=link_types,
-            link_direction="out")
+            link_direction="in")  # looking for 'in'puts for version
 
         versions_to_check = set()
         for links in versions_links.values():
@@ -119,9 +119,6 @@ def get_linked_representation_id(
                 if link["entityType"] != "version":
                     continue
                 entity_id = link["entityId"]
-                # Skip already found linked version ids
-                if entity_id in linked_version_ids:
-                    continue
                 linked_version_ids.add(entity_id)
                 versions_to_check.add(entity_id)
 
