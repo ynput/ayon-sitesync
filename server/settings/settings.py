@@ -1,16 +1,19 @@
+import typing
 from pydantic import Field, validator
 
 from ayon_server.settings import (
     BaseSettingsModel,
     ensure_unique_names,
-    normalize_name)
-
-from ayon_server.settings.anatomy.roots import Root
+    normalize_name,
+)
 
 from .providers.local_drive import LocalDriveSubmodel
 from .providers.gdrive import GoogleDriveSubmodel
 from .providers.dropbox import DropboxSubmodel
 from .providers.sftp import SFTPSubmodel
+
+if typing.TYPE_CHECKING:
+    from ayon_server.addons import BaseServerAddon
 
 
 class GeneralSubmodel(BaseSettingsModel):

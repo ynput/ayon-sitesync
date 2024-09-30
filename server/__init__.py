@@ -10,7 +10,7 @@ from ayon_server.access.utils import folder_access_list
 from ayon_server.api.dependencies import (
     CurrentUser,
     ProjectName,
-    RepresentationID, 
+    RepresentationID,
 )
 
 from ayon_server.entities.representation import RepresentationEntity
@@ -118,9 +118,9 @@ class SiteSync(BaseServerAddon):
         sites = {"active_site": [], "remote_site": []}
         site_infos = await Postgres.fetch("select id, data from sites")
         for site_info in site_infos:
-            settings = await self.get_project_site_settings(project_name,
-                                                            user.name, 
-                                                            site_info["id"])
+            settings = await self.get_project_site_settings(
+                project_name, user.name, site_info["id"]
+            )
             for site_type in ["active_site", "remote_site"]:
                 used_site = settings.dict()["local_setting"][site_type]
                 if not used_site:
@@ -205,8 +205,8 @@ class SiteSync(BaseServerAddon):
         bothOnly: bool = Query(
             False,
             name="Query only with both sites",
-            description="Used for front end UI to show only repres with " 
-                        "both sides",
+            description="Used for front end UI to show only repres with"
+                        " both sides",
         ),
         # Pagination
         page: int = Query(1, ge=1),
@@ -518,7 +518,7 @@ class SiteSync(BaseServerAddon):
                     site_name,
                 )
 
-                result = await conn.fetch(*query)
+                await conn.fetch(*query)
 
                 return Response(status_code=204)
 
