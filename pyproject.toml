@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "SiteSync"
-version = "1.1.3-dev.1"
+version = "1.2.1+dev"
 description = "SiteSync Addon"
 authors = ["Ynput s.r.o. <info@ynput.io>"]
 license = "MIT License"
