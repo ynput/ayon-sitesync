@@ -243,7 +243,7 @@ def update_frontend_version(logger):
 
         data["version"] = ADDON_VERSION
         empty_package = data.get("packages", {}).get("")
-        if empty_package.get("name") == data.get("name"):
+        if empty_package and empty_package.get("name") == data.get("name"):
             empty_package["version"] = ADDON_VERSION
 
         content = json.dumps(data, indent=2)
@@ -258,7 +258,11 @@ def update_frontend_version(logger):
     new_lines = []
     addon_version_spitter = "const addonVersion"
     for line in main_lines:
-        if addon_version_spitter in line:
+        if addon_version_spitter not in line:
+            new_lines.append(line)
+            continue
+
+        if not line.lstrip().startswith("//"):
             head, tail = line.split(addon_version_spitter)
             line = f"{head}{addon_version_spitter} = '{ADDON_VERSION}'\n"
         new_lines.append(line)
