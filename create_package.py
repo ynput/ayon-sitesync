@@ -25,6 +25,7 @@ import os
 import sys
 import re
 import io
+import json
 import shutil
 import platform
 import argparse
@@ -213,6 +214,57 @@ def update_client_version(logger):
     logger.info("Updating client version")
     with open(version_path, "w") as stream:
         stream.write(VERSION_PY_CONTENT)
+
+
+def update_general_version(logger):
+    logger.info("Updating version in root pyproject.toml")
+    root_pyproject_toml = os.path.join(CURRENT_ROOT, "pyproject.toml")
+    with open(root_pyproject_toml, "r") as stream:
+        lines = stream.readlines()
+
+    new_lines = []
+    for line in lines:
+        if line.startswith("version ="):
+            line = f'version = "{ADDON_VERSION}"\n'
+        new_lines.append(line)
+
+    with open(root_pyproject_toml, "w") as stream:
+        stream.write("".join(new_lines))
+
+
+def update_frontend_version(logger):
+    logger.info("Updating frontend version")
+    for filepath in (
+        os.path.join(FRONTEND_ROOT, "package-lock.json"),
+        os.path.join(FRONTEND_ROOT, "package.json"),
+    ):
+        with open(filepath, "r") as stream:
+            data = json.load(stream)
+
+        data["version"] = ADDON_VERSION
+        empty_package = data.get("packages", {}).get("")
+        if empty_package.get("name") == data.get("name"):
+            empty_package["version"] = ADDON_VERSION
+
+        content = json.dumps(data, indent=2)
+        content.rstrip("\n")
+        with open(filepath, "w") as stream:
+            stream.write(content + "\n")
+
+    main_file = os.path.join(FRONTEND_ROOT, "src", "main.jsx")
+    with open(main_file, "r") as stream:
+        main_lines = stream.readlines()
+
+    new_lines = []
+    addon_version_spitter = "const addonVersion"
+    for line in main_lines:
+        if addon_version_spitter in line:
+            head, tail = line.split(addon_version_spitter)
+            line = f"{head}{addon_version_spitter} = '{ADDON_VERSION}'\n"
+        new_lines.append(line)
+
+    with open(main_file, "w") as stream:
+        stream.write("".join(new_lines))
 
 
 def build_frontend():
@@ -425,7 +477,10 @@ def main(
 
     log.info(f"Preparing package for {ADDON_NAME}-{ADDON_VERSION}")
 
+    update_general_version(log)
+
     if os.path.exists(FRONTEND_ROOT):
+        update_frontend_version(log)
         build_frontend()
 
     files_mapping: List[FileMapping] = []
