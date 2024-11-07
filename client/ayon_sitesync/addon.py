@@ -338,11 +338,14 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         # add skeleton for sites where it should be always synced to
         # usually it would be a backup site which is handled by separate
         # background process
-        for site in self._get_always_accessible_sites(project_name):
-            if site not in attached_sites:
-                attached_sites[site] = create_metadata(site, created=False)
-
-        return list(attached_sites.values())
+        for site_name in self._get_always_accessible_sites(project_name):
+            if site_name not in attached_sites:
+                attached_sites[site_name] = (
+                    create_metadata(site_name, created=False))
+        unique_sites = {}
+        for site in attached_sites.values():
+            unique_sites[site["name"]] = site
+        return list(unique_sites.values())
 
     def _get_always_accessible_sites(self, project_name):
         """Sites that synced to as a part of background process.
