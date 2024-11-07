@@ -353,12 +353,15 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         Artist machine doesn't handle those, explicit Tray with that site name
         as a local id must be running.
         Example is dropbox site serving as a backup solution
+
+        Returns:
+            (list[str]): list of site names
         """
         sync_settings = self.get_sync_project_setting(project_name)
         always_accessible_sites = (
             sync_settings["config"].get("always_accessible_on", [])
         )
-        return [site.strip() for site in always_accessible_sites]
+        return [site_name.strip() for site_name in always_accessible_sites]
 
     def _add_alternative_sites(self, project_name, attached_sites):
         """Add skeleton document for alternative sites
@@ -368,6 +371,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         physically accessible also on 'a alternative' site.
         Example is sftp site serving studio files via sftp protocol, physically
         file is only in studio, sftp server has this location mounted.
+
+        Returns:
+            (dict[str, dict])
         """
         sync_project_settings = self.get_sync_project_setting(project_name)
         all_sites = sync_project_settings["sites"]
