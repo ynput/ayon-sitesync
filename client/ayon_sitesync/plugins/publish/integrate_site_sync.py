@@ -28,12 +28,14 @@ class IntegrateSiteSync(pyblish.api.InstancePlugin):
         if sitesync_addon is None:
             return
 
-        for repre_id, inst in published_representations.items():  # noqa
-            sites = sitesync_addon.compute_resource_sync_sites(
-                project_name=project_name
-            )
-
+        sites = sitesync_addon.compute_resource_sync_sites(
+            project_name=project_name
+        )
+        for repre_id, inst in published_representations.items():
             for site_info in sites:
-                sitesync_addon.add_site(project_name, repre_id,
-                                        site_info["name"],
-                                        status=site_info["status"])
+                sitesync_addon.add_site(
+                    project_name,
+                    repre_id,
+                    site_info["name"],
+                    status=site_info["status"]
+                )
