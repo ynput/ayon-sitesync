@@ -342,9 +342,10 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             if site_name not in attached_sites:
                 attached_sites[site_name] = (
                     create_metadata(site_name, created=False))
-        unique_sites = {}
-        for site in attached_sites.values():
-            unique_sites[site["name"]] = site
+        unique_sites = {
+            site["name"]: site
+            for site in attached_sites.values()
+        }
         return list(unique_sites.values())
 
     def _get_always_accessible_sites(self, project_name):
