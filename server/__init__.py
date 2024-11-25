@@ -36,7 +36,6 @@ class SiteSync(BaseServerAddon):
     frontend_scopes: dict[str, Any] = {"project": {}}
 
     def initialize(self) -> None:
-        logging.info("Init SiteSync")
 
         self.add_endpoint(
             "/{project_name}/get_user_sites",
@@ -67,7 +66,6 @@ class SiteSync(BaseServerAddon):
             self.remove_site_sync_representation_state,
             method="DELETE",
         )
-        logging.info("added endpoints")
 
     #
     # GET SITE SYNC PARAMS
@@ -334,7 +332,7 @@ class SiteSync(BaseServerAddon):
                 size=rsize,
                 timestamp=rtime,
             )
-            # logging.debug(f"lfiles::{pprint.pformat(lfiles, indent=4)}")
+
             file_list = []
             for file_info in files:
                 file_id = file_info["id"]
@@ -450,7 +448,7 @@ class SiteSync(BaseServerAddon):
                 for posted_file in post_data.files:
                     posted_file_id = posted_file.id
                     if posted_file_id not in files:
-                        logging.info(f"{posted_file} not in files")
+                        logging.warning(f"{posted_file} not in files")
                         continue
                     files[posted_file_id]["timestamp"] = posted_file.timestamp
                     files[posted_file_id]["status"] = posted_file.status
