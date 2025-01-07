@@ -239,10 +239,19 @@ class SiteSync(BaseServerAddon):
         if localStatusFilter:
             statusFilter = [str(s.value) for s in localStatusFilter]
             conditions.append(f"local.status IN ({','.join(statusFilter)})")
+        else:
+            # ignore failed sites, would block processing,
+            # need to be reset explicitly first
+            # is null check necessary to download only remote files!
+            conditions.append(f"(local.status IS NULL OR "
+                              f"local.status != {StatusEnum.FAILED})")
 
         if remoteStatusFilter:
             statusFilter = [str(s.value) for s in remoteStatusFilter]
             conditions.append(f"remote.status IN ({','.join(statusFilter)})")
+        else:
+            conditions.append(f"(remote.status IS NULL OR "
+                              f"remote.status != {StatusEnum.FAILED} )")
 
         if repreNameFilter:
             conditions.append(f"r.name IN {SQLTool.array(repreNameFilter)}")
@@ -299,6 +308,7 @@ class SiteSync(BaseServerAddon):
             LIMIT {pageLength}
             OFFSET { (page-1) * pageLength }
         """
+        print(f"query::{query}")
         repres = []
 
         async for row in Postgres.iterate(query):
