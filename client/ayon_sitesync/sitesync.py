@@ -548,7 +548,8 @@ class SiteSyncThread(threading.Thread):
                     remote_site,
                     preset.get("config")
                 )
-                if status == SyncStatus.DO_UPLOAD:
+                if (status == SyncStatus.DO_UPLOAD and
+                        len(task_files_to_process) < limit):
                     tree = handler.get_tree()
                     task = asyncio.create_task(
                         upload(
@@ -573,7 +574,8 @@ class SiteSyncThread(threading.Thread):
                     ))
                     processed_file_path.add(file_path)
 
-                if status == SyncStatus.DO_DOWNLOAD:
+                if (status == SyncStatus.DO_DOWNLOAD and
+                        len(task_files_to_process) < limit):
                     tree = handler.get_tree()
                     task = asyncio.create_task(
                         download(

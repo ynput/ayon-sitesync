@@ -1,29 +1,15 @@
 from __future__ import print_function
-import os.path
+import os
 import time
-import sys
-import six
 import platform
 
-from ayon_core.lib import Logger
+from googleapiclient.discovery import build
+import google.oauth2.service_account as service_account
+from googleapiclient import errors
+from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
 from ayon_sitesync.utils import time_function, ResumableError
 from ayon_sitesync.providers.abstract_provider import AbstractProvider
-
-
-log = Logger.get_logger("GDriveHandler")
-
-try:
-    from googleapiclient.discovery import build
-    import google.oauth2.service_account as service_account
-    from googleapiclient import errors
-    from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
-except (ImportError, SyntaxError):
-    if six.PY3:
-        six.reraise(*sys.exc_info())
-
-    # handle imports from Python 2 hosts - in those only basic methods are used
-    log.warning("Import failed, imported from Python 2, operations will fail.")
 
 SCOPES = ["https://www.googleapis.com/auth/drive.metadata.readonly",
           "https://www.googleapis.com/auth/drive.file",
@@ -604,7 +590,7 @@ class GDriveHandler(AbstractProvider):
             service = build("drive", "v3",
                             credentials=creds, cache_discovery=False)
         except Exception:
-            log.error("Connection failed, " +
+            self.log.error("Connection failed, " +
                       "check '{}' credentials file".format(credentials_path),
                       exc_info=True)
 

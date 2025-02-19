@@ -543,7 +543,7 @@ def get_overal_status(files: dict) -> StatusEnum:
         return StatusEnum.IN_PROGRESS
     elif any(stat == StatusEnum.PAUSED for stat in all_states):
         return StatusEnum.PAUSED
-    elif all(stat == StatusEnum.QUEUED for stat in all_states):
+    elif any(stat == StatusEnum.QUEUED for stat in all_states):
         return StatusEnum.QUEUED
     return StatusEnum.NOT_AVAILABLE
 

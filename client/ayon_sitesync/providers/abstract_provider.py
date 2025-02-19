@@ -1,12 +1,11 @@
-import abc
-import six
+from abc import ABC, abstractmethod
+
 from ayon_core.lib import Logger
 
 log = Logger.get_logger("SiteSync")
 
 
-@six.add_metaclass(abc.ABCMeta)
-class AbstractProvider:
+class AbstractProvider(ABC):
     CODE = ""
     LABEL = ""
 
@@ -27,7 +26,7 @@ class AbstractProvider:
             self._log = Logger.get_logger(self.__class__.__name__)
         return self._log
 
-    @abc.abstractmethod
+    @abstractmethod
     def is_active(self):
         """
             Returns True if provider is activated, eg. has working credentials.
@@ -35,7 +34,7 @@ class AbstractProvider:
             (boolean)
         """
 
-    @abc.abstractmethod
+    @abstractmethod
     def upload_file(
         self,
         source_path,
@@ -67,7 +66,7 @@ class AbstractProvider:
         """
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def download_file(
         self,
         source_path,
@@ -98,7 +97,7 @@ class AbstractProvider:
         """
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def delete_file(self, path):
         """
             Deletes file from 'path'. Expects path to specific file.
@@ -111,7 +110,7 @@ class AbstractProvider:
         """
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def list_folder(self, folder_path):
         """
             List all files and subfolders of particular path non-recursively.
@@ -123,7 +122,7 @@ class AbstractProvider:
         """
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def create_folder(self, folder_path):
         """
             Create all nonexistent folders and subfolders in 'path'.
@@ -136,7 +135,7 @@ class AbstractProvider:
         """
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def get_tree(self):
         """
             Creates folder structure for providers which do not provide
@@ -145,7 +144,7 @@ class AbstractProvider:
         """
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def get_roots_config(self, anatomy=None):
         """
             Returns root values for path resolving
