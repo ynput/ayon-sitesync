@@ -299,7 +299,6 @@ class SiteSync(BaseServerAddon):
             LIMIT {pageLength}
             OFFSET { (page-1) * pageLength }
         """
-        print(f"query::{query}")
         repres = []
 
         async for row in Postgres.iterate(query):
