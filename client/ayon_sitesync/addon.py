@@ -1500,11 +1500,18 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                     status_entity["status"] = SiteSyncStatus.IN_PROGRESS
                     status_entity["progress"] = progress
                 elif error:
-
+                    max_retries = int(
+                        self.sync_project_settings
+                        [project_name]
+                        ["config"]
+                        ["retry_cnt"]
+                    )
                     tries = status_entity.get("retries", 0)
                     tries += 1
                     status_entity["retries"] = tries
                     status_entity["message"] = error
+                    if tries >= max_retries:
+                        status_entity["status"] = SiteSyncStatus.FAILED
                 elif pause is not None:
                     if pause:
                         status_entity["pause"] = True
