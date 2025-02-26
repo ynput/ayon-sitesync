@@ -1373,9 +1373,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             "localSite": active_site,
             "remoteSite": remote_site,
             "localStatusFilter": [SiteSyncStatus.OK],
-            "remoteStatusFilter": [
-                SiteSyncStatus.QUEUED, SiteSyncStatus.FAILED
-            ]
+            "remoteStatusFilter": [SiteSyncStatus.QUEUED],
         }
 
         response = ayon_api.get(endpoint, **kwargs)
@@ -1390,9 +1388,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         # get to download
         if len(repre_states) < limit:
-            kwargs["localStatusFilter"] = [
-                SiteSyncStatus.QUEUED, SiteSyncStatus.FAILED
-            ]
+            kwargs["localStatusFilter"] = [SiteSyncStatus.QUEUED]
             kwargs["remoteStatusFilter"] = [SiteSyncStatus.OK]
 
             response = ayon_api.get(endpoint, **kwargs)
@@ -1504,11 +1500,18 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                     status_entity["status"] = SiteSyncStatus.IN_PROGRESS
                     status_entity["progress"] = progress
                 elif error:
-                    status_entity["status"] = SiteSyncStatus.FAILED
+                    max_retries = int(
+                        self.sync_project_settings
+                        [project_name]
+                        ["config"]
+                        ["retry_cnt"]
+                    )
                     tries = status_entity.get("retries", 0)
                     tries += 1
                     status_entity["retries"] = tries
                     status_entity["message"] = error
+                    if tries >= max_retries:
+                        status_entity["status"] = SiteSyncStatus.FAILED
                 elif pause is not None:
                     if pause:
                         status_entity["pause"] = True
