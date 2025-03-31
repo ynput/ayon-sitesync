@@ -5,3 +5,5 @@ package
 private
 
 .idea
+# ignore mkdocs build
+site/
