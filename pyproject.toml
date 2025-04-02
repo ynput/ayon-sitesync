@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "SiteSync"
-version = "1.2.3+dev"
+version = "1.2.3"
 description = "SiteSync Addon"
 authors = ["Ynput s.r.o. <info@ynput.io>"]
 license = "MIT License"
@@ -8,3 +8,21 @@ homepage = "https://ayon.ynput.io/"
 documentation = "https://ayon.ynput.io/docs/addon_site_sync_admin"
 repository = "https://github.com/ynput/ayon-sitesync"
 readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.9"
+
+[tool.poetry.group.dev.dependencies]
+tomlkit = "^0.13.2"
+requests = "^2.32.3"
+mkdocs-material = "^9.6.7"
+mkdocs-autoapi = "^0.4.0"
+mkdocstrings-python = "^1.16.2"
+mkdocstrings-shell = "^1.0.2"
+mkdocs-click = "^0.8.1"
+mkdocs-minify-plugin = "^0.8.0"
+markdown-checklist = "^0.4.4"
+mdx-gh-links = "^0.4"
+pymdown-extensions = "^10.14.3"
+mike = "^2.1.3"
