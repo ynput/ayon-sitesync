@@ -206,14 +206,14 @@ dev = ["flake8", "markdown", "twine", "wheel"]
 
 [[package]]
 name = "griffe"
-version = "1.7.1"
+version = "1.7.2"
 description = "Signatures for entire Python programs. Extract the structure, the frame, the skeleton of your project, to generate API documentation or find breaking changes in your API."
 optional = false
 python-versions = ">=3.9"
 groups = ["dev"]
 files = [
-    {file = "griffe-1.7.1-py3-none-any.whl", hash = "sha256:37a7f15233937d723ddc969fa4117fdd03988885c16938dc43bccdfe8fa4d02d"},
-    {file = "griffe-1.7.1.tar.gz", hash = "sha256:464730d0e95d0afd038e699a5f7276d7438d0712db0c489a17e761f70e011507"},
+    {file = "griffe-1.7.2-py3-none-any.whl", hash = "sha256:1ed9c2e338a75741fc82083fe5a1bc89cb6142efe126194cc313e34ee6af5423"},
+    {file = "griffe-1.7.2.tar.gz", hash = "sha256:98d396d803fab3b680c2608f300872fd57019ed82f0672f5b5323a9ad18c540c"},
 ]
 
 [package.dependencies]
@@ -516,14 +516,14 @@ min-versions = ["babel (==2.9.0)", "click (==7.0)", "colorama (==0.4) ; platform
 
 [[package]]
 name = "mkdocs-autoapi"
-version = "0.4.0"
+version = "0.4.1"
 description = "MkDocs plugin providing automatic API reference generation"
 optional = false
 python-versions = ">=3.6"
 groups = ["dev"]
 files = [
-    {file = "mkdocs_autoapi-0.4.0-py3-none-any.whl", hash = "sha256:ce2b5e8b4d1df37bd1273a6bce1dded152107e2280cedbfa085cea10edf8531b"},
-    {file = "mkdocs_autoapi-0.4.0.tar.gz", hash = "sha256:409c2da8eb297ef51381b066744ac1cdf846220bcc779bdba680fbc5a080df1e"},
+    {file = "mkdocs_autoapi-0.4.1-py3-none-any.whl", hash = "sha256:0f6903058c1a790c6180870559ad930fea04da93961371e21ff23cd010f09c78"},
+    {file = "mkdocs_autoapi-0.4.1.tar.gz", hash = "sha256:3ea73c66361124afea8024a5cb2d681b8d88c3137b6acfed6fe31e11f7b8cf85"},
 ]
 
 [package.dependencies]
@@ -553,6 +553,22 @@ markupsafe = ">=2.0.1"
 mkdocs = ">=1.1"
 
 [[package]]
+name = "mkdocs-click"
+version = "0.8.1"
+description = "An MkDocs extension to generate documentation for Click command line applications"
+optional = false
+python-versions = ">=3.7"
+groups = ["dev"]
+files = [
+    {file = "mkdocs_click-0.8.1-py3-none-any.whl", hash = "sha256:a100ff938be63911f86465a1c21d29a669a7c51932b700fdb3daa90d13b61ee4"},
+    {file = "mkdocs_click-0.8.1.tar.gz", hash = "sha256:0a88cce04870c5d70ff63138e2418219c3c4119cc928a59c66b76eb5214edba6"},
+]
+
+[package.dependencies]
+click = ">=8.1"
+markdown = ">=3.3"
+
+[[package]]
 name = "mkdocs-get-deps"
 version = "0.2.0"
 description = "MkDocs extension that lists all dependencies according to a mkdocs.yml file"
@@ -572,21 +588,21 @@ pyyaml = ">=5.1"
 
 [[package]]
 name = "mkdocs-material"
-version = "9.6.10"
+version = "9.6.11"
 description = "Documentation that simply works"
 optional = false
 python-versions = ">=3.8"
 groups = ["dev"]
 files = [
-    {file = "mkdocs_material-9.6.10-py3-none-any.whl", hash = "sha256:36168548df4e2ddeb9a334ddae4ab9c388ccfea4dd50ffee657d22b93dcb1c3e"},
-    {file = "mkdocs_material-9.6.10.tar.gz", hash = "sha256:25a453c1f24f34fcf1f53680c03d2c1421b52ce5247f4468153c87a70cd5f1fc"},
+    {file = "mkdocs_material-9.6.11-py3-none-any.whl", hash = "sha256:47f21ef9cbf4f0ebdce78a2ceecaa5d413581a55141e4464902224ebbc0b1263"},
+    {file = "mkdocs_material-9.6.11.tar.gz", hash = "sha256:0b7f4a0145c5074cdd692e4362d232fb25ef5b23328d0ec1ab287af77cc0deff"},
 ]
 
 [package.dependencies]
 babel = ">=2.10,<3.0"
 backrefs = ">=5.7.post1,<6.0"
 colorama = ">=0.4,<1.0"
-jinja2 = ">=3.0,<4.0"
+jinja2 = ">=3.1,<4.0"
 markdown = ">=3.2,<4.0"
 mkdocs = ">=1.6,<2.0"
 mkdocs-material-extensions = ">=1.3,<2.0"
@@ -1064,4 +1080,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9"
-content-hash = "db58dbcd95c714753c1334f98410a93b00066dfbd8fe65bd996fd6b14d8a1edf"
+content-hash = "9933c923ee4322dfd694bbfaa744ff2d03a79f9c170248f8253fbc6189295af3"
