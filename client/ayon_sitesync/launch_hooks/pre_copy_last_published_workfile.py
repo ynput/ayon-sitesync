@@ -7,10 +7,11 @@ from ayon_api import (
     get_last_versions
 )
 
-from ayon_applications import PreLaunchHook
 from ayon_core.pipeline.template_data import get_template_data
 from ayon_core.pipeline.workfile import get_workfile_template_key
 from ayon_core.pipeline.workfile import should_use_last_workfile_on_launch
+
+from ayon_applications import PreLaunchHook
 
 from ayon_sitesync.sitesync import download_last_published_workfile
 
@@ -62,21 +63,39 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
             )
             return
 
-        project_settings = self.data["project_settings"]
+        host_name = self.application.host_name
+
+        host_addon = self.addons_manager.get_host_addon(host_name)
+        if host_addon is None:
+            self.log.warning(
+                f"Host addon not found for host '{host_name}'"
+            )
+            return
+
+        workfile_extensions = host_addon.get_workfile_extensions()
+        if not workfile_extensions:
+            self.log.debug(
+                "No workfile extensions defined by"
+                f" host addon '{host_addon.name}'"
+            )
+            return
 
         # Get data
+        project_settings = self.data["project_settings"]
         anatomy = self.data["anatomy"]
         task_id = self.data["task_entity"]["id"]
         folder_entity = self.data["folder_entity"]
         folder_id = folder_entity["id"]
         task_name = self.data["task_name"]
         task_type = self.data["task_type"]
-        host_name = self.application.host_name
         project_entity = self.data["project_entity"]
         task_entity = self.data["task_entity"]
 
         use_last_published_workfile = should_use_last_workfile_on_launch(
-            project_name, host_name, task_name, task_type,
+            project_name,
+            host_name,
+            task_name,
+            task_type,
             project_settings=project_settings
         )
 
@@ -105,7 +124,7 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
 
         workfile_representation = (
             self._get_last_published_workfile_representation(
-                project_name, folder_id, task_id, host_name
+                project_name, folder_id, task_id, workfile_extensions
             )
         )
 
@@ -164,8 +183,10 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
         self.data["source_filepath"] = last_published_workfile_path
 
     def _get_last_published_workfile_representation(self,
-            project_name, folder_id, task_id, host_name):
+        project_name, folder_id, task_id, workfile_extensions
+    ):
         """Looks for last published representation for host and context"""
+
         product_entities = get_products(
             project_name,
             folder_ids={folder_id},
@@ -176,7 +197,8 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
             for product_entity in product_entities
         }
         if not product_ids:
-            return
+            return None
+
         versions_by_product_id = get_last_versions(
             project_name,
             product_ids
@@ -187,17 +209,16 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
             if version_entity["taskId"] == task_id
         }
         if not version_ids:
-            return
-
-        addons_manager = self.addons_manager
-        host_addon = addons_manager[host_name]
-        workfile_extensions = host_addon.get_workfile_extensions()
+            return None
 
         for representation_entity in get_representations(
             project_name,
             version_ids=version_ids,
         ):
             ext = representation_entity["context"].get("ext")
+            if not ext:
+                continue
             ext = f".{ext}"
             if ext in workfile_extensions:
                 return representation_entity
+        return None
