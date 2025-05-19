@@ -266,9 +266,10 @@ class GDriveHandler(AbstractProvider):
 
             media.stream()
             self.log.debug("Start Upload! {}".format(source_path))
-            last_tick = status = response = None
+            last_tick = status = None
+            response = False
             status_val = 0
-            while response is None:
+            while response is False:
                 if addon.is_representation_paused(
                         repre_status["representationId"],
                         check_parents=True,
@@ -362,9 +363,10 @@ class GDriveHandler(AbstractProvider):
 
         with open(local_path + "/" + target_name, "wb") as fh:
             downloader = MediaIoBaseDownload(fh, request)
-            last_tick = status = response = None
+            last_tick = status = None
+            response = False
             status_val = 0
-            while response is None:
+            while response is False:
                 if addon.is_representation_paused(
                     repre_status["representationId"],
                     check_parents=True,
