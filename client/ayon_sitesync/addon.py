@@ -21,7 +21,7 @@ from ayon_api import (
     get_representations,
     get_project_names,
     get_addon_project_settings,
-    get_project_roots_for_site
+    get_project_root_overrides_by_site_id
 )
 
 from .version import __version__
@@ -1252,7 +1252,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             sites[site_name] = configured_site
         return sites
 
-    def _get_project_roots_for_site(self, project_name, site_name=None):
+    def _get_project_root_overrides_by_site_id(
+            self, project_name, site_name=None):
         """Returns projects roots and their overrides."""
         # overrides for Studio site for particular user
         # TODO temporary to get roots without overrides
@@ -1265,7 +1266,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             f"projects/{project_name}/siteRoots",
             platform=platform_name
         ).data
-        root_overrides = get_project_roots_for_site(project_name, site_name)
+        root_overrides = get_project_root_overrides_by_site_id(
+            project_name, site_name
+        )
         for key, value in roots.items():
             override = root_overrides.get(key)
             if override:
@@ -1288,7 +1291,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         """
         local_site_id = get_local_site_id()
-        roots = self._get_project_roots_for_site(project_name, local_site_id)
+        roots = self._get_project_root_overrides_by_site_id(
+            project_name, local_site_id
+        )
         studio_config = {
             "enabled": True,
             "provider": "local_drive",

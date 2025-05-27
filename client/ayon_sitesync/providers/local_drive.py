@@ -149,7 +149,7 @@ class LocalDriveHandler(AbstractProvider):
             sitesync_addon = manager.get_enabled_addon("sitesync")
             if not sitesync_addon:
                 raise RuntimeError("No SiteSync addon")
-            roots = sitesync_addon._get_project_roots_for_site(
+            roots = sitesync_addon._get_project_root_overrides_by_site_id(
                 self.project_name, site_name)
 
         return {'root': roots}
