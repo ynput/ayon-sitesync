@@ -115,7 +115,7 @@ class SitesSubmodel(BaseSettingsModel):
         title="Provider",
         description="Switch between providers",
         enum_resolver=lambda: provider_enum,
-        conditionalEnum=True
+        conditional_enum=True
     )
 
     local_drive: LocalDriveSubmodel = Field(
