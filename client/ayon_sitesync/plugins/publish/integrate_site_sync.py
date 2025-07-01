@@ -37,5 +37,6 @@ class IntegrateSiteSync(pyblish.api.InstancePlugin):
                     project_name,
                     repre_id,
                     site_info["name"],
-                    status=site_info["status"]
+                    status=site_info["status"],
+                    force=True
                 )
