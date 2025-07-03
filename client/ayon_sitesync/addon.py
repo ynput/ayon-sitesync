@@ -1776,6 +1776,42 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             if repre_state["localStatus"]["status"] != -1:
                 return repre_state
 
+    def get_representations_sites_sync_state(
+        self,
+        project_name,
+        representation_ids,
+        site_names = None
+    ):
+        """ Returns all site states for representation ids.
+
+        Args:
+            project_name (str):
+            representation_ids (list[str]): even single repre should be in []
+            site_names (list[str]): sub-selection of states
+
+        Returns:
+            list[dict]: dicts follow RepresentationSiteStateModel
+        """
+        endpoint = "{}/{}/state/representations".format(
+            self.endpoint_prefix, project_name
+        )
+
+        payload_dict = {
+            "representationIds": representation_ids
+        }
+        if site_names:
+            payload_dict["siteNames"] = site_names
+
+        response = ayon_api.get(endpoint, **payload_dict)
+        if response.status_code != 200:
+            raise RuntimeError(
+                "Can't get all sites sync state for representations {}".format(
+                    representation_ids
+                )
+            )
+
+        return response.data
+
     def get_representations_sync_state(
         self,
         project_name,

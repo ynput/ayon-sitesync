@@ -90,3 +90,10 @@ class RepresentationStateModel(OPModel):
 class UserSyncSites(OPModel):
     localSite: str = Field(...)
     remoteSite: str = Field(...)
+
+
+class RepresentationSiteStateModel(OPModel):
+    """High level model to get all sites status on representations"""
+    representationId: str = Field(...)
+    siteName: str = Field(...)
+    status: StatusEnum = Field(StatusEnum.NOT_AVAILABLE)

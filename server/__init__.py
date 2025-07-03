@@ -27,6 +27,7 @@ from .settings.models import (
     SortByEnum,
     StatusEnum,
     SyncStatusModel,
+    RepresentationSiteStateModel
 )
 
 
@@ -52,6 +53,12 @@ class SiteSync(BaseServerAddon):
         self.add_endpoint(
             "/{project_name}/state",
             self.get_site_sync_state,
+            method="GET",
+        )
+
+        self.add_endpoint(
+            "/{project_name}/state/representations",
+            self.get_representations_site_sync_state,
             method="GET",
         )
 
@@ -527,6 +534,47 @@ class SiteSync(BaseServerAddon):
                 await conn.fetch(*query)
 
                 return Response(status_code=204)
+
+    async def get_representations_site_sync_state(
+        self,
+        project_name: ProjectName,
+        representationIds: list[str] = Query(
+            None,
+            description="Filter by representation ids",
+            example="['57cf375c749611ed89de0242ac140004']",
+        ),
+        siteNames: list[str] | None = Query(
+            None,
+            description="Filter by site names",
+            example="['studio']",
+        ),
+    ) -> list[RepresentationSiteStateModel]:
+        """List all sites on all representations and their state"""
+        await check_sync_status_table(project_name)
+
+        conditions = [
+            f"representation_id IN {SQLTool.array(representationIds)}"
+        ]
+
+        if siteNames:
+            conditions.append(f"site_name IN {SQLTool.array(siteNames)}")
+
+        query = f"""
+            SELECT representation_id, site_name, status
+            FROM project_{project_name}.sitesync_files_status
+            {SQLTool.conditions(conditions)}
+        """
+        repres = []
+
+        async for row in Postgres.iterate(query):
+            repres.append(
+                RepresentationSiteStateModel(
+                    representationId=row["representation_id"],
+                    siteName=row["site_name"],
+                    status=row["status"]
+                )
+            )
+        return repres
 
 
 def get_overal_status(files: dict) -> StatusEnum:
