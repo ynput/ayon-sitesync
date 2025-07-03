@@ -234,7 +234,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         representation_id = representation_id.replace("-", "")
 
         self._set_state_sync_state(
-            project_name, representation_id, site_name, payload_dict
+            project_name, representation_id, site_name, payload_dict, force
         )
 
     def remove_site(
@@ -1724,15 +1724,19 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         return self._get_progress_for_repre_new(*args, **kwargs)
 
     def _set_state_sync_state(
-        self, project_name, representation_id, site_name, payload_dict
+        self,
+        project_name,
+        representation_id,
+        site_name,
+        payload_dict,
+        force=False,
     ):
         """Calls server endpoint to store sync info for 'representation_id'."""
         endpoint = "{}/{}/state/{}/{}".format(
-            self.endpoint_prefix,
-            project_name,
-            representation_id,
-            site_name
+            self.endpoint_prefix, project_name, representation_id, site_name
         )
+        if force:
+            endpoint = f"{endpoint}?reset=true"
 
         response = ayon_api.post(endpoint, **payload_dict)
         if response.status_code not in [200, 204]:

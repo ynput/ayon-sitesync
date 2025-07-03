@@ -395,9 +395,10 @@ class SiteSync(BaseServerAddon):
         post_data: RepresentationStateModel,
         project_name: ProjectName,
         representation_id: RepresentationID,
-        site_name: str = Path(...),  # TODO: add regex validator/dependency here! Important!
-
-        # TODO: add CurrentUser dependency here! This endpoint is public now!
+        site_name: str = Path(
+            ...
+        ),
+        reset: bool = Query(False),  # reset existing
     ) -> Response:
         """Adds site information to representation.
 
@@ -406,6 +407,7 @@ class SiteSync(BaseServerAddon):
         Called repeatedly during synchronization to update progress/store error
         message
         """
+        DEFAULT_PRIORITY = 50
         await check_sync_status_table(project_name)
 
         priority = post_data.priority
@@ -425,8 +427,13 @@ class SiteSync(BaseServerAddon):
 
                 result = await conn.fetch(*query)
                 do_insert = False
-                if not result:
-                    do_insert = True
+
+                # reset with new files is required for hero versions
+                if not result or reset:
+                    if not result:
+                        do_insert = True
+                    else:
+                        priority = result[0]["priority"]
                     repre = await RepresentationEntity.load(
                         project_name, representation_id, transaction=conn
                     )
@@ -476,7 +483,8 @@ class SiteSync(BaseServerAddon):
                         representation_id,
                         site_name,
                         status,
-                        post_data.priority if post_data.priority is not None else 50,
+                        post_data.priority if post_data.priority is not None else DEFAULT_PRIORITY  # noqa
+,
                         {"files": files},
                     )
                 else:
@@ -488,7 +496,7 @@ class SiteSync(BaseServerAddon):
                         """,
                         status,
                         {"files": files},
-                        priority,
+                        priority or DEFAULT_PRIORITY,
                         representation_id,
                         site_name,
                     )
