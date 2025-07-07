@@ -1780,7 +1780,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         self,
         project_name,
         representation_ids,
-        site_names = None
+        site_names=None,
     ):
         """ Returns all site states for representation ids.
 
