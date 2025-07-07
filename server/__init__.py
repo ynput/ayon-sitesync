@@ -433,14 +433,16 @@ class SiteSync(BaseServerAddon):
                 )
 
                 result = await conn.fetch(*query)
-                do_insert = False
+                do_insert = not result
+
+                if priority is None:
+                    priority = DEFAULT_PRIORITY
+                    # Keep priority from existing items
+                    if result:
+                        priority = result[0]["priority"]
 
                 # reset with new files is required for hero versions
-                if not result or reset:
-                    if not result:
-                        do_insert = True
-                    else:
-                        priority = result[0]["priority"]
+                if reset or do_insert:
                     repre = await RepresentationEntity.load(
                         project_name, representation_id, transaction=conn
                     )
@@ -456,8 +458,6 @@ class SiteSync(BaseServerAddon):
                         }
                 else:
                     files = result[0]["data"].get("files")
-                    if priority is None:
-                        priority = result[0]["priority"]
 
                 for posted_file in post_data.files:
                     posted_file_id = posted_file.id
@@ -490,7 +490,7 @@ class SiteSync(BaseServerAddon):
                         representation_id,
                         site_name,
                         status,
-                        post_data.priority if post_data.priority is not None else DEFAULT_PRIORITY  # noqa
+                        priority
 ,
                         {"files": files},
                     )
@@ -503,7 +503,7 @@ class SiteSync(BaseServerAddon):
                         """,
                         status,
                         {"files": files},
-                        priority or DEFAULT_PRIORITY,
+                        priority,
                         representation_id,
                         site_name,
                     )
