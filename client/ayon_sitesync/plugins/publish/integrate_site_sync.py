@@ -85,7 +85,7 @@ class IntegrateSiteSync(pyblish.api.InstancePlugin):
             sitesync_addon.add_site(
                 project_name,
                 repre_on_site["representationId"],
-                site_status,
+                repre_on_site["siteName"],
                 status=site_status,
                 force=True,
             )
