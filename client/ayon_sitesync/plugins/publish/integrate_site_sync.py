@@ -5,6 +5,8 @@ sites. On some might be present (by default 'studio'), on some needs to
 be synchronized.
 
 """
+from collections import defaultdict
+
 import pyblish.api
 
 from ayon_core.addon import AYONAddon
@@ -46,6 +48,7 @@ class IntegrateSiteSync(pyblish.api.InstancePlugin):
                 )
 
         hero_version_entity = instance.data.get("heroVersionEntity")
+        self.log.info(f"hero_version_entity::{hero_version_entity}")
         if not hero_version_entity:
             return
 
@@ -68,24 +71,44 @@ class IntegrateSiteSync(pyblish.api.InstancePlugin):
         Re sync of all downloaded hero version is necessary to update locally
         cached instances.
         """
-        hero_repres = get_representations(
-            project_name,
-            version_ids=[hero_version_entity["id"]]
-        )
+        hero_repres = list(get_representations(
+            project_name, version_ids=[hero_version_entity["id"]]
+        ))
+
         hero_repre_ids = [repre["id"] for repre in hero_repres]
-        repres_sites = sitesync_addon.get_representations_sites_sync_state(
-            project_name, hero_repre_ids
+        repres_sites_state = (
+            sitesync_addon.get_representations_sites_sync_state(
+                project_name, hero_repre_ids
+            )
         )
+        repre_sites_by_id = defaultdict(list)
+        for repre_site in repres_sites_state:
+            repre_sites_by_id[repre_site["representationId"]].append(repre_site)
+
         publish_site_status = {site["name"]: site["status"] for site in sites}
-        for repre_on_site in repres_sites:
-            site_status = (
-                    publish_site_status.get(repre_on_site["siteName"])
-                    or SiteSyncStatus.QUEUED
-            )
-            sitesync_addon.add_site(
-                project_name,
-                repre_on_site["representationId"],
-                repre_on_site["siteName"],
-                status=site_status,
-                force=True,
-            )
+        for hero_repre in hero_repres:
+            # completely new
+            repre_on_sites = repre_sites_by_id.get(hero_repre["id"])
+            if not repre_on_sites:
+                for site_name, site_status in publish_site_status.items():
+                    sitesync_addon.add_site(
+                        project_name,
+                        hero_repre["id"],
+                        site_name,
+                        status=site_status,
+                    )
+            else:
+                # update existing synced
+                for repre_on_site in repre_on_sites:
+                    site_status = (
+                        publish_site_status.get(
+                            repre_on_site["siteName"],SiteSyncStatus.QUEUED
+                        )
+                    )
+                    sitesync_addon.add_site(
+                        project_name,
+                        repre_on_site["representationId"],
+                        repre_on_site["siteName"],
+                        status=site_status,
+                        force=True,
+                    )
