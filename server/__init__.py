@@ -27,6 +27,7 @@ from .settings.models import (
     SortByEnum,
     StatusEnum,
     SyncStatusModel,
+    RepresentationSiteStateModel
 )
 
 
@@ -52,6 +53,12 @@ class SiteSync(BaseServerAddon):
         self.add_endpoint(
             "/{project_name}/state",
             self.get_site_sync_state,
+            method="GET",
+        )
+
+        self.add_endpoint(
+            "/{project_name}/state/representations",
+            self.get_representations_site_sync_state,
             method="GET",
         )
 
@@ -395,9 +402,10 @@ class SiteSync(BaseServerAddon):
         post_data: RepresentationStateModel,
         project_name: ProjectName,
         representation_id: RepresentationID,
-        site_name: str = Path(...),  # TODO: add regex validator/dependency here! Important!
-
-        # TODO: add CurrentUser dependency here! This endpoint is public now!
+        site_name: str = Path(
+            ...
+        ),
+        reset: bool = Query(False),  # reset existing
     ) -> Response:
         """Adds site information to representation.
 
@@ -406,6 +414,7 @@ class SiteSync(BaseServerAddon):
         Called repeatedly during synchronization to update progress/store error
         message
         """
+        DEFAULT_PRIORITY = 50
         await check_sync_status_table(project_name)
 
         priority = post_data.priority
@@ -424,9 +433,16 @@ class SiteSync(BaseServerAddon):
                 )
 
                 result = await conn.fetch(*query)
-                do_insert = False
-                if not result:
-                    do_insert = True
+                do_insert = not result
+
+                if priority is None:
+                    priority = DEFAULT_PRIORITY
+                    # Keep priority from existing items
+                    if result:
+                        priority = result[0]["priority"]
+
+                # reset with new files is required for hero versions
+                if reset or do_insert:
                     repre = await RepresentationEntity.load(
                         project_name, representation_id, transaction=conn
                     )
@@ -442,8 +458,6 @@ class SiteSync(BaseServerAddon):
                         }
                 else:
                     files = result[0]["data"].get("files")
-                    if priority is None:
-                        priority = result[0]["priority"]
 
                 for posted_file in post_data.files:
                     posted_file_id = posted_file.id
@@ -476,7 +490,8 @@ class SiteSync(BaseServerAddon):
                         representation_id,
                         site_name,
                         status,
-                        post_data.priority if post_data.priority is not None else 50,
+                        priority
+,
                         {"files": files},
                     )
                 else:
@@ -519,6 +534,47 @@ class SiteSync(BaseServerAddon):
                 await conn.fetch(*query)
 
                 return Response(status_code=204)
+
+    async def get_representations_site_sync_state(
+        self,
+        project_name: ProjectName,
+        representationIds: list[str] = Query(
+            None,
+            description="Filter by representation ids",
+            example="['57cf375c749611ed89de0242ac140004']",
+        ),
+        siteNames: list[str] | None = Query(
+            None,
+            description="Filter by site names",
+            example="['studio']",
+        ),
+    ) -> list[RepresentationSiteStateModel]:
+        """List all sites on all representations and their state"""
+        await check_sync_status_table(project_name)
+
+        conditions = [
+            f"representation_id IN {SQLTool.array(representationIds)}"
+        ]
+
+        if siteNames:
+            conditions.append(f"site_name IN {SQLTool.array(siteNames)}")
+
+        query = f"""
+            SELECT representation_id, site_name, status
+            FROM project_{project_name}.sitesync_files_status
+            {SQLTool.conditions(conditions)}
+        """
+        repres = []
+
+        async for row in Postgres.iterate(query):
+            repres.append(
+                RepresentationSiteStateModel(
+                    representationId=row["representation_id"],
+                    siteName=row["site_name"],
+                    status=row["status"]
+                )
+            )
+        return repres
 
 
 def get_overal_status(files: dict) -> StatusEnum:
