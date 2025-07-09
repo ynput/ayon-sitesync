@@ -1,7 +1,7 @@
 {
   "name": "sitesync-addon",
   "private": true,
-  "version": "1.2.4+dev",
+  "version": "1.2.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
