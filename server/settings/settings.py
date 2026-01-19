@@ -11,6 +11,9 @@ from .providers.local_drive import LocalDriveSubmodel
 from .providers.gdrive import GoogleDriveSubmodel
 from .providers.dropbox import DropboxSubmodel
 from .providers.sftp import SFTPSubmodel
+from .providers.nextcloud import NextcloudSubmodel
+from .providers.rclone import RCloneSubmodel
+
 
 if typing.TYPE_CHECKING:
     from ayon_server.addons import BaseServerAddon
@@ -66,7 +69,9 @@ def provider_resolver():
         "gdrive": "Google Drive",
         "local_drive": "Local Drive",
         "dropbox": "Dropbox",
-        "sftp": "SFTP"
+        "sftp": "SFTP",
+        "nextcloud": "Nextcloud",
+        "rclone": "Rclone"
     }
     return [{"value": f"{key}", "label": f"{label}"}
             for key, label in provider_dict.items()]
@@ -132,6 +137,14 @@ class SitesSubmodel(BaseSettingsModel):
     )
     sftp: SFTPSubmodel = Field(
         default_factory=SFTPSubmodel,
+        scope=["studio", "project", "site"]
+    )
+    nextcloud: NextcloudSubmodel = Field(
+        default_factory=NextcloudSubmodel,
+        scope=["studio", "project", "site"]
+    )
+    rclone: RCloneSubmodel = Field(
+        default_factory=RCloneSubmodel,
         scope=["studio", "project", "site"]
     )
 
