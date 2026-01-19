@@ -9,7 +9,7 @@ from email.utils import parsedate_to_datetime
 log = Logger.get_logger("SiteSync-NextCloudHandler")
 
 
-class NextcloudProvider(AbstractProvider):
+class NextcloudHandler(AbstractProvider):
     """Nextcloud provider using WebDAV protocol."""
 
     CODE = "nextcloud"

@@ -1,18 +1,20 @@
 import os
 import json
 import subprocess
+import platform
 from datetime import datetime
 from .abstract_provider import AbstractProvider
 
 
-class RCloneProvider(AbstractProvider):
+class RCloneHandler(AbstractProvider):
     CODE = "rclone"
 
     def __init__(self, project_name, site_name, tree=None, presets=None):
         super().__init__(project_name, site_name, tree, presets)
         self.presets = presets or {}
-        self.rclone_path = self.presets.get("rclone_executable_path", "rclone")
-        self._config_path = self.presets.get("rclone_config_path")
+        self.rclone_path = self.presets.get("rclone_executable_path", "rclone").get(platform.system().lower())
+        self._config_path = self.presets.get("rclone_config_path").get(platform.system().lower())
+        self.log.info(f"Using rclone config from {self._config_path}")
         self.remote_name = self.presets.get("remote_name", "nextcloud")
         self._root = self.presets.get("root", "").strip("/")
         self.extra_args = self.presets.get("additional_args", [])
