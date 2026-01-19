@@ -193,6 +193,9 @@ class RCloneProvider(AbstractProvider):
         if not output:
             return None
 
+        if isinstance(output, bytes):
+            output = output.decode("utf-8", errors="replace")
+
         # Find the first occurrence of '[' or '{' to skip headers/notices
         start_index = -1
         for i, char in enumerate(output):
@@ -210,5 +213,4 @@ class RCloneProvider(AbstractProvider):
                 end_index = len(output) - i
                 break
 
-        json_content = output[start_index:end_index]
-        return json.loads(json_content)
+        return output[start_index:end_index]
