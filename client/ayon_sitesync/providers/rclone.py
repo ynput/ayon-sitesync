@@ -11,11 +11,10 @@ class RCloneProvider(AbstractProvider):
     def __init__(self, project_name, site_name, tree=None, presets=None):
         super().__init__(project_name, site_name, tree, presets)
         self.presets = presets or {}
-        self.rclone_path = self.presets.get("rclone_path", "rclone")
-        self._config_path = self.presets.get("config_file")
+        self.rclone_path = self.presets.get("rclone_executable_path", "rclone")
+        self._config_path = self.presets.get("rclone_config_path")
         self.remote_name = self.presets.get("remote_name", "nextcloud")
         self._root = self.presets.get("root", "").strip("/")
-        # Get extra flags from settings (e.g. ["--webdav-nextcloud-chunk-size", "0"])
         self.extra_args = self.presets.get("additional_args", [])
 
     def is_active(self):
@@ -81,6 +80,12 @@ class RCloneProvider(AbstractProvider):
             overwrite=False
     ):
         """High-speed download using rclone copyto."""
+
+        if os.path.exists(local_path) and not overwrite:
+            raise FileExistsError(
+                "File already exists, use 'overwrite' argument"
+            )
+
         source_path = self._get_remote_path(source_path)
         args = [
             "copyto",
@@ -166,8 +171,10 @@ class RCloneProvider(AbstractProvider):
             # Format: RCLONE_CONFIG_<UPPERCASE_REMOTE_NAME>_PASS
             env_key = f"RCLONE_CONFIG_{self.remote_name.upper()}_PASS"
             env[env_key] = self._obscure_pass(self.presets.get("password"))
-        self.log.debug(f"Running rclone: {' '.join(cmd)}")
-        return subprocess.check_output(cmd, stderr=subprocess.STDOUT, env=env)
+        self.log.info(f"Running rclone: {' '.join(cmd)}")
+        p = subprocess.check_output(' '.join(cmd), stderr=subprocess.STDOUT, env=env)
+        self.log.info(f"rclone output: {p}")
+        return p
 
     def _get_remote_path(self, path):
         """Helper to format the path for rclone with the root prefix."""
