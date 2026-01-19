@@ -10,10 +10,11 @@ class RCloneProvider(AbstractProvider):
 
     def __init__(self, project_name, site_name, tree=None, presets=None):
         super().__init__(project_name, site_name, tree, presets)
-        self.rclone_path = "rclone"
         self.presets = presets or {}
+        self.rclone_path = self.presets.get("rclone_path", "rclone")
         self._config_path = self.presets.get("config_file")
-        self.remote_name = self.presets.get("remote_name", "ayon_remote")
+        self.remote_name = self.presets.get("remote_name", "nextcloud")
+        self._root = self.presets.get("root", "").strip("/")
         # Get extra flags from settings (e.g. ["--webdav-nextcloud-chunk-size", "0"])
         self.extra_args = self.presets.get("additional_args", [])
 
@@ -42,10 +43,12 @@ class RCloneProvider(AbstractProvider):
         if not os.path.exists(source_path):
             raise FileNotFoundError(f"Source file {source_path} doesn't exist.")
 
+        remote_path = self._get_remote_path(target_path)
+
         args = [
             "copyto",
             source_path,
-            f"{self.remote_name}:{target_path}",
+            remote_path,
             "--fast-list",
             "--contimeout", "60s"
         ]
@@ -78,9 +81,10 @@ class RCloneProvider(AbstractProvider):
             overwrite=False
     ):
         """High-speed download using rclone copyto."""
+        source_path = self._get_remote_path(source_path)
         args = [
             "copyto",
-            f"{self.remote_name}:{source_path}",
+            source_path,
             local_path
         ]
         if not overwrite:
@@ -102,7 +106,8 @@ class RCloneProvider(AbstractProvider):
 
     def delete_file(self, path):
         """Delete a file from the remote."""
-        args = ["deletefile", f"{self.remote_name}:{path}"]
+        remote_path = self._get_remote_path(path)
+        args = ["deletefile", f"{remote_path}"]
         try:
             self._run_rclone(args)
             self.log.info(f"Successfully deleted {path} on {self.remote_name}")
@@ -113,26 +118,30 @@ class RCloneProvider(AbstractProvider):
 
     def list_folder(self, folder_path):
         """List all files in a folder non-recursively."""
-        args = ["lsjson", f"{self.remote_name}:{folder_path}"]
+        remote_folder_path = self._get_remote_path(folder_path)
+        args = ["lsjson", remote_folder_path]
         raw_json = self._run_rclone(args)
         items = json.loads(raw_json)
         return [item["Name"] for item in items]
 
     def create_folder(self, folder_path):
         """Create a directory on the remote."""
-        args = ["mkdir", f"{self.remote_name}:{folder_path}"]
+        remote_folder_path = self._get_remote_path(folder_path)
+        args = ["mkdir", remote_folder_path]
         self._run_rclone(args)
         return folder_path
 
     def get_tree(self, remote_path=""):
         """Fetch full recursive metadata tree."""
+        remote_path = self._get_remote_path(remote_path)
         args = [
             "lsjson", "-R",
-            f"{self.remote_name}:{remote_path}",
+            remote_path,
             "--files-only"
         ]
         raw_json = self._run_rclone(args)
-        items = json.loads(raw_json)
+        data = self._parse_rclone_json(raw_json)
+        items = json.loads(data)
 
         tree = {}
         for item in items:
@@ -152,10 +161,54 @@ class RCloneProvider(AbstractProvider):
         """Internal helper to execute rclone commands with extra args."""
         # Insert extra args before the specific command arguments
         cmd = [self.rclone_path, "--config", self._config_path] + self.extra_args + args
+        env = os.environ.copy()
+        if self.presets.get("password"):
+            # Format: RCLONE_CONFIG_<UPPERCASE_REMOTE_NAME>_PASS
+            env_key = f"RCLONE_CONFIG_{self.remote_name.upper()}_PASS"
+            env[env_key] = self._obscure_pass(self.presets.get("password"))
         self.log.debug(f"Running rclone: {' '.join(cmd)}")
-        return subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+        return subprocess.check_output(cmd, stderr=subprocess.STDOUT, env=env)
+
+    def _get_remote_path(self, path):
+        """Helper to format the path for rclone with the root prefix."""
+        clean_path = path.strip("/")
+        if self._root:
+            return f"{self.remote_name}:{self._root}/{clean_path}"
+        return f"{self.remote_name}:{clean_path}"
 
     def _parse_time(self, rclone_time_str):
         """Parse rclone's ISO8601 time string to timestamp."""
         dt = datetime.fromisoformat(rclone_time_str.replace("Z", "+00:00"))
         return dt.timestamp()
+
+    def _obscure_pass(self, password):
+        # Rclone expects passwords in env vars to be obscured
+        # You can call 'rclone obscure' via subprocess to get this string
+        cmd = [self.rclone_path, "obscure", password]
+        return subprocess.check_output(cmd).decode().strip()
+
+    @staticmethod
+    def _parse_rclone_json(output:dict):
+        """Parses JSON from rclone output, stripping leading/trailing non-JSON text."""
+        if not output:
+            return None
+
+        # Find the first occurrence of '[' or '{' to skip headers/notices
+        start_index = -1
+        for i, char in enumerate(output):
+            if char in ('[', '{'):
+                start_index = i
+                break
+
+        if start_index == -1:
+            raise ValueError(f"No JSON object found in output: {output}")
+
+        # Find the last occurrence of ']' or '}'
+        end_index = -1
+        for i, char in enumerate(reversed(output)):
+            if char in (']', '}'):
+                end_index = len(output) - i
+                break
+
+        json_content = output[start_index:end_index]
+        return json.loads(json_content)
