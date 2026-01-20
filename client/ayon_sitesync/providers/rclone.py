@@ -11,13 +11,15 @@ class RCloneHandler(AbstractProvider):
 
     def __init__(self, project_name, site_name, tree=None, presets=None):
         super().__init__(project_name, site_name, tree, presets)
+        self.project_name = project_name
         self.presets = presets or {}
         self.rclone_path = self.presets.get("rclone_executable_path", "rclone").get(platform.system().lower())
         self._config_path = self.presets.get("rclone_config_path").get(platform.system().lower())
-        self.log.info(f"Using rclone config from {self._config_path}")
+        self.log.debug(f"Using rclone config from {self._config_path}")
         self.remote_name = self.presets.get("remote_name", "nextcloud")
         self._root = self.presets.get("root", "").strip("/")
         self.extra_args = self.presets.get("additional_args", [])
+        self._tree = tree
 
     def is_active(self):
         """Check if rclone is available and config exists."""
@@ -25,6 +27,7 @@ class RCloneHandler(AbstractProvider):
             return False
         try:
             self._run_rclone(["version"])
+            self.log.info("rclone is healthy")
             return True
         except Exception:
             return False
@@ -44,6 +47,11 @@ class RCloneHandler(AbstractProvider):
         if not os.path.exists(source_path):
             raise FileNotFoundError(f"Source file {source_path} doesn't exist.")
 
+        if self._path_exists(target_path) and not overwrite:
+            raise FileExistsError(
+                f"File already exists, use 'overwrite' argument: {target_path}"
+            )
+
         remote_path = self._get_remote_path(target_path)
 
         args = [
@@ -60,6 +68,8 @@ class RCloneHandler(AbstractProvider):
 
         # SiteSync status update
         if addon:
+            self.log.info(f"Successfully uploaded {source_path} to {remote_path}")
+            self.log.info(f"Updating SiteSync status for {file['id']}")
             addon.update_db(
                 project_name=project_name,
                 new_file_id=None,
@@ -82,6 +92,8 @@ class RCloneHandler(AbstractProvider):
             overwrite=False
     ):
         """High-speed download using rclone copyto."""
+        if not self._path_exists(source_path):
+            raise FileNotFoundError(f"Source file {source_path} doesn't exist.")
 
         if os.path.exists(local_path) and not overwrite:
             raise FileExistsError(
@@ -100,6 +112,8 @@ class RCloneHandler(AbstractProvider):
         self._run_rclone(args)
 
         if addon:
+            self.log.info(f"Successfully downloaded {source_path} to {local_path}")
+            self.log.info(f"Updating SiteSync status for {file['id']}")
             addon.update_db(
                 project_name=project_name,
                 new_file_id=None,
@@ -129,35 +143,52 @@ class RCloneHandler(AbstractProvider):
         args = ["lsjson", remote_folder_path]
         raw_json = self._run_rclone(args)
         items = json.loads(raw_json)
-        return [item["Name"] for item in items]
+        data = []
+        for item in items:
+            name = item["Name"]
+            if not name.startswith("/"):
+                name = "/" + name
+            data.append(name)
+        self.log.info(f"Fetched list of files in {folder_path}: {data}")
+        return data
 
     def create_folder(self, folder_path):
         """Create a directory on the remote."""
+        if self._path_exists(folder_path):
+            return folder_path
         remote_folder_path = self._get_remote_path(folder_path)
         args = ["mkdir", remote_folder_path]
         self._run_rclone(args)
+        self.log.info(f"Successfully created {folder_path} on {self.remote_name}")
         return folder_path
 
-    def get_tree(self, remote_path=""):
+    def get_tree(self):
         """Fetch full recursive metadata tree."""
-        remote_path = self._get_remote_path(remote_path)
-        args = [
-            "lsjson", "-R",
-            remote_path,
-            "--files-only"
-        ]
-        raw_json = self._run_rclone(args)
-        data = self._parse_rclone_json(raw_json)
-        items = json.loads(data)
+        if not self._tree:
+            remote_path = self._get_remote_path(self._root or "/")
+            # remote_path = remote_path + "/" + self.project_name
+            args = [
+                "lsjson", "-R",
+                remote_path,
+                "--files-only"
+            ]
+            raw_json = self._run_rclone(args)
+            data = self._parse_rclone_json(raw_json)
+            items = json.loads(data)
 
-        tree = {}
-        for item in items:
-            tree[item["Path"]] = {
-                "size": item["Size"],
-                "mtime": self._parse_time(item["ModTime"]),
-                "is_dir": item["IsDir"]
-            }
-        return tree
+            tree = {}
+            for item in items:
+                path = item["Path"]
+                full_ayon_path = f"{self._root}/{path}" if self._root else path
+                tree[full_ayon_path] = {
+                    "size": item["Size"],
+                    "mtime": self._parse_time(item["ModTime"]),
+                    "is_dir": item["IsDir"]
+                }
+            if tree:
+                self._tree = tree
+        self.log.info(f"Tree: {self._tree}")
+        return self._tree
 
     def get_roots_config(self, anatomy=None):
         """Returns root values for path resolving."""
@@ -175,15 +206,34 @@ class RCloneHandler(AbstractProvider):
             env[env_key] = self._obscure_pass(self.presets.get("password"))
         self.log.info(f"Running rclone: {' '.join(cmd)}")
         p = subprocess.check_output(' '.join(cmd), stderr=subprocess.STDOUT, env=env)
-        self.log.info(f"rclone output: {p}")
+        self.log.debug(f"rclone output: {p}")
         return p
 
+    def _path_exists(self, path):
+        """Checks if path exists on remote."""
+        remote_path = self._get_remote_path(path)
+        args = ["lsjson", remote_path]
+        try:
+            output = self._run_rclone(args)
+            parsed = self._parse_rclone_json(output)
+            if not parsed:
+                self.log.info(f"Path check failed for {remote_path}: empty output")
+                return False
+
+            items = json.loads(parsed)
+            # If rclone returns a list with items, the path (or its contents) exists.
+            # When pointing directly to a file, rclone returns [ { "Path": "filename", ... } ]
+            self.log.info(f"{remote_path} exists")
+            return len(items) > 0
+        except Exception as e:
+            self.log.info(f"Path check failed for {remote_path}: {e}")
+            return False
+
     def _get_remote_path(self, path):
-        """Helper to format the path for rclone with the root prefix."""
-        clean_path = path.strip("/")
-        if self._root:
-            return f"{self.remote_name}:{self._root}/{clean_path}"
-        return f"{self.remote_name}:{clean_path}"
+        """Helper to format the path for rclone with the remote name."""
+        path = f"{self.remote_name}:{path}"
+        self.log.info(f"Remote Path: {path}")
+        return path
 
     def _parse_time(self, rclone_time_str):
         """Parse rclone's ISO8601 time string to timestamp."""
