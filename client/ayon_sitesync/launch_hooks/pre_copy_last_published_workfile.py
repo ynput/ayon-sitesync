@@ -7,6 +7,7 @@ from ayon_api import (
     get_last_versions
 )
 
+from ayon_core.lib import is_func_signature_supported
 from ayon_core.pipeline.template_data import get_template_data
 from ayon_core.pipeline.workfile import get_workfile_template_key
 from ayon_core.pipeline.workfile import should_use_last_workfile_on_launch
@@ -187,11 +188,17 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
     ):
         """Looks for last published representation for host and context"""
 
-        product_entities = get_products(
-            project_name,
+        kwargs = dict(
             folder_ids={folder_id},
-            product_types={"workfile"}
+            product_base_types={"workfile"},
         )
+        if not is_func_signature_supported(
+            get_products, project_name, **kwargs
+        ):
+            kwargs["product_types"] = kwargs.pop("product_base_types")
+
+        product_entities = get_products(project_name, **kwargs)
+
         product_ids = {
             product_entity["id"]
             for product_entity in product_entities
