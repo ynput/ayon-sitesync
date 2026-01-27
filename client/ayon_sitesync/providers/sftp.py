@@ -9,8 +9,15 @@ from .abstract_provider import AbstractProvider
 
 log = Logger.get_logger("SiteSync-SFTPHandler")
 
-import sftpretty
-import paramiko
+sftpretty = None
+try:
+    import sftpretty
+    import paramiko
+except (ImportError, SyntaxError):
+    pass
+
+    # handle imports from Python 2 hosts - in those only basic methods are used
+    log.warning("Import failed, imported from Python 2, operations will fail.")
 
 
 class SFTPHandler(AbstractProvider):
@@ -295,6 +302,9 @@ class SFTPHandler(AbstractProvider):
         Returns:
             sftpretty.Connection
         """
+        if not sftpretty:
+            raise ImportError
+
         cnopts = sftpretty.CnOpts()
         cnopts.log_level = "error"
         cnopts.hostkeys = None
