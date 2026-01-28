@@ -15,31 +15,36 @@ class RCloneHandler(AbstractProvider):
         self.presets = presets or {}
         self.rclone_path = self.presets.get("rclone_executable_path", {}).get(
             platform.system().lower(), "rclone")
+
+        self._root = self.presets.get("root", "").strip("/")
+        self.extra_args = self.presets.get("additional_args", [])
+
         self._config_path = self.presets.get("rclone_config_path", {}).get(
             platform.system().lower(), "")
 
+        self.vendor = self.presets.get("vendor", "")
+        self.tipe = self.presets.get("type", "")
+        self.url = self.presets.get("url", "")
+        self.user = self.presets.get("user", "")
+
+        # manage config vs live env
         if not self._config_path:
             # We need to check vendor, type, url and user under presets
             # if they exist and are filled we use them in the env to get the config path
-            vendor = self.presets.get("vendor", "")
-            type = self.presets.get("type", "")
-            url = self.presets.get("url", "")
-            user = self.presets.get("user", "")
             # check if there is data in all vars
-            if vendor and type and url and user:
-                self.vendor = vendor
-                self.type = type
-                self.url = url
-                self.user = user
+            if self.vendor and self.tipe and self.url and self.user:
+
+                self.log.debug(
+                    f"Using rclone with env vars: vendor={self.vendor}, type={self.tipe}, url={self.url}, user={self.user}")
+
             else:
                 raise ValueError(
                     "No rclone.conf is defined nor the needed settings, cannot create a connection.")
+        else:
+            self.log.debug(f"Using rclone config from {self._config_path}")
 
-        self.log.debug(f"Using rclone config from {self._config_path}")
-
-        self.remote_name = self.presets.get("remote_name", "")
-        self._root = self.presets.get("root", "").strip("/")
-        self.extra_args = self.presets.get("additional_args", [])
+        # in case the remote name is not set, use the vendor name works for the env connection
+        self.remote_name = self.presets.get("remote_name", self.vendor)
         self._tree = tree
 
     def is_active(self):
