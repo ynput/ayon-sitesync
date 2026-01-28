@@ -36,7 +36,7 @@ class RCloneSubmodel(BaseSettingsModel):
     type: str = Field("webdav", title="Remote Type",
                       description="Use this if you do not have a rclone.conf")
 
-    url: str = Field(title="Remote Url",
+    url: str = Field("", title="Remote Url",
                      description="Use this if you do not have a rclone.conf")
 
     vendor: str = Field("nextcloud", title="Vendor",
