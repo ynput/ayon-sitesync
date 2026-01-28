@@ -537,6 +537,7 @@ class SiteSyncThread(threading.Thread):
                 continue
             file_states = repre_state.get("files") or []
             for file_state in file_states:
+                self.log.info(f"Processing file '{file_state}'")
                 # skip already processed files
                 # WARNING Using empty string for path is dangerous!!!
                 file_path = file_state.get("path", "")

@@ -13,10 +13,31 @@ class RCloneHandler(AbstractProvider):
         super().__init__(project_name, site_name, tree, presets)
         self.project_name = project_name
         self.presets = presets or {}
-        self.rclone_path = self.presets.get("rclone_executable_path", "rclone").get(platform.system().lower())
-        self._config_path = self.presets.get("rclone_config_path").get(platform.system().lower())
+        self.rclone_path = self.presets.get("rclone_executable_path", {}).get(
+            platform.system().lower(), "rclone")
+        self._config_path = self.presets.get("rclone_config_path", {}).get(
+            platform.system().lower(), "")
+
+        if not self._config_path:
+            # We need to check vendor, type, url and user under presets
+            # if they exist and are filled we use them in the env to get the config path
+            vendor = self.presets.get("vendor", "")
+            type = self.presets.get("type", "")
+            url = self.presets.get("url", "")
+            user = self.presets.get("user", "")
+            # check if there is data in all vars
+            if vendor and type and url and user:
+                self.vendor = vendor
+                self.type = type
+                self.url = url
+                self.user = user
+            else:
+                raise ValueError(
+                    "No rclone.conf is defined nor the needed settings, cannot create a connection.")
+
         self.log.debug(f"Using rclone config from {self._config_path}")
-        self.remote_name = self.presets.get("remote_name", "nextcloud")
+
+        self.remote_name = self.presets.get("remote_name", "")
         self._root = self.presets.get("root", "").strip("/")
         self.extra_args = self.presets.get("additional_args", [])
         self._tree = tree
@@ -68,7 +89,8 @@ class RCloneHandler(AbstractProvider):
 
         # SiteSync status update
         if addon:
-            self.log.info(f"Successfully uploaded {source_path} to {remote_path}")
+            self.log.info(
+                f"Successfully uploaded {source_path} to {remote_path}")
             self.log.info(f"Updating SiteSync status for {file['id']}")
             addon.update_db(
                 project_name=project_name,
@@ -112,7 +134,8 @@ class RCloneHandler(AbstractProvider):
         self._run_rclone(args)
 
         if addon:
-            self.log.info(f"Successfully downloaded {source_path} to {local_path}")
+            self.log.info(
+                f"Successfully downloaded {source_path} to {local_path}")
             self.log.info(f"Updating SiteSync status for {file['id']}")
             addon.update_db(
                 project_name=project_name,
@@ -159,7 +182,8 @@ class RCloneHandler(AbstractProvider):
         remote_folder_path = self._get_remote_path(folder_path)
         args = ["mkdir", remote_folder_path]
         self._run_rclone(args)
-        self.log.info(f"Successfully created {folder_path} on {self.remote_name}")
+        self.log.info(
+            f"Successfully created {folder_path} on {self.remote_name}")
         return folder_path
 
     def get_tree(self):
@@ -198,14 +222,29 @@ class RCloneHandler(AbstractProvider):
     def _run_rclone(self, args):
         """Internal helper to execute rclone commands with extra args."""
         # Insert extra args before the specific command arguments
-        cmd = [self.rclone_path, "--config", self._config_path] + self.extra_args + args
+        cmd = [self.rclone_path, "--config",
+               self._config_path] + self.extra_args + args
         env = os.environ.copy()
         if self.presets.get("password"):
             # Format: RCLONE_CONFIG_<UPPERCASE_REMOTE_NAME>_PASS
             env_key = f"RCLONE_CONFIG_{self.remote_name.upper()}_PASS"
             env[env_key] = self._obscure_pass(self.presets.get("password"))
+
+        if not self._config_path:
+            # as we raise an error upon init we can get away with this check alone
+            cmd = [self.rclone_path] + self.extra_args + args
+            env_vendor = f"RCLONE_CONFIG_{self.remote_name.upper()}_VENDOR"
+            env[env_vendor] = self.vendor
+            env_type = f"RCLONE_CONFIG_{self.remote_name.upper()}_TYPE"
+            env[env_type] = self.type
+            env_url = f"RCLONE_CONFIG_{self.remote_name.upper()}_URL"
+            env[env_url] = self.url
+            env_user = f"RCLONE_CONFIG_{self.remote_name.upper()}_USER"
+            env[env_user] = self.user
+
         self.log.info(f"Running rclone: {' '.join(cmd)}")
-        p = subprocess.check_output(' '.join(cmd), stderr=subprocess.STDOUT, env=env)
+        p = subprocess.check_output(' '.join(cmd), stderr=subprocess.STDOUT,
+                                    env=env)
         self.log.debug(f"rclone output: {p}")
         return p
 
@@ -217,7 +256,8 @@ class RCloneHandler(AbstractProvider):
             output = self._run_rclone(args)
             parsed = self._parse_rclone_json(output)
             if not parsed:
-                self.log.info(f"Path check failed for {remote_path}: empty output")
+                self.log.info(
+                    f"Path check failed for {remote_path}: empty output")
                 return False
 
             items = json.loads(parsed)
@@ -247,7 +287,7 @@ class RCloneHandler(AbstractProvider):
         return subprocess.check_output(cmd).decode().strip()
 
     @staticmethod
-    def _parse_rclone_json(output:dict):
+    def _parse_rclone_json(output: dict):
         """Parses JSON from rclone output, stripping leading/trailing non-JSON text."""
         if not output:
             return None
