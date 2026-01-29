@@ -18,7 +18,6 @@ class RCloneHandler(AbstractProvider):
 
         self._root = self.presets.get("root", "").strip("/")
         self.extra_args = self.presets.get("additional_args", [])
-
         self._config_path = self.presets.get("rclone_config_path", {}).get(
             platform.system().lower(), "")
 
@@ -33,7 +32,6 @@ class RCloneHandler(AbstractProvider):
             # if they exist and are filled we use them in the env to get the config path
             # check if there is data in all vars
             if self.vendor and self.tipe and self.url and self.user:
-
                 self.log.debug(
                     f"Using rclone with env vars: vendor={self.vendor}, type={self.tipe}, url={self.url}, user={self.user}")
 
@@ -44,18 +42,20 @@ class RCloneHandler(AbstractProvider):
             self.log.debug(f"Using rclone config from {self._config_path}")
 
         # in case the remote name is not set, use the vendor name works for the env connection
-        self.remote_name = self.presets.get("remote_name", self.vendor)
+        self.remote_name = self.presets.get("remote_name")
+        if not self.remote_name:
+            self.remote_name = self.vendor
+
         self._tree = tree
 
     def is_active(self):
         """Check if rclone is available and config exists."""
-        if not self._config_path or not os.path.exists(self._config_path):
-            return False
         try:
             self._run_rclone(["version"])
-            self.log.info("rclone is healthy")
+            self.log.debug("rclone is healthy")
             return True
-        except Exception:
+        except Exception as e:
+            self.log.exception(f"rclone is not healthy: {e}")
             return False
 
     def upload_file(
@@ -94,9 +94,9 @@ class RCloneHandler(AbstractProvider):
 
         # SiteSync status update
         if addon:
-            self.log.info(
+            self.log.debug(
                 f"Successfully uploaded {source_path} to {remote_path}")
-            self.log.info(f"Updating SiteSync status for {file['id']}")
+            self.log.debug(f"Updating SiteSync status for {file['id']}")
             addon.update_db(
                 project_name=project_name,
                 new_file_id=None,
@@ -104,8 +104,10 @@ class RCloneHandler(AbstractProvider):
                 repre_status=repre_status,
                 site_name=site_name,
                 side="remote",
-                progress=100
+                progress=1.0
             )
+
+        return target_path
 
     def download_file(
             self,
@@ -139,9 +141,9 @@ class RCloneHandler(AbstractProvider):
         self._run_rclone(args)
 
         if addon:
-            self.log.info(
+            self.log.debug(
                 f"Successfully downloaded {source_path} to {local_path}")
-            self.log.info(f"Updating SiteSync status for {file['id']}")
+            self.log.debug(f"Updating SiteSync status for {file['id']}")
             addon.update_db(
                 project_name=project_name,
                 new_file_id=None,
@@ -149,7 +151,7 @@ class RCloneHandler(AbstractProvider):
                 repre_status=repre_status,
                 site_name=site_name,
                 side="local",
-                progress=100
+                progress=1.0
             )
         return os.path.basename(source_path)
 
@@ -159,7 +161,7 @@ class RCloneHandler(AbstractProvider):
         args = ["deletefile", f"{remote_path}"]
         try:
             self._run_rclone(args)
-            self.log.info(f"Successfully deleted {path} on {self.remote_name}")
+            self.log.debug(f"Successfully deleted {path} on {self.remote_name}")
         except subprocess.CalledProcessError as e:
             self.log.error(f"Failed to delete {path}: {e}")
             raise FileNotFoundError(
@@ -177,7 +179,7 @@ class RCloneHandler(AbstractProvider):
             if not name.startswith("/"):
                 name = "/" + name
             data.append(name)
-        self.log.info(f"Fetched list of files in {folder_path}: {data}")
+        self.log.debug(f"Fetched list of files in {folder_path}: {data}")
         return data
 
     def create_folder(self, folder_path):
@@ -187,37 +189,13 @@ class RCloneHandler(AbstractProvider):
         remote_folder_path = self._get_remote_path(folder_path)
         args = ["mkdir", remote_folder_path]
         self._run_rclone(args)
-        self.log.info(
+        self.log.debug(
             f"Successfully created {folder_path} on {self.remote_name}")
         return folder_path
 
     def get_tree(self):
-        """Fetch full recursive metadata tree."""
-        if not self._tree:
-            remote_path = self._get_remote_path(self._root or "/")
-            # remote_path = remote_path + "/" + self.project_name
-            args = [
-                "lsjson", "-R",
-                remote_path,
-                "--files-only"
-            ]
-            raw_json = self._run_rclone(args)
-            data = self._parse_rclone_json(raw_json)
-            items = json.loads(data)
-
-            tree = {}
-            for item in items:
-                path = item["Path"]
-                full_ayon_path = f"{self._root}/{path}" if self._root else path
-                tree[full_ayon_path] = {
-                    "size": item["Size"],
-                    "mtime": self._parse_time(item["ModTime"]),
-                    "is_dir": item["IsDir"]
-                }
-            if tree:
-                self._tree = tree
-        self.log.info(f"Tree: {self._tree}")
-        return self._tree
+        """Not needed here."""
+        pass
 
     def get_roots_config(self, anatomy=None):
         """Returns root values for path resolving."""
@@ -228,7 +206,12 @@ class RCloneHandler(AbstractProvider):
         """Internal helper to execute rclone commands with extra args."""
         # Insert extra args before the specific command arguments
         cmd = [self.rclone_path, "--config",
-               self._config_path] + self.extra_args + args
+               self._config_path]
+
+        if self.extra_args:
+            cmd += self.extra_args
+        cmd += args
+
         env = os.environ.copy()
         if self.presets.get("password"):
             # Format: RCLONE_CONFIG_<UPPERCASE_REMOTE_NAME>_PASS
@@ -237,21 +220,41 @@ class RCloneHandler(AbstractProvider):
 
         if not self._config_path:
             # as we raise an error upon init we can get away with this check alone
-            cmd = [self.rclone_path] + self.extra_args + args
+            cmd = [self.rclone_path]
+            if self.extra_args:
+                cmd += self.extra_args
+            cmd += args
             env_vendor = f"RCLONE_CONFIG_{self.remote_name.upper()}_VENDOR"
             env[env_vendor] = self.vendor
             env_type = f"RCLONE_CONFIG_{self.remote_name.upper()}_TYPE"
-            env[env_type] = self.type
+            env[env_type] = self.tipe
             env_url = f"RCLONE_CONFIG_{self.remote_name.upper()}_URL"
             env[env_url] = self.url
             env_user = f"RCLONE_CONFIG_{self.remote_name.upper()}_USER"
             env[env_user] = self.user
+            env["RCLONE_CONFIG"] = "NUL"
 
-        self.log.info(f"Running rclone: {' '.join(cmd)}")
-        p = subprocess.check_output(' '.join(cmd), stderr=subprocess.STDOUT,
-                                    env=env)
-        self.log.debug(f"rclone output: {p}")
-        return p
+        self.log.info("Running rclone: %s", " ".join(cmd))
+
+        p = subprocess.run(
+            cmd,  # pass list, not a joined string
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            text=True,  # decoded to str
+            check=False,
+        )
+
+        if p.returncode != 0:
+            raise RuntimeError(
+                "rclone failed\n"
+                f"exit_code: {p.returncode}\n"
+                f"stdout:\n{p.stdout}\n"
+                f"stderr:\n{p.stderr}"
+            )
+
+        out = p.stdout
+        return out
 
     def _path_exists(self, path):
         """Checks if path exists on remote."""
@@ -261,23 +264,23 @@ class RCloneHandler(AbstractProvider):
             output = self._run_rclone(args)
             parsed = self._parse_rclone_json(output)
             if not parsed:
-                self.log.info(
+                self.log.error(
                     f"Path check failed for {remote_path}: empty output")
                 return False
 
             items = json.loads(parsed)
             # If rclone returns a list with items, the path (or its contents) exists.
             # When pointing directly to a file, rclone returns [ { "Path": "filename", ... } ]
-            self.log.info(f"{remote_path} exists")
+            self.log.debug(f"{remote_path} exists")
             return len(items) > 0
         except Exception as e:
-            self.log.info(f"Path check failed for {remote_path}: {e}")
+            self.log.exception(f"Path check failed for {remote_path}: {e}")
             return False
 
     def _get_remote_path(self, path):
         """Helper to format the path for rclone with the remote name."""
         path = f"{self.remote_name}:{path}"
-        self.log.info(f"Remote Path: {path}")
+        self.log.debug(f"Remote Path: {path}")
         return path
 
     def _parse_time(self, rclone_time_str):
