@@ -53,7 +53,7 @@ class RCloneSubmodel(BaseSettingsModel):
     )
 
     password: str = Field(
-        enum_resolver=secrets_enum,
+        "",
         title="Password / Token",
         scope=["studio", "project"],
         description="Will be obscured before passing to rclone."
