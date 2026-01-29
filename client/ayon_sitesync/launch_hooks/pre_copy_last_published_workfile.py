@@ -192,6 +192,7 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
             folder_ids={folder_id},
             product_base_types={"workfile"},
         )
+        # TODO add requirement for AYON launcher 1.4.3 when removed
         if not is_func_signature_supported(
             get_products, project_name, **kwargs
         ):
