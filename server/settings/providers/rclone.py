@@ -33,14 +33,14 @@ class RCloneSubmodel(BaseSettingsModel):
         description="The name of the remote as defined in rclone.conf"
     )
 
-    type: str = Field("webdav", title="Remote Type",
-                      description="Use this if you do not have a rclone.conf")
+    type: str = Field("", title="Remote Type",
+                      description="Egg webdav, Use this if you do not have a rclone.conf")
 
     url: str = Field("", title="Remote Url",
                      description="Use this if you do not have a rclone.conf")
 
-    vendor: str = Field("nextcloud", title="Vendor",
-                        description="Use this if you do not have a rclone.conf")
+    vendor: str = Field("", title="Vendor",
+                        description="Egg nextcloud, check rclone docs for the right name, Use this if you do not have a rclone.conf")
 
     user: str = Field("", title="User",
                       description="Use this if you do not have a rclone.conf")
