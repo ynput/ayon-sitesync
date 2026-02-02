@@ -15,40 +15,52 @@ class RCloneSubmodel(BaseSettingsModel):
     rclone_executable_path: MultiplatformPath = Field(
         default_factory=MultiplatformPath,
         title="RClone Executable Path",
-        scope=["studio", "project", "site"],
+        scope=["studio", "project"],
         description="Path to rclone executable. Leave as 'rclone' if it exists on PATH"
     )
 
     rclone_config_path: MultiplatformPath = Field(
         default_factory=MultiplatformPath,
         title="RClone Config Path (.conf)",
-        scope=["studio", "project", "site"],
+        scope=["studio", "project"],
         description="Path to the rclone.conf file. Or use the settings below. Then leave this empty"
     )
 
     remote_name: str = Field(
         "nextcloud",
         title="Remote Name from the rclone config",
-        scope=["studio", "project", "site"],
+        scope=["studio", "project"],
         description="The name of the remote as defined in rclone.conf"
     )
 
-    type: str = Field("", title="Remote Type",
-                      description="e.g. webdav, Use this if you do not have a rclone.conf")
+    type: str = Field(
+        "",
+        title="Remote Type",
+        scope=["studio", "project"],
+        description="e.g. webdav, Use this if you do not have a rclone.conf")
 
-    url: str = Field("", title="Remote Url",
-                     description="Use this if you do not have a rclone.conf")
+    url: str = Field(
+        "",
+        title="Remote Url",
+        scope=["studio", "project"],
+        description="Use this if you do not have a rclone.conf")
 
-    vendor: str = Field("", title="Vendor",
-                        description="e.g. nextcloud, check rclone docs for the right name, Use this if you do not have a rclone.conf")
+    vendor: str = Field(
+        "",
+        title="Vendor",
+        scope=["studio", "project"],
+        description="e.g. nextcloud, check rclone docs for the right name, Use this if you do not have a rclone.conf")
 
-    user: str = Field("", title="User",
-                      description="Use this if you do not have a rclone.conf")
+    user: str = Field(
+        "",
+        title="User",
+        scope=["studio", "project"],
+        description="Use this if you do not have a rclone.conf")
 
     root: str = Field(
         "",
         title="Root Folder",
-        scope=["studio", "project", "site"],
+        scope=["studio", "project"],
         description="Root folder on the remote storage."
     )
 
@@ -62,5 +74,6 @@ class RCloneSubmodel(BaseSettingsModel):
     additional_args: list[str] = Field(
         default_factory=list,
         title="Additional Arguments",
+        scope=["studio", "project"],
         description="Extra flags for rclone (e.g. ['--checkers=16'])"
     )
