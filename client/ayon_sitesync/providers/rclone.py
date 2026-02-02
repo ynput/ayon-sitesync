@@ -45,7 +45,7 @@ class RCloneHandler(AbstractProvider):
         else:
             self.log.debug(f"Using rclone config from {self._config_path}")
 
-        # in case the remote name is not set, use the vendor name works for the env connection
+        # in case the remote name is not set, use the vendor name which works for the env connection
         self.remote_name = self.presets.get("remote_name")
         if not self.remote_name:
             self.remote_name = self.vendor
