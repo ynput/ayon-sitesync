@@ -166,7 +166,7 @@ class RCloneHandler(AbstractProvider):
         try:
             self._run_rclone(args)
             self.log.debug(f"Successfully deleted {path} on {self.remote_name}")
-        except subprocess.CalledProcessError as e:
+        except RuntimeError as e:
             self.log.error(f"Failed to delete {path}: {e}")
             raise FileNotFoundError(
                 f"Failed to delete {path} on {self.remote_name}")
