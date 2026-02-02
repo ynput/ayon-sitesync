@@ -13,7 +13,6 @@ from .providers.dropbox import DropboxSubmodel
 from .providers.sftp import SFTPSubmodel
 from .providers.rclone import RCloneSubmodel
 
-
 if typing.TYPE_CHECKING:
     from ayon_server.addons import BaseServerAddon
 
