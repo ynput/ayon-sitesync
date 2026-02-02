@@ -299,7 +299,27 @@ class RCloneHandler(AbstractProvider):
         # Rclone expects passwords in env vars to be obscured
         # You can call 'rclone obscure' via subprocess to get this string
         cmd = [self.rclone_path, "obscure", password]
-        return subprocess.check_output(cmd).decode().strip()
+        try:
+            output = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+            return output.decode().strip()
+        except FileNotFoundError as e:
+            self.log.error(
+                f"Failed to run rclone for obscuring password: "
+                f"executable not found at '{self.rclone_path}'"
+            )
+            raise RuntimeError(
+                "rclone executable not found for password obscuring"
+            ) from e
+        except subprocess.CalledProcessError as e:
+            output = e.output.decode("utf-8", errors="replace") if e.output else ""
+            self.log.error(
+                "rclone 'obscure' command failed with exit code %s and output: %s",
+                e.returncode,
+                output,
+            )
+            raise RuntimeError(
+                "Failed to obscure password with rclone"
+            ) from e
 
     @staticmethod
     def _parse_rclone_json(output: str | bytes) -> str | None:
