@@ -1,5 +1,5 @@
 from pydantic import Field
-from ayon_server.settings import BaseSettingsModel, secrets_enum
+from ayon_server.settings import BaseSettingsModel
 
 
 class MultiplatformPath(BaseSettingsModel):
@@ -34,13 +34,13 @@ class RCloneSubmodel(BaseSettingsModel):
     )
 
     type: str = Field("", title="Remote Type",
-                      description="Egg webdav, Use this if you do not have a rclone.conf")
+                      description="e.g. webdav, Use this if you do not have a rclone.conf")
 
     url: str = Field("", title="Remote Url",
                      description="Use this if you do not have a rclone.conf")
 
     vendor: str = Field("", title="Vendor",
-                        description="Egg nextcloud, check rclone docs for the right name, Use this if you do not have a rclone.conf")
+                        description="e.g. nextcloud, check rclone docs for the right name, Use this if you do not have a rclone.conf")
 
     user: str = Field("", title="User",
                       description="Use this if you do not have a rclone.conf")
@@ -62,5 +62,5 @@ class RCloneSubmodel(BaseSettingsModel):
     additional_args: list[str] = Field(
         default_factory=list,
         title="Additional Arguments",
-        description="Extra flags for rclone (e.g. ['--webdav-nextcloud-chunk-size', '0'])"
+        description="Extra flags for rclone (e.g. ['--checkers=16'])"
     )

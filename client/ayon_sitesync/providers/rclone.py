@@ -1,13 +1,18 @@
+from __future__ import annotations
 import os
 import json
 import subprocess
 import platform
-from datetime import datetime
+from typing import TYPE_CHECKING
+
 from .abstract_provider import AbstractProvider
 
+if TYPE_CHECKING:
+    from ayon_sitesync.addon import SiteSyncAddon
 
 class RCloneHandler(AbstractProvider):
     CODE = "rclone"
+    LABEL = "RClone"
 
     def __init__(self, project_name, site_name, tree=None, presets=None):
         super().__init__(project_name, site_name, tree, presets)
@@ -16,7 +21,6 @@ class RCloneHandler(AbstractProvider):
         self.rclone_path = self.presets.get("rclone_executable_path", {}).get(
             platform.system().lower(), "rclone")
 
-        self._root = self.presets.get("root", "").strip("/")
         self.extra_args = self.presets.get("additional_args", [])
         self._config_path = self.presets.get("rclone_config_path", {}).get(
             platform.system().lower(), "")
@@ -48,7 +52,7 @@ class RCloneHandler(AbstractProvider):
 
         self._tree = tree
 
-    def is_active(self):
+    def is_active(self) -> bool:
         """Check if rclone is available and config exists."""
         try:
             self._run_rclone(["version"])
@@ -60,15 +64,15 @@ class RCloneHandler(AbstractProvider):
 
     def upload_file(
             self,
-            source_path,
-            target_path,
-            addon,
-            project_name,
-            file,
-            repre_status,
-            site_name,
-            overwrite=False
-    ):
+            source_path: str,
+            target_path: str,
+            addon: SiteSyncAddon,
+            project_name: str,
+            file: dict,
+            repre_status: dict,
+            site_name: str,
+            overwrite: bool = False
+    ) -> str:
         """High-speed upload using rclone copyto."""
         if not os.path.exists(source_path):
             raise FileNotFoundError(f"Source file {source_path} doesn't exist.")
@@ -111,15 +115,15 @@ class RCloneHandler(AbstractProvider):
 
     def download_file(
             self,
-            source_path,
-            local_path,
-            addon,
-            project_name,
-            file,
-            repre_status,
-            site_name,
-            overwrite=False
-    ):
+            source_path: str,
+            local_path: str,
+            addon: SiteSyncAddon,
+            project_name: str,
+            file: dict,
+            repre_status: dict,
+            site_name: str,
+            overwrite: bool = False
+    ) -> str:
         """High-speed download using rclone copyto."""
         if not self._path_exists(source_path):
             raise FileNotFoundError(f"Source file {source_path} doesn't exist.")
@@ -155,7 +159,7 @@ class RCloneHandler(AbstractProvider):
             )
         return os.path.basename(source_path)
 
-    def delete_file(self, path):
+    def delete_file(self, path: str) -> None:
         """Delete a file from the remote."""
         remote_path = self._get_remote_path(path)
         args = ["deletefile", f"{remote_path}"]
@@ -167,11 +171,13 @@ class RCloneHandler(AbstractProvider):
             raise FileNotFoundError(
                 f"Failed to delete {path} on {self.remote_name}")
 
-    def list_folder(self, folder_path):
+    def list_folder(self, folder_path: str) -> list[str]:
         """List all files in a folder non-recursively."""
         remote_folder_path = self._get_remote_path(folder_path)
         args = ["lsjson", remote_folder_path]
         raw_json = self._run_rclone(args)
+        if not raw_json:
+            return []
         items = json.loads(raw_json)
         data = []
         for item in items:
@@ -182,7 +188,7 @@ class RCloneHandler(AbstractProvider):
         self.log.debug(f"Fetched list of files in {folder_path}: {data}")
         return data
 
-    def create_folder(self, folder_path):
+    def create_folder(self, folder_path: str) -> str:
         """Create a directory on the remote."""
         if self._path_exists(folder_path):
             return folder_path
@@ -197,20 +203,20 @@ class RCloneHandler(AbstractProvider):
         """Not needed here."""
         pass
 
-    def get_roots_config(self, anatomy=None):
+    def get_roots_config(self, anatomy=None) -> dict:
         """Returns root values for path resolving."""
         return {"root": {"work": self.presets.get('root', '/')}}
 
     # Helper methods
-    def _run_rclone(self, args):
+    def _run_rclone(self, args: list[str]) -> str:
         """Internal helper to execute rclone commands with extra args."""
-        # Insert extra args before the specific command arguments
-        cmd = [self.rclone_path, "--config",
-               self._config_path]
+        cmd = [self.rclone_path]
+        if self._config_path:
+            cmd.extend(["--config", self._config_path])
 
         if self.extra_args:
-            cmd += self.extra_args
-        cmd += args
+            cmd.extend(self.extra_args)
+        cmd.extend(args)
 
         env = os.environ.copy()
         if self.presets.get("password"):
@@ -219,11 +225,6 @@ class RCloneHandler(AbstractProvider):
             env[env_key] = self._obscure_pass(self.presets.get("password"))
 
         if not self._config_path:
-            # as we raise an error upon init we can get away with this check alone
-            cmd = [self.rclone_path]
-            if self.extra_args:
-                cmd += self.extra_args
-            cmd += args
             env_vendor = f"RCLONE_CONFIG_{self.remote_name.upper()}_VENDOR"
             env[env_vendor] = self.vendor
             env_type = f"RCLONE_CONFIG_{self.remote_name.upper()}_TYPE"
@@ -232,7 +233,10 @@ class RCloneHandler(AbstractProvider):
             env[env_url] = self.url
             env_user = f"RCLONE_CONFIG_{self.remote_name.upper()}_USER"
             env[env_user] = self.user
-            env["RCLONE_CONFIG"] = "NUL"
+            # Set RCLONE_CONFIG to null device to prevent rclone from
+            # trying to find/create a default config file.
+            null_device = "NUL" if platform.system().lower() == "windows" else "/dev/null"
+            env["RCLONE_CONFIG"] = null_device
 
         self.log.info("Running rclone: %s", " ".join(cmd))
 
@@ -246,6 +250,11 @@ class RCloneHandler(AbstractProvider):
         )
 
         if p.returncode != 0:
+            # Rclone exit code 3 means directory not found
+            if p.returncode == 3 and "lsjson" in args:
+                self.log.info(f"{p.stderr}")
+                return ""
+
             raise RuntimeError(
                 "rclone failed\n"
                 f"exit_code: {p.returncode}\n"
@@ -256,12 +265,15 @@ class RCloneHandler(AbstractProvider):
         out = p.stdout
         return out
 
-    def _path_exists(self, path):
+    def _path_exists(self, path: str) -> bool:
         """Checks if path exists on remote."""
         remote_path = self._get_remote_path(path)
         args = ["lsjson", remote_path]
         try:
             output = self._run_rclone(args)
+            if not output:
+                return False
+
             parsed = self._parse_rclone_json(output)
             if not parsed:
                 self.log.error(
@@ -274,33 +286,28 @@ class RCloneHandler(AbstractProvider):
             self.log.debug(f"{remote_path} exists")
             return len(items) > 0
         except Exception as e:
-            self.log.exception(f"Path check failed for {remote_path}: {e}")
+            self.log.error(f"Path check failed for {remote_path}: {e}")
             return False
 
-    def _get_remote_path(self, path):
+    def _get_remote_path(self, path: str) -> str:
         """Helper to format the path for rclone with the remote name."""
         path = f"{self.remote_name}:{path}"
         self.log.debug(f"Remote Path: {path}")
         return path
 
-    def _parse_time(self, rclone_time_str):
-        """Parse rclone's ISO8601 time string to timestamp."""
-        dt = datetime.fromisoformat(rclone_time_str.replace("Z", "+00:00"))
-        return dt.timestamp()
-
-    def _obscure_pass(self, password):
+    def _obscure_pass(self, password: str) -> str:
         # Rclone expects passwords in env vars to be obscured
         # You can call 'rclone obscure' via subprocess to get this string
         cmd = [self.rclone_path, "obscure", password]
         return subprocess.check_output(cmd).decode().strip()
 
     @staticmethod
-    def _parse_rclone_json(output: dict):
+    def _parse_rclone_json(output: str | bytes) -> str | None:
         """Parses JSON from rclone output, stripping leading/trailing non-JSON text."""
         if not output:
             return None
 
-        if isinstance(output, bytes):
+        if isinstance(output, (bytes, bytearray)):
             output = output.decode("utf-8", errors="replace")
 
         # Find the first occurrence of '[' or '{' to skip headers/notices
