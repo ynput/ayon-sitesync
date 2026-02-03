@@ -239,7 +239,7 @@ class RCloneHandler(AbstractProvider):
             null_device = "NUL" if platform.system().lower() == "windows" else "/dev/null"
             env["RCLONE_CONFIG"] = null_device
 
-        self.log.info("Running rclone: %s", " ".join(cmd))
+        self.log.debug("Running rclone: %s", " ".join(cmd))
 
         p = subprocess.run(
             cmd,
