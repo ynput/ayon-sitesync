@@ -901,9 +901,19 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """
         if self.enabled:
             if single:
-                project_settings = get_addon_project_settings(
-                    self.name, self.version, project_name
-                )
+                try:
+                    project_settings = get_addon_project_settings(
+                        self.name, self.version, project_name
+                    )
+                except ayon_api.exceptions.HTTPRequestError as exp:
+                    if exp.response.status_code == 403:
+                        self.log.debug(
+                            f"Doesn't have permission to access settings of "
+                            f"'{project_name}', skipping."
+                        )
+                        return False
+                    raise
+
             else:
                 project_settings = self.get_sync_project_setting(project_name)
             if project_settings and project_settings.get("enabled"):
@@ -1180,8 +1190,18 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         project_names = get_project_names()
         for project_name in project_names:
             project_sites = copy.deepcopy(sites)
-            project_settings = get_addon_project_settings(
-                self.name, self.version, project_name)
+            try:
+                project_settings = get_addon_project_settings(
+                    self.name, self.version, project_name
+                )
+            except ayon_api.exceptions.HTTPRequestError as exp:
+                if exp.response.status_code == 403:
+                    self.log.debug(
+                        f"Doesn't have permission to access settings of "
+                        f"'{project_name}', skipping."
+                    )
+                    continue
+                raise
 
             project_sites.update(self._get_default_site_configs(
                 project_settings["enabled"], project_name, project_settings
