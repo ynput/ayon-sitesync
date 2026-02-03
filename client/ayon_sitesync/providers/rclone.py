@@ -10,6 +10,7 @@ from .abstract_provider import AbstractProvider
 if TYPE_CHECKING:
     from ayon_sitesync.addon import SiteSyncAddon
 
+
 class RCloneHandler(AbstractProvider):
     CODE = "rclone"
     LABEL = "RClone"
@@ -241,23 +242,22 @@ class RCloneHandler(AbstractProvider):
         self.log.info("Running rclone: %s", " ".join(cmd))
 
         p = subprocess.run(
-            cmd,  # pass list, not a joined string
+            cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=env,
-            text=True,  # decoded to str
+            text=True,
             check=False,
+            creationflags=subprocess.CREATE_NO_WINDOW,
         )
 
         if p.returncode != 0:
             # Rclone exit code 3 means directory not found
             if p.returncode == 3 and "lsjson" in args:
-                self.log.info(f"{p.stderr}")
                 return ""
 
             raise RuntimeError(
-                "rclone failed\n"
-                f"exit_code: {p.returncode}\n"
+                f"rclone failed with exit code {p.returncode}\n"
                 f"stdout:\n{p.stdout}\n"
                 f"stderr:\n{p.stderr}"
             )
@@ -300,7 +300,11 @@ class RCloneHandler(AbstractProvider):
         # You can call 'rclone obscure' via subprocess to get this string
         cmd = [self.rclone_path, "obscure", password]
         try:
-            output = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+            output = subprocess.check_output(
+                cmd,
+                stderr=subprocess.STDOUT,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
             return output.decode().strip()
         except FileNotFoundError as e:
             self.log.error(
@@ -311,7 +315,8 @@ class RCloneHandler(AbstractProvider):
                 "rclone executable not found for password obscuring"
             ) from e
         except subprocess.CalledProcessError as e:
-            output = e.output.decode("utf-8", errors="replace") if e.output else ""
+            output = e.output.decode("utf-8",
+                                     errors="replace") if e.output else ""
             self.log.error(
                 "rclone 'obscure' command failed with exit code %s and output: %s",
                 e.returncode,
