@@ -112,7 +112,7 @@ class SFTPHandler(AbstractProvider):
         Returns:
             (string) folder id of lowest subfolder from 'path'
         """
-        self.conn.makedirs(path)
+        self.conn.mkdir_p(path)
 
         return os.path.basename(path)
 
