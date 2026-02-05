@@ -11,6 +11,7 @@ class ProviderFactory:
         Each new implementation needs to be registered and added to Providers
         enum.
     """
+
     def __init__(self):
         self.providers = {}  # {'PROVIDER_LABEL: {cls, int},..}
 
