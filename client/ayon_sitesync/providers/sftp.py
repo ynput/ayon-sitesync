@@ -303,7 +303,10 @@ class SFTPHandler(AbstractProvider):
             sftpretty.Connection
         """
         if not sftpretty:
-            raise ImportError
+            raise ImportError(
+                "Library for SFTP provider is not available, "
+                "ask admin to update dependency package."
+            )
 
         cnopts = sftpretty.CnOpts()
         cnopts.log_level = "error"
