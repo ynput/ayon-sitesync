@@ -6,11 +6,12 @@ import platform
 
 from ayon_core.lib import Logger
 from .abstract_provider import AbstractProvider
+
 log = Logger.get_logger("SiteSync-SFTPHandler")
 
-pysftp = None
+sftpretty = None
 try:
-    import pysftp
+    import sftpretty
     import paramiko
 except (ImportError, SyntaxError):
     pass
@@ -111,7 +112,7 @@ class SFTPHandler(AbstractProvider):
         Returns:
             (string) folder id of lowest subfolder from 'path'
         """
-        self.conn.makedirs(path)
+        self.conn.mkdir_p(path)
 
         return os.path.basename(path)
 
@@ -261,7 +262,7 @@ class SFTPHandler(AbstractProvider):
         Returns:
              (list)
         """
-        return list(pysftp.path_advance(folder_path))
+        return list(sftpretty.path_advance(folder_path))
 
     def folder_path_exists(self, file_path):
         """
@@ -299,40 +300,48 @@ class SFTPHandler(AbstractProvider):
             for get and put which run in separate threads.
 
         Returns:
-            pysftp.Connection
+            sftpretty.Connection
         """
-        if not pysftp:
-            raise ImportError
+        if not sftpretty:
+            raise ImportError(
+                "Library for SFTP provider is not available, "
+                "ask admin to update dependency package."
+            )
 
-        cnopts = pysftp.CnOpts()
+        cnopts = sftpretty.CnOpts()
+        cnopts.log_level = "error"
         cnopts.hostkeys = None
 
         conn_params = {
-            'host': self.sftp_host,
-            'port': self.sftp_port,
-            'username': self.sftp_user,
-            'cnopts': cnopts
+            "host": self.sftp_host,
+            "port": self.sftp_port,
+            "username": self.sftp_user,
+            "cnopts": cnopts,
         }
         if self.sftp_pass and self.sftp_pass.strip():
-            conn_params['password'] = self.sftp_pass
+            conn_params["password"] = self.sftp_pass
         if self.sftp_key:
-            no_configured_file_exist = False   # expects .pem format, not .ppk!
+            no_configured_file_exist = False  # expects .pem format, not .ppk!
             key_paths = self.sftp_key[platform.system().lower()]
             for key_path in key_paths:
                 no_configured_file_exist = True
                 if os.path.exists(key_path):
                     no_configured_file_exist = False
-                    conn_params['private_key'] = key_path
+                    conn_params["private_key"] = key_path
                     break
             if no_configured_file_exist:
-                raise ValueError(f"Certificate at '{key_paths}' doesn't exist.")
+                raise ValueError(
+                    f"Certificate at '{key_paths}' doesn't exist."
+                )
         if self.sftp_key_pass:
-            conn_params['private_key_pass'] = self.sftp_key_pass
+            conn_params["private_key_pass"] = self.sftp_key_pass
 
         try:
-            return pysftp.Connection(**conn_params)
-        except (paramiko.ssh_exception.SSHException,
-                pysftp.exceptions.ConnectionException):
+            return sftpretty.Connection(**conn_params)
+        except (
+            paramiko.ssh_exception.SSHException,
+            sftpretty.exceptions.ConnectionException,
+        ):
             self.log.warning("Couldn't connect", exc_info=True)
 
     def _mark_progress(
