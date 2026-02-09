@@ -308,7 +308,7 @@ class SFTPHandler(AbstractProvider):
                 "ask admin to update dependency package."
             )
 
-        cnopts = sftpretty.CnOpts()
+        cnopts = sftpretty.CnOpts(knownhosts=None)
         cnopts.log_level = "error"
         cnopts.hostkeys = None
 
