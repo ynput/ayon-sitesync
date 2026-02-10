@@ -308,9 +308,8 @@ class SFTPHandler(AbstractProvider):
                 "ask admin to update dependency package."
             )
 
-        cnopts = sftpretty.CnOpts()
+        cnopts = sftpretty.CnOpts(knownhosts=None)
         cnopts.log_level = "error"
-        cnopts.hostkeys = None
 
         conn_params = {
             "host": self.sftp_host,
@@ -333,6 +332,7 @@ class SFTPHandler(AbstractProvider):
                 raise ValueError(
                     f"Certificate at '{key_paths}' doesn't exist."
                 )
+                
         if self.sftp_key_pass:
             conn_params["private_key_pass"] = self.sftp_key_pass
 
@@ -357,6 +357,7 @@ class SFTPHandler(AbstractProvider):
     ):
         """
             Updates progress field in DB by values 0-1.
+            
 
             Compares file sizes of source and target.
         """
