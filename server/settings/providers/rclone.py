@@ -1,79 +1,79 @@
-from pydantic import Field
-from ayon_server.settings import BaseSettingsModel
+from ayon_server.settings import BaseSettingsModel, SettingsField
 
 
 class MultiplatformPath(BaseSettingsModel):
-    windows: str = Field("", title="Windows")
-    linux: str = Field("", title="Linux")
-    darwin: str = Field("", title="MacOS")
+    windows: str = SettingsField("", title="Windows")
+    linux: str = SettingsField("", title="Linux")
+    darwin: str = SettingsField("", title="MacOS")
+
+
+class RCloneConfigSubModel(BaseSettingsModel):
+    enable: bool = SettingsField(False, title="Enable")
+    remote_name: str = SettingsField(
+        "",
+        title="Remote Name from the rclone config",
+        scope=["studio", "project"],
+        description="The name of the remote as defined in rclone.conf",
+    )
+    rclone_config_path: MultiplatformPath = SettingsField(
+        default_factory=MultiplatformPath,
+        title="RClone Config Path (.conf)",
+        scope=["studio", "project"],
+        description="Path to the rclone.conf file. Or use the settings below. Then leave this empty",
+    )
+
+
+class KeyValueItem(BaseSettingsModel):
+    key: str = SettingsField(title="Key")
+    value: str = SettingsField(title="Value")
+
+
+class RCloneWebConfigSubModel(BaseSettingsModel):
+    enable: bool = SettingsField(False, title="Enable RClone Web Config")
+    config_params: list[KeyValueItem] = SettingsField(default_factory=list)
 
 
 class RCloneSubmodel(BaseSettingsModel):
     """Specific settings for RClone sites."""
-    _layout = "expanded"
 
-    rclone_executable_path: MultiplatformPath = Field(
+    _layout = "collapsed"
+
+    rclone_executable_path: MultiplatformPath = SettingsField(
         default_factory=MultiplatformPath,
         title="RClone Executable Path",
         scope=["studio", "project"],
-        description="Path to rclone executable. Leave as 'rclone' if it exists on PATH"
+        description="Path to rclone executable. Leave as 'rclone' if it exists on PATH",
     )
 
-    rclone_config_path: MultiplatformPath = Field(
-        default_factory=MultiplatformPath,
-        title="RClone Config Path (.conf)",
-        scope=["studio", "project"],
-        description="Path to the rclone.conf file. Or use the settings below. Then leave this empty"
+    config_file: RCloneConfigSubModel = SettingsField(
+        default_factory=RCloneConfigSubModel,
+        title="RClone Config File Settings",
+        description="If you can provide an existing rclone.conf file, you can use it here. Otherwise leave empty.",
     )
 
-    remote_name: str = Field(
-        "nextcloud",
-        title="Remote Name from the rclone config",
-        scope=["studio", "project"],
-        description="The name of the remote as defined in rclone.conf"
+    config_web: RCloneWebConfigSubModel = SettingsField(
+        default_factory=RCloneWebConfigSubModel,
+        title="RClone Web Config",
+        description="Here you can configure settings that will be propagated to the env.",
     )
 
-    type: str = Field(
+    type: str = SettingsField(
         "",
         title="Remote Type",
         scope=["studio", "project"],
-        description="e.g. webdav, Use this if you do not have a rclone.conf")
+        description="e.g. webdav, Use this if you do not have a rclone.conf",
+    )
 
-    url: str = Field(
-        "",
-        title="Remote Url",
-        scope=["studio", "project"],
-        description="Use this if you do not have a rclone.conf")
-
-    vendor: str = Field(
-        "",
-        title="Vendor",
-        scope=["studio", "project"],
-        description="e.g. nextcloud, check rclone docs for the right name, Use this if you do not have a rclone.conf")
-
-    user: str = Field(
-        "",
-        title="User",
-        scope=["studio", "project"],
-        description="Use this if you do not have a rclone.conf")
-
-    root: str = Field(
+    root: str = SettingsField(
         "",
         title="Root Folder",
         scope=["studio", "project"],
-        description="Root folder on the remote storage."
+        description="Root folder on the remote storage.",
     )
 
-    password: str = Field(
-        "",
-        title="Password / Token",
-        scope=["studio", "project"],
-        description="Will be obscured before passing to rclone."
-    )
-
-    additional_args: list[str] = Field(
+    additional_args: list[str] = SettingsField(
         default_factory=list,
         title="Additional Arguments",
         scope=["studio", "project"],
-        description="Extra flags for rclone (e.g. ['--checkers=16'])"
+        description="Extra flags for rclone (e.g. ['--checkers=16'])",
     )
