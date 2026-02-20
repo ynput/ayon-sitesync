@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import re
 import subprocess
 from typing import TYPE_CHECKING
 
@@ -12,6 +13,10 @@ if TYPE_CHECKING:
     from ayon_sitesync.addon import SiteSyncAddon
 
 
+def expand_env_vars(text):
+    return re.sub(r"\{([^}]+)\}", lambda m: os.environ.get(m.group(1),
+                                                           m.group(0)), text)
+
 class RCloneHandler(AbstractProvider):
     CODE = "rclone"
     LABEL = "RClone"
@@ -20,9 +25,10 @@ class RCloneHandler(AbstractProvider):
         super().__init__(project_name, site_name, tree, presets)
         self.project_name = project_name
         self.presets = presets or {}
-        self.rclone_path = self.presets.get("rclone_executable_path", {}).get(
+        rclone_path = self.presets.get("rclone_executable_path", {}).get(
             platform.system().lower(), "rclone"
         )
+        self.rclone_path = expand_env_vars(rclone_path)
         self.config_path = ""
         self.web_config_params = []
         self.extra_args = self.presets.get("additional_args", [])
@@ -30,11 +36,12 @@ class RCloneHandler(AbstractProvider):
         self.use_web_config = self.presets["config_web"].get("enabled", False)
 
         if self.use_cfg_file:
-            self.config_path = (
+            config_path = (
                 self.presets["config_file"]
                 .get("rclone_config_path", {})
                 .get(platform.system().lower(), "")
             )
+            self.config_path = expand_env_vars(config_path)
             if self.use_cfg_file and not os.path.exists(self.config_path):
                 self.log.error(f"Config file not found at {self.config_path}")
 

@@ -8,7 +8,7 @@ class MultiplatformPath(BaseSettingsModel):
 
 
 class RCloneConfigSubModel(BaseSettingsModel):
-    enable: bool = SettingsField(False, title="Enable")
+    enabled: bool = SettingsField(False, title="Enable")
     remote_name: str = SettingsField(
         "",
         title="Remote Name from the rclone config",
@@ -24,44 +24,49 @@ class RCloneConfigSubModel(BaseSettingsModel):
 
 
 class KeyValueItem(BaseSettingsModel):
+    _layout = "compact"
     key: str = SettingsField(title="Key")
     value: str = SettingsField(title="Value")
 
 
 class RCloneWebConfigSubModel(BaseSettingsModel):
-    enable: bool = SettingsField(False, title="Enable RClone Web Config")
-    config_params: list[KeyValueItem] = SettingsField(default_factory=list)
+    enabled: bool = SettingsField(False, title="Enable RClone Web Config")
+    type: str = SettingsField(
+        "",
+        title="Type",
+        scope=["studio", "project"],
+        description="e.g. webdav, S3",
+    )
+    config_params: list[KeyValueItem] = SettingsField(
+        default_factory=list, title="Config Parameters"
+    )
 
 
 class RCloneSubmodel(BaseSettingsModel):
     """Specific settings for RClone sites."""
 
-    _layout = "collapsed"
-
     rclone_executable_path: MultiplatformPath = SettingsField(
         default_factory=MultiplatformPath,
         title="RClone Executable Path",
         scope=["studio", "project"],
-        description="Path to rclone executable. Leave as 'rclone' if it exists on PATH",
+        description="Path to rclone executable. Leave as 'rclone' if it exists on PATH or environment variable expansion is possible. Syntax {LOCALAPPDATA}/path.",
     )
-
+    info_note: str = SettingsField(
+        "Choose either one Setting below: file config (*.conf) or web config, declare all here. If both are active config is used first.",
+        title="⚠️ Important",
+        description="Choose either one Setting below: file config (*.conf) or web config, declare all here. If both are active config is used first.",
+        widget="label",
+    )
     config_file: RCloneConfigSubModel = SettingsField(
         default_factory=RCloneConfigSubModel,
-        title="RClone Config File Settings",
-        description="If you can provide an existing rclone.conf file, you can use it here. Otherwise leave empty.",
+        title="RClone File Config",
+        description="Provide an existing rclone.conf file, environment variable expansion is possible. Syntax {LOCALAPPDATA}/path ",
     )
 
     config_web: RCloneWebConfigSubModel = SettingsField(
         default_factory=RCloneWebConfigSubModel,
         title="RClone Web Config",
-        description="Here you can configure settings that will be propagated to the env.",
-    )
-
-    type: str = SettingsField(
-        "",
-        title="Remote Type",
-        scope=["studio", "project"],
-        description="e.g. webdav, Use this if you do not have a rclone.conf",
+        description="Define all required keys from the rclone.conf, no need to distribute a file.",
     )
 
     root: str = SettingsField(
