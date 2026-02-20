@@ -148,15 +148,22 @@ class SitesSubmodel(BaseSettingsModel):
 
 class LocalSubmodel(BaseSettingsModel):
     """Select your local and remote site"""
-    active_site: str = Field("",
-                             title="My Active Site",
-                             scope=["site"],
-                             enum_resolver=defined_sited_enum_resolver)
+    active_site: str = Field(
+        "",
+        title="My Active Site",
+        scope=["site"],
+        enum_resolver=defined_sited_enum_resolver
+    )
 
     remote_site: str = Field("",
                              title="My Remote Site",
                              scope=["site"],
                              enum_resolver=defined_sited_enum_resolver)
+    remote_site: str = Field(
+        "",
+        title="My Remote Site",
+        scope=["site"],
+        enum_resolver=defined_sited_enum_resolver
 
     local_roots: list[RootSubmodel] = Field(
         default=default_roots,
