@@ -68,8 +68,10 @@ def provider_resolver():
         "dropbox": "Dropbox",
         "sftp": "SFTP"
     }
-    return [{"value": f"{key}", "label": f"{label}"}
-            for key, label in provider_dict.items()]
+    return [
+        {"value": f"{key}", "label": f"{label}"}
+        for key, label in provider_dict.items()
+    ]
 
 
 async def defined_sited_enum_resolver(
