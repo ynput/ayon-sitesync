@@ -20,8 +20,10 @@ class GeneralSubmodel(BaseSettingsModel):
     """Properties for loop and module configuration"""
     retry_cnt: int = Field(3, title="Retry Count")
     loop_delay: int = Field(60, title="Loop Delay")
-    always_accessible_on: list[str] = Field([],
-                                            title="Always accessible on sites")
+    always_accessible_on: list[str] = Field(
+        [],
+        title="Always accessible on sites"
+    )
     active_site: str = Field("studio", title="User Default Active Site")
     remote_site: str = Field("studio", title="User Default Remote Site")
 
