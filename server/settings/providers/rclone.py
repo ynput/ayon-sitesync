@@ -7,8 +7,14 @@ class MultiplatformPath(BaseSettingsModel):
     darwin: str = SettingsField("", title="MacOS")
 
 
+def _config_type_enum():
+    return [
+        {"value": "config_file", "label": "Use File Config"},
+        {"value": "config_web", "label": "Use Web Config"},
+    ]
+
+
 class RCloneConfigSubModel(BaseSettingsModel):
-    enabled: bool = SettingsField(False, title="Enable")
     remote_name: str = SettingsField(
         "",
         title="Remote Name from the rclone config",
@@ -19,7 +25,7 @@ class RCloneConfigSubModel(BaseSettingsModel):
         default_factory=MultiplatformPath,
         title="RClone Config Path (.conf)",
         scope=["studio", "project"],
-        description="Path to the rclone.conf file. Or use the settings below. Then leave this empty",
+        description="Path to the rclone.conf file",
     )
 
 
@@ -30,7 +36,6 @@ class KeyValueItem(BaseSettingsModel):
 
 
 class RCloneWebConfigSubModel(BaseSettingsModel):
-    enabled: bool = SettingsField(False, title="Enable RClone Web Config")
     type: str = SettingsField(
         "",
         title="Type",
@@ -51,12 +56,15 @@ class RCloneSubmodel(BaseSettingsModel):
         scope=["studio", "project"],
         description="Path to rclone executable. Leave as 'rclone' if it exists on PATH or environment variable expansion is possible. Syntax {LOCALAPPDATA}/path.",
     )
-    info_note: str = SettingsField(
-        "Choose either one Setting below: file config (*.conf) or web config, declare all here. If both are active config is used first.",
-        title="⚠️ Important",
-        description="Choose either one Setting below: file config (*.conf) or web config, declare all here. If both are active config is used first.",
-        widget="label",
+
+    config_type: str = SettingsField(
+        "config_web",
+        title="Config Type",
+        enum_resolver=_config_type_enum,
+        conditional_enum=True,
+        description="Choose between file-based config (.conf) or web-based config (define inline)",
     )
+
     config_file: RCloneConfigSubModel = SettingsField(
         default_factory=RCloneConfigSubModel,
         title="RClone File Config",

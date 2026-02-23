@@ -14,10 +14,38 @@ if TYPE_CHECKING:
 
 
 def expand_env_vars(text):
-    return re.sub(r"\{([^}]+)\}", lambda m: os.environ.get(m.group(1),
-                                                           m.group(0)), text)
+    return re.sub(
+        r"\{([^}]+)\}", lambda m: os.environ.get(m.group(1), m.group(0)), text
+    )
+
 
 class RCloneHandler(AbstractProvider):
+    """
+    example preset submission
+    x = {'enabled': True, 'alternative_sites': [],
+     'root': '/projects',
+     'rclone_executable_path': {'windows': 'rclone.exe', 'linux': 'rclone ',
+                                'darwin': 'rclone '},
+     'config_type': 'config_web',
+     'config_file': {'remote_name': '',
+                      'rclone_config_path': {
+                          'windows': '',
+                          'linux': '',
+                          'darwin': ''}},
+     'config_web': {'type': 's3',
+                    'config_params': [{'key': 'provider', 'value': 'Other'},
+                                      {'key': 'access_key_id',
+                                       'value': 'changemeuser'},
+                                      {'key': 'secret_access_key',
+                                       'value': 'changemepass'},
+                                      {'key': 'endpoint',
+                                       'value': 'bucket.storage.com'},
+                                      {'key': 'region', 'value': 'bucket-region'},
+                                      {'key': 'acl', 'value': 'private'},
+                                      {'key': 'disable_ssl', 'value': 'true'}]},
+     'additional_args': []}
+    """
+
     CODE = "rclone"
     LABEL = "RClone"
 
@@ -25,34 +53,45 @@ class RCloneHandler(AbstractProvider):
         super().__init__(project_name, site_name, tree, presets)
         self.project_name = project_name
         self.presets = presets or {}
+        self.log.debug(f"Using rclone presets: {self.presets}")
         rclone_path = self.presets.get("rclone_executable_path", {}).get(
             platform.system().lower(), "rclone"
         )
         self.rclone_path = expand_env_vars(rclone_path)
+        self.remote_name = ""
         self.config_path = ""
         self.web_config_params = []
         self.extra_args = self.presets.get("additional_args", [])
-        self.use_cfg_file = self.presets["config_file"].get("enabled", False)
-        self.use_web_config = self.presets["config_web"].get("enabled", False)
 
-        if self.use_cfg_file:
+        if self.presets["config_type"] == "config_file":
             config_path = (
-                self.presets["config_file"]
-                .get("rclone_config_path", {})
+                self.presets["config_file"]["rclone_config_path"]
                 .get(platform.system().lower(), "")
             )
             self.config_path = expand_env_vars(config_path)
-            if self.use_cfg_file and not os.path.exists(self.config_path):
+            self.log.debug("Config path: %s", self.config_path)
+            self.remote_name = self.presets["config_file"]["remote_name"]
+            self.log.debug("Remote name: %s", self.remote_name)
+            if not self.remote_name:
+                self.log.error("Remote name not specified webui")
+                raise ValueError("Remote name not specified in webui")
+            if not os.path.exists(self.config_path):
                 self.log.error(f"Config file not found at {self.config_path}")
+                raise FileNotFoundError(
+                    f"Config file not found at {self.config_path}"
+                )
 
-        if self.use_web_config:
-            self.web_config_params = self.presets["config_web"].get(
-                "config_params", {}
-            )
-        # in case the remote name is not set, use the vendor name which works for the env connection
-        self.remote_name = self.presets["remote_name"]
-        if not self.remote_name:
-            self.remote_name = "RCLONE_REMOTE"
+        if self.presets["config_type"] == "config_web":
+            self.web_config_params = self.presets["config_web"]["config_params"]
+            self.log.debug("Web config params: %s", self.web_config_params)
+            if not self.web_config_params:
+                self.log.error("Web config params not specified")
+                raise ValueError("Web config params not specified")
+            self.web_config_type = self.presets["config_web"]["type"]
+            if not self.web_config_type:
+                self.log.error("Web config type not specified")
+                raise ValueError("Web config type not specified")
+            self.remote_name = "WEBREMOTE"
 
         self._tree = tree
 
@@ -222,9 +261,12 @@ class RCloneHandler(AbstractProvider):
     def _manage_web_config(self):
         """Manage web config parameters."""
         env = os.environ.copy()
-        if self.web_config_params and not self.use_cfg_file:
+        if self.web_config_params:
             # the config file wins over the web params
             self.log.debug("Updating web config params")
+            env[f"RCLONE_CONFIG_{self.remote_name.upper()}_TYPE"] = (
+                self.web_config_type
+            )
             for param in self.web_config_params:
                 key = param.get("key").lower()
                 value = param.get("value")
