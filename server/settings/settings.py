@@ -11,6 +11,7 @@ from .providers.local_drive import LocalDriveSubmodel
 from .providers.gdrive import GoogleDriveSubmodel
 from .providers.dropbox import DropboxSubmodel
 from .providers.sftp import SFTPSubmodel
+from .providers.resilio import ResilioSubmodel
 
 if typing.TYPE_CHECKING:
     from ayon_server.addons import BaseServerAddon
@@ -68,7 +69,8 @@ def provider_resolver():
         "gdrive": "Google Drive",
         "local_drive": "Local Drive",
         "dropbox": "Dropbox",
-        "sftp": "SFTP"
+        "sftp": "SFTP",
+        "resilio": "Resilio",
     }
     return [
         {"value": f"{key}", "label": f"{label}"}
@@ -86,8 +88,10 @@ async def defined_sited_enum_resolver(
         return []
 
     if project_name:
-        settings = await addon.get_project_settings(project_name=project_name,
-                                                    variant=settings_variant)
+        settings = await addon.get_project_settings(
+            project_name=project_name,
+            variant=settings_variant
+        )
     else:
         settings =  await addon.get_studio_settings(variant=settings_variant)
 
@@ -138,6 +142,10 @@ class SitesSubmodel(BaseSettingsModel):
         default_factory=SFTPSubmodel,
         scope=["studio", "project", "site"]
     )
+    resilio: ResilioSubmodel = Field(
+        default_factory=ResilioSubmodel,
+        scope=["studio", "project", "site"]
+    )
 
     name: str = Field(..., title="Site name",
                       scope=["studio", "project", "site"])
@@ -157,15 +165,12 @@ class LocalSubmodel(BaseSettingsModel):
         enum_resolver=defined_sited_enum_resolver
     )
 
-    remote_site: str = Field("",
-                             title="My Remote Site",
-                             scope=["site"],
-                             enum_resolver=defined_sited_enum_resolver)
     remote_site: str = Field(
         "",
         title="My Remote Site",
         scope=["site"],
         enum_resolver=defined_sited_enum_resolver
+    )
 
     local_roots: list[RootSubmodel] = Field(
         default=default_roots,
