@@ -112,38 +112,15 @@ class ResilioHandler(AbstractProvider):
             (string) file_id of created/modified file ,
                 throws FileExistsError, FileNotFoundError exceptions
         """
-        project_settings = addon.sync_project_settings[project_name]
+        src_agent_id = self._get_local_agent_id(addon, project_name)
+        dest_agent_id = self._get_site_agent_id(addon, project_name, site_name)
 
-        # Access the sites configuration
-        sites = project_settings.get("sites", {})
-
-        # Get agent_id for a specific site_name
-        site_config = sites.get(site_name, {})
-        if not site_config:
-            msg = (f"Sync Server: No configuration found for site '{site_name}'"
-                   f" in project '{project_name}'.")
-            self.log.error(msg)
-            raise ValueError(msg)
-        dest_agent_id = site_config.get("agent_id")
-
-        src_agent_id = project_settings["local_setting"]["resilio"]["agent_id"]
-        job_data = {
-            "name": f"Sync Job via API  {datetime.now().strftime('%Y%m%d%H%M%S')}",
-            "description": "Created using the connect_api module",
-            "type": "distribution",  # 'transfer' is used for Distribution jobs
-            "agents": [
-                {
-                    "id": src_agent_id,
-                    "path":  Path(source_path).get_object(),
-                    "permission": "rw"  # Sources are read_write
-                },
-                {
-                    "id": dest_agent_id,
-                    "path": Path(os.path.dirname(target_path)).get_object(),
-                    "permission": "ro"   # Targets are read_only
-                }
-            ]
-        }
+        job_data = self._build_job_data(
+            source_path,
+            src_agent_id,
+            target_path,
+            dest_agent_id
+        )
 
         return self._upload_download_process(
             project_name,
@@ -184,35 +161,15 @@ class ResilioHandler(AbstractProvider):
             (string) file_id of created/modified file ,
                 throws FileExistsError, FileNotFoundError exceptions
         """
-        project_settings = addon.sync_project_settings[project_name]
-        sites = project_settings.get("sites", {})
+        src_agent_id = self._get_site_agent_id(addon, project_name, site_name)
+        target_agent_id = self._get_local_agent_id(addon, project_name)
 
-        # Get agent_id for a specific site_name
-        site_config = sites.get(site_name, {})
-        if not site_config:
-            msg = (f"Sync Server: No configuration found for site '{site_name}'"
-                   f" in project '{project_name}'.")
-            self.log.error(msg)
-            raise ValueError(msg)
-        src_agent_id = site_config.get("agent_id")
-        target_agent_id = project_settings["local_setting"]["resilio"]["agent_id"]
-        job_data = {
-            "name": f"Sync Job via API  {datetime.now().strftime('%Y%m%d%H%M%S')}",
-            "description": "Created using the connect_api module",
-            "type": "distribution",  # 'transfer' is used for Distribution jobs
-            "agents": [
-                {
-                    "id": src_agent_id,
-                    "path":  Path(source_path).get_object(),
-                    "permission": "rw"  # Sources are read_write
-                },
-                {
-                    "id": target_agent_id,
-                    "path": Path(os.path.dirname(local_path)).get_object(),
-                    "permission": "ro"   # Targets are read_only
-                }
-            ]
-        }
+        job_data = self._build_job_data(
+            source_path,
+            src_agent_id,
+            local_path,
+            target_agent_id
+        )
 
         return self._upload_download_process(
             project_name,
@@ -224,61 +181,6 @@ class ResilioHandler(AbstractProvider):
             job_data,
             "remote"
         )
-
-    def _upload_download_process(
-            self,
-            project_name,
-            addon,
-            file,
-            repre_status,
-            site_name,
-            target_path,
-            job_data,
-            side
-    ):
-        new_job = Job(self._conn, job_data)
-        new_job.save()
-
-        self.log.debug(f"Job '{new_job.name}' created successfully.")
-        job_run_id = new_job.start()
-
-        last_tick = None
-        job_run = None
-        while (
-            job_run is None or
-            job_run.status not in ["finished", "failed", "aborted"]
-        ):
-            job_run = self._conn.get_job_run(job_run_id)
-
-            if addon.is_representation_paused(
-                    repre_status["representationId"],
-                    check_parents=True,
-                    project_name=project_name):
-                raise ValueError("Paused during process, please redo.")
-
-            progress_value = (
-                    float(job_run.attrs["transferred"] / job_run.attrs["size_total"])
-                    if job_run.attrs["size_total"]
-                    else 0.0
-            )
-
-            if not last_tick or \
-                    time.time() - last_tick >= addon.LOG_PROGRESS_SEC:
-                last_tick = time.time()
-                self.log.debug("Uploaded %d%%." % int(progress_value * 100))
-                addon.update_db(
-                    project_name=project_name,
-                    new_file_id=None,
-                    file=file,
-                    repre_status=repre_status,
-                    site_name=site_name,
-                    side=side,
-                    progress=progress_value
-                )
-            time.sleep(10)
-
-        if job_run.status == "finished":
-            return target_path
 
     def delete_file(self, path):
         """
@@ -374,3 +276,140 @@ class ResilioHandler(AbstractProvider):
                 raise ValueError(msg)
 
         return path
+
+    def _get_site_agent_id(self, addon, project_name, site_name):
+        """Get agent_id for a specific site from project settings.
+
+        Args:
+            addon: SiteSyncAddon instance
+            project_name: Project name
+            site_name: Site name to get agent_id for
+
+        Returns:
+            int: Agent ID for the site
+
+        Raises:
+            ValueError: If site configuration or agent_id not found
+        """
+        project_settings = addon.sync_project_settings[project_name]
+        sites = project_settings.get("sites", {})
+        site_config = sites.get(site_name, {})
+
+        if not site_config:
+            msg = (f"Sync Server: No configuration found for site '{site_name}'"
+                   f" in project '{project_name}'.")
+            self.log.error(msg)
+            raise ValueError(msg)
+
+        agent_id = site_config.get("agent_id")
+        if not agent_id:
+            msg = (f"Sync Server: No agent_id configured for site '{site_name}'"
+                   f" in project '{project_name}'.")
+            self.log.error(msg)
+            raise ValueError(msg)
+
+        return agent_id
+
+    def _get_local_agent_id(self, addon, project_name):
+        """Get local agent_id from project settings.
+
+        Args:
+            addon: SiteSyncAddon instance
+            project_name: Project name
+
+        Returns:
+            int: Local agent ID
+        """
+        project_settings = addon.sync_project_settings[project_name]
+        return project_settings["local_setting"]["resilio"]["agent_id"]
+
+    def _build_job_data(
+        self,
+        source_path,
+        source_agent_id,
+        target_path,
+        target_agent_id
+    ):
+        """Build job data for Resilio sync operation.
+
+        Args:
+            source_path: Path on source agent
+            source_agent_id: Source agent ID
+            target_path: Path on target agent
+            target_agent_id: Target agent ID
+
+        Returns:
+            dict: Job data configuration
+        """
+        return {
+            "name": f"Sync Job via API  {datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "description": "Created using the connect_api module",
+            "type": "distribution",
+            "agents": [
+                {
+                    "id": source_agent_id,
+                    "path": Path(source_path).get_object(),
+                    "permission": "rw"
+                },
+                {
+                    "id": target_agent_id,
+                    "path": Path(os.path.dirname(target_path)).get_object(),
+                    "permission": "ro"
+                }
+            ]
+        }
+
+    def _upload_download_process(
+            self,
+            project_name,
+            addon,
+            file,
+            repre_status,
+            site_name,
+            target_path,
+            job_data,
+            side
+    ):
+        new_job = Job(self._conn, job_data)
+        new_job.save()
+
+        self.log.debug(f"Job '{new_job.name}' created successfully.")
+        job_run_id = new_job.start()
+
+        last_tick = None
+        job_run = None
+        while (
+            job_run is None or
+            job_run.status not in ["finished", "failed", "aborted"]
+        ):
+            job_run = self._conn.get_job_run(job_run_id)
+
+            if addon.is_representation_paused(
+                    repre_status["representationId"],
+                    check_parents=True,
+                    project_name=project_name):
+                raise ValueError("Paused during process, please redo.")
+
+            progress_value = (
+                    float(job_run.attrs["transferred"] / job_run.attrs["size_total"])
+                    if job_run.attrs["size_total"]
+                    else 0.0
+            )
+
+            if not last_tick or \
+                    time.time() - last_tick >= addon.LOG_PROGRESS_SEC:
+                last_tick = time.time()
+                self.log.debug("Uploaded %d%%." % int(progress_value * 100))
+                addon.update_db(
+                    project_name=project_name,
+                    new_file_id=None,
+                    file=file,
+                    repre_status=repre_status,
+                    site_name=site_name,
+                    side=side,
+                    progress=progress_value
+                )
+            time.sleep(10)
+
+        if job_run.status == "finished":
+            return target_path
