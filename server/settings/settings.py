@@ -105,6 +105,22 @@ async def defined_sited_enum_resolver(
 provider_enum = provider_resolver()
 
 
+class ResilioLocalSubmodel(BaseSettingsModel):
+    """Configure Resilio credentials for sync from local site"""
+    token: str = Field(
+        "",
+        title="Access token",
+        scope=["site"],
+        description="API access token",
+    )
+
+    agent_id: int = Field(
+        0,
+        title="Agent id",
+        scope=["site"],
+    )
+
+
 class SitesSubmodel(BaseSettingsModel):
     """Configured additional sites and properties for their providers"""
     _layout = "expanded"
@@ -180,6 +196,12 @@ class LocalSubmodel(BaseSettingsModel):
         title="Local roots overrides",
         scope=["site"],
         description="Overrides for local root(s)."
+    )
+
+    resilio: ResilioLocalSubmodel = Field(
+        title="Resilio credentials for local site",
+        default_factory=ResilioLocalSubmodel,
+        scope=["site"]
     )
 
 
