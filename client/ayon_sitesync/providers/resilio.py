@@ -74,7 +74,6 @@ class ResilioHandler(AbstractProvider):
         address = f"{host}:{port}"
         self._conn = ConnectApi(address, token)
 
-
     def is_active(self):
         """
             Returns True if provider is activated, eg. has working credentials.
