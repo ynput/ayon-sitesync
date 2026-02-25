@@ -219,7 +219,10 @@ class ResilioHandler(AbstractProvider):
 
         last_tick = None
         job_run = None
-        while job_run is None or job_run.status not in ["finished", "failed"]:
+        while (
+            job_run is None or
+            job_run.status not in ["finished", "failed", "aborted"]
+        ):
             job_run = self._conn.get_job_run(job_run_id)
 
             if addon.is_representation_paused(
@@ -249,7 +252,8 @@ class ResilioHandler(AbstractProvider):
                 )
             time.sleep(10)
 
-        return target_path
+        if job_run.status == "finished":
+            return target_path
 
     def delete_file(self, path):
         """
