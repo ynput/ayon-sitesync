@@ -11,12 +11,6 @@ class ResilioSubmodel(BaseSettingsModel):
     root: root folder on Resilio
     """
     _layout = "expanded"
-    token: str = Field(
-        "",
-        title="Access token",
-        scope=["studio", "project", "site"],
-        description="API access token",
-    )
 
     host: str = Field(
         "",
@@ -32,15 +26,22 @@ class ResilioSubmodel(BaseSettingsModel):
         placeholder="8443"
     )
 
+    token: str = Field(
+        "",
+        title="Access token",
+        scope=["studio", "project", "site"],
+        description="API access token",
+    )
+
     agent_id: int = Field(
         0,
         title="Agent id",
-        scope=["studio", "project", "site"],
+        scope=["studio", "project"],
     )
 
     roots: list[Root] = Field(
         default=default_roots,
-        scope=["studio", "project", "site"],
+        scope=["studio", "project"],
         title="Roots",
         description="Setup root paths for the project",
     )
