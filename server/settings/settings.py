@@ -147,8 +147,11 @@ class SitesSubmodel(BaseSettingsModel):
         scope=["studio", "project", "site"]
     )
 
-    name: str = Field(..., title="Site name",
-                      scope=["studio", "project", "site"])
+    name: str = Field(
+        ...,
+        title="Site name",
+        scope=["studio", "project", "site"]
+    )
 
     @validator("name")
     def validate_name(cls, value):
