@@ -112,14 +112,28 @@ class ResilioHandler(AbstractProvider):
             (string) file_id of created/modified file ,
                 throws FileExistsError, FileNotFoundError exceptions
         """
-        dest_agent_id = 168   # TODO
+        project_settings = addon.sync_project_settings[project_name]
+
+        # Access the sites configuration
+        sites = project_settings.get("sites", {})
+
+        # Get agent_id for a specific site_name
+        site_config = sites.get(site_name, {})
+        if not site_config:
+            msg = (f"Sync Server: No configuration found for site '{site_name}'"
+                   f" in project '{project_name}'.")
+            self.log.error(msg)
+            raise ValueError(msg)
+        dest_agent_id = site_config.get("agent_id")
+
+        src_agent_id = project_settings["local_setting"]["resilio"]["agent_id"]
         job_data = {
             "name": f"Sync Job via API  {datetime.now().strftime('%Y%m%d%H%M%S')}",
             "description": "Created using the connect_api module",
             "type": "distribution",  # 'transfer' is used for Distribution jobs
             "agents": [
                 {
-                    "id": self.agent_id,
+                    "id": src_agent_id,
                     "path":  Path(source_path).get_object(),
                     "permission": "rw"  # Sources are read_write
                 },
@@ -170,7 +184,18 @@ class ResilioHandler(AbstractProvider):
             (string) file_id of created/modified file ,
                 throws FileExistsError, FileNotFoundError exceptions
         """
-        src_agent_id = 168   # TODO
+        project_settings = addon.sync_project_settings[project_name]
+        sites = project_settings.get("sites", {})
+
+        # Get agent_id for a specific site_name
+        site_config = sites.get(site_name, {})
+        if not site_config:
+            msg = (f"Sync Server: No configuration found for site '{site_name}'"
+                   f" in project '{project_name}'.")
+            self.log.error(msg)
+            raise ValueError(msg)
+        src_agent_id = site_config.get("agent_id")
+        target_agent_id = project_settings["local_setting"]["resilio"]["agent_id"]
         job_data = {
             "name": f"Sync Job via API  {datetime.now().strftime('%Y%m%d%H%M%S')}",
             "description": "Created using the connect_api module",
@@ -182,7 +207,7 @@ class ResilioHandler(AbstractProvider):
                     "permission": "rw"  # Sources are read_write
                 },
                 {
-                    "id": self.agent_id,
+                    "id": target_agent_id,
                     "path": Path(os.path.dirname(local_path)).get_object(),
                     "permission": "ro"   # Targets are read_only
                 }
