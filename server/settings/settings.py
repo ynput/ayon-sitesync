@@ -144,7 +144,7 @@ class SitesSubmodel(BaseSettingsModel):
     )
     resilio: ResilioSubmodel = Field(
         default_factory=ResilioSubmodel,
-        scope=["studio", "project", "site"]
+        scope=["studio", "project"]
     )
 
     name: str = Field(
