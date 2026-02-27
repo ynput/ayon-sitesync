@@ -111,14 +111,14 @@ class ResilioHandler(AbstractProvider):
             (string) file_id of created/modified file ,
                 throws FileExistsError, FileNotFoundError exceptions
         """
-        src_agent_id = self._get_local_agent_id(addon, project_name)
-        dest_agent_id = self._get_site_agent_id(addon, project_name, site_name)
+        src_agent_id = self._get_site_agent_id(addon, project_name, "active")
+        trg_agent_id = self._get_site_agent_id(addon, project_name, "remote")
 
         job_data = self._build_job_data(
             source_path,
             src_agent_id,
             target_path,
-            dest_agent_id
+            trg_agent_id
         )
 
         return self._upload_download_process(
@@ -160,14 +160,14 @@ class ResilioHandler(AbstractProvider):
             (string) file_id of created/modified file ,
                 throws FileExistsError, FileNotFoundError exceptions
         """
-        src_agent_id = self._get_site_agent_id(addon, project_name, site_name)
-        target_agent_id = self._get_local_agent_id(addon, project_name)
+        src_agent_id = self._get_site_agent_id(addon, project_name, "remote")
+        trg_agent_id = self._get_site_agent_id(addon, project_name, "active")
 
         job_data = self._build_job_data(
             source_path,
             src_agent_id,
             local_path,
-            target_agent_id
+            trg_agent_id
         )
 
         return self._upload_download_process(
@@ -276,13 +276,13 @@ class ResilioHandler(AbstractProvider):
 
         return path
 
-    def _get_site_agent_id(self, addon, project_name, site_name):
+    def _get_site_agent_id(self, addon, project_name, side):
         """Get agent_id for a specific site from project settings.
 
         Args:
             addon: SiteSyncAddon instance
             project_name: Project name
-            site_name: Site name to get agent_id for
+            side: active | remote
 
         Returns:
             int: Agent ID for the site
@@ -291,9 +291,15 @@ class ResilioHandler(AbstractProvider):
             ValueError: If site configuration or agent_id not found
         """
         project_settings = addon.sync_project_settings[project_name]
+        local_setting = project_settings["local_setting"]
         sites = project_settings.get("sites", {})
-        site_config = sites.get(site_name, {})
 
+        site_name = local_setting[f"{side}_site"]
+
+        if site_name == "local":
+            return local_setting["resilio"]["agent_id"]
+
+        site_config = sites.get(site_name, {})
         if not site_config:
             msg = (f"Sync Server: No configuration found for site '{site_name}'"
                    f" in project '{project_name}'.")
@@ -308,19 +314,6 @@ class ResilioHandler(AbstractProvider):
             raise ValueError(msg)
 
         return agent_id
-
-    def _get_local_agent_id(self, addon, project_name):
-        """Get local agent_id from project settings.
-
-        Args:
-            addon: SiteSyncAddon instance
-            project_name: Project name
-
-        Returns:
-            int: Local agent ID
-        """
-        project_settings = addon.sync_project_settings[project_name]
-        return project_settings["local_setting"]["resilio"]["agent_id"]
 
     def _build_job_data(
         self,
