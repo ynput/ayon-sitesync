@@ -11,6 +11,7 @@ from .providers.local_drive import LocalDriveSubmodel
 from .providers.gdrive import GoogleDriveSubmodel
 from .providers.dropbox import DropboxSubmodel
 from .providers.sftp import SFTPSubmodel
+from .providers.resilio import ResilioSubmodel
 
 if typing.TYPE_CHECKING:
     from ayon_server.addons import BaseServerAddon
@@ -20,8 +21,10 @@ class GeneralSubmodel(BaseSettingsModel):
     """Properties for loop and module configuration"""
     retry_cnt: int = Field(3, title="Retry Count")
     loop_delay: int = Field(60, title="Loop Delay")
-    always_accessible_on: list[str] = Field([],
-                                            title="Always accessible on sites")
+    always_accessible_on: list[str] = Field(
+        [],
+        title="Always accessible on sites"
+    )
     active_site: str = Field("studio", title="User Default Active Site")
     remote_site: str = Field("studio", title="User Default Remote Site")
 
@@ -66,10 +69,13 @@ def provider_resolver():
         "gdrive": "Google Drive",
         "local_drive": "Local Drive",
         "dropbox": "Dropbox",
-        "sftp": "SFTP"
+        "sftp": "SFTP",
+        "resilio": "Resilio",
     }
-    return [{"value": f"{key}", "label": f"{label}"}
-            for key, label in provider_dict.items()]
+    return [
+        {"value": f"{key}", "label": f"{label}"}
+        for key, label in provider_dict.items()
+    ]
 
 
 async def defined_sited_enum_resolver(
@@ -82,8 +88,10 @@ async def defined_sited_enum_resolver(
         return []
 
     if project_name:
-        settings = await addon.get_project_settings(project_name=project_name,
-                                                    variant=settings_variant)
+        settings = await addon.get_project_settings(
+            project_name=project_name,
+            variant=settings_variant
+        )
     else:
         settings =  await addon.get_studio_settings(variant=settings_variant)
 
@@ -95,6 +103,22 @@ async def defined_sited_enum_resolver(
 
 
 provider_enum = provider_resolver()
+
+
+class ResilioLocalSubmodel(BaseSettingsModel):
+    """Configure Resilio credentials for sync from local site"""
+    token: str = Field(
+        "",
+        title="Access token",
+        scope=["site"],
+        description="API access token",
+    )
+
+    agent_id: int = Field(
+        0,
+        title="Agent id",
+        scope=["site"],
+    )
 
 
 class SitesSubmodel(BaseSettingsModel):
@@ -134,9 +158,16 @@ class SitesSubmodel(BaseSettingsModel):
         default_factory=SFTPSubmodel,
         scope=["studio", "project", "site"]
     )
+    resilio: ResilioSubmodel = Field(
+        default_factory=ResilioSubmodel,
+        scope=["studio", "project"]
+    )
 
-    name: str = Field(..., title="Site name",
-                      scope=["studio", "project", "site"])
+    name: str = Field(
+        ...,
+        title="Site name",
+        scope=["studio", "project", "site"]
+    )
 
     @validator("name")
     def validate_name(cls, value):
@@ -146,21 +177,31 @@ class SitesSubmodel(BaseSettingsModel):
 
 class LocalSubmodel(BaseSettingsModel):
     """Select your local and remote site"""
-    active_site: str = Field("",
-                             title="My Active Site",
-                             scope=["site"],
-                             enum_resolver=defined_sited_enum_resolver)
+    active_site: str = Field(
+        "",
+        title="My Active Site",
+        scope=["site"],
+        enum_resolver=defined_sited_enum_resolver
+    )
 
-    remote_site: str = Field("",
-                             title="My Remote Site",
-                             scope=["site"],
-                             enum_resolver=defined_sited_enum_resolver)
+    remote_site: str = Field(
+        "",
+        title="My Remote Site",
+        scope=["site"],
+        enum_resolver=defined_sited_enum_resolver
+    )
 
     local_roots: list[RootSubmodel] = Field(
         default=default_roots,
         title="Local roots overrides",
         scope=["site"],
         description="Overrides for local root(s)."
+    )
+
+    resilio: ResilioLocalSubmodel = Field(
+        title="Resilio credentials for local site",
+        default_factory=ResilioLocalSubmodel,
+        scope=["site"]
     )
 
 

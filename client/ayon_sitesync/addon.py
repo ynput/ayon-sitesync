@@ -785,10 +785,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if site_name not in ("studio", "local"):
             # Consider local site id as 'local'
             if site_name != get_local_site_id():
-                raise ValueError((
-                    "Root overrides are available only for"
-                    " default sites not for \"{}\""
-                ).format(site_name))
+                return {}
             site_name = "local"
 
         sitesync_settings = self.get_sync_project_setting(project_name)
