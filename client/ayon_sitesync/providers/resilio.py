@@ -334,7 +334,7 @@ class ResilioHandler(AbstractProvider):
             dict: Job data configuration
         """
         return {
-            "name": f"Sync Job via API  {datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+            "name": f"Sync Job via API  {datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]}",
             "description": "Created using the connect_api module",
             "type": "distribution",
             "agents": [
