@@ -136,19 +136,19 @@ class LocalDriveHandler(AbstractProvider):
                      {"root": {"root_ONE": "value", "root_TWO":"value}}
             Format is importing for usage of python's format ** approach
         """
-        site_name = self._normalize_site_name(self.site_name)
+        manager = AddonsManager()
+        sitesync_addon = manager.get_enabled_addon("sitesync")
+        if not sitesync_addon:
+            raise RuntimeError("No SiteSync addon")
+
+        site_name = sitesync_addon.get_local_normalized_site(self.site_name)
         if not anatomy:
-            anatomy = Anatomy(self.project_name,
-                              site_name)
+            anatomy = Anatomy(self.project_name, site_name)
 
         # TODO cleanup when Anatomy will implement siteRoots method
         roots = anatomy.roots
         root_values = [root.value for root in roots.values()]
         if not all(root_values):
-            manager = AddonsManager()
-            sitesync_addon = manager.get_enabled_addon("sitesync")
-            if not sitesync_addon:
-                raise RuntimeError("No SiteSync addon")
             roots = sitesync_addon._get_project_root_overrides_by_site_id(
                 self.project_name, site_name)
 
@@ -206,9 +206,3 @@ class LocalDriveHandler(AbstractProvider):
             except FileNotFoundError:
                 pass
             time.sleep(0.5)
-
-    def _normalize_site_name(self, site_name):
-        """Transform user id to 'local' for Local settings"""
-        if site_name != 'studio':
-            return 'local'
-        return site_name
