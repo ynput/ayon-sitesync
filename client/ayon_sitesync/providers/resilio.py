@@ -163,6 +163,11 @@ class ResilioHandler(AbstractProvider):
         src_agent_id = self._get_site_agent_id(addon, project_name, "remote")
         trg_agent_id = self._get_site_agent_id(addon, project_name, "active")
 
+        if src_agent_id == trg_agent_id:
+            raise ValueError(
+                f"Source and target agent cannot be the same ({src_agent_id}"
+            )
+
         job_data = self._build_job_data(
             source_path,
             src_agent_id,
