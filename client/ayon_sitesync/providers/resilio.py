@@ -115,9 +115,9 @@ class ResilioHandler(AbstractProvider):
         trg_agent_id = self._get_site_agent_id(addon, project_name, "remote")
 
         job_data = self._build_job_data(
-            source_path,
+            os.path.normpath(source_path),
             src_agent_id,
-            target_path,
+            os.path.normpath(target_path),
             trg_agent_id
         )
 
