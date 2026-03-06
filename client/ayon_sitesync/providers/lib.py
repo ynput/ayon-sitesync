@@ -1,6 +1,7 @@
 from .gdrive import GDriveHandler
 from .dropbox import DropboxHandler
 from .local_drive import LocalDriveHandler
+from .resilio import ResilioHandler
 from .sftp import SFTPHandler
 
 
@@ -105,3 +106,4 @@ factory.register_provider(GDriveHandler.CODE, GDriveHandler, 7)
 factory.register_provider(DropboxHandler.CODE, DropboxHandler, 10)
 factory.register_provider(LocalDriveHandler.CODE, LocalDriveHandler, 50)
 factory.register_provider(SFTPHandler.CODE, SFTPHandler, 20)
+factory.register_provider(ResilioHandler.CODE, ResilioHandler, 50)
