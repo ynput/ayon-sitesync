@@ -4,11 +4,11 @@ import shutil
 import threading
 import time
 
-from ayon_core.lib import Logger
-from ayon_core.pipeline import Anatomy
-from .abstract_provider import AbstractProvider
-
 from ayon_core.addon import AddonsManager
+from ayon_core.lib import Logger, get_local_site_id
+from ayon_core.pipeline import Anatomy
+
+from .abstract_provider import AbstractProvider
 
 log = Logger.get_logger("SiteSync")
 
