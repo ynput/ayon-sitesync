@@ -59,10 +59,9 @@ class EditableScopes:
 
 
 def get_linked_representation_id(
-    project_name,
-    repre_entity,
-    link_type,
-    max_depth=None
+        project_name,
+        repre_entity,
+        link_type,
 ):
     """Returns list of linked ids of particular type (if provided).
 
@@ -72,15 +71,12 @@ def get_linked_representation_id(
             version back to representations.
 
     Todos:
-        Missing depth query. Not sure how it did find more representations
-            in depth, probably links to version?
         This function should probably live in sitesync addon?
 
     Args:
         project_name (str): Name of project where look for links.
         repre_entity (dict[str, Any]): Representation entity.
         link_type (str): Type of link (e.g. 'reference', ...).
-        max_depth (int): Limit recursion level. Default: 0
 
     Returns:
         List[ObjectId] Linked representation ids.
@@ -90,22 +86,17 @@ def get_linked_representation_id(
         return []
 
     version_id = repre_entity["versionId"]
-    if max_depth is None or max_depth == 0:
-        max_depth = 1
 
     link_types = None
     if link_type:
         link_types = [link_type]
 
-    # Store already found version ids to avoid recursion, and also to store
-    #   output -> Don't forget to remove 'version_id' at the end!!!
+    # Store already found version ids to avoid infinite recursion
     linked_version_ids = {version_id}
-    # Each loop of depth will reset this variable
+    # Each loop will find new versions linked to current versions
     versions_to_check = {version_id}
-    for _ in range(max_depth):
-        if not versions_to_check:
-            break
 
+    while versions_to_check:
         versions_links = get_versions_links(
             project_name,
             versions_to_check,
@@ -119,12 +110,17 @@ def get_linked_representation_id(
                 if link["entityType"] != "version":
                     continue
                 entity_id = link["entityId"]
-                linked_version_ids.add(entity_id)
-                versions_to_check.add(entity_id)
+                # Only add if not already visited
+                if entity_id not in linked_version_ids:
+                    linked_version_ids.add(entity_id)
+                    versions_to_check.add(entity_id)
 
-    linked_version_ids.remove(version_id)
+    # Remove the original version_id from results
+    linked_version_ids.discard(version_id)
+
     if not linked_version_ids:
         return []
+
     representations = get_representations(
         project_name,
         version_ids=linked_version_ids,
