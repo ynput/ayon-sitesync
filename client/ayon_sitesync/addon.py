@@ -810,7 +810,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         return roots
 
     def get_local_normalized_site(self, site_name):
-        """Normlize local site name.
+        """Normalize local site name.
 
          Return 'local' if 'site_name' is local id.
 
@@ -821,7 +821,13 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             str: Normalized site name.
 
         """
-        if site_name == get_local_site_id():
+        studio_site_names = self._transform_sites_from_settings(
+                self.sync_studio_settings
+            ).keys()
+        if (
+            site_name not in studio_site_names and
+            site_name == get_local_site_id()
+        ):
             site_name = self.LOCAL_SITE
 
         return site_name
