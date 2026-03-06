@@ -379,6 +379,7 @@ class ResilioHandler(AbstractProvider):
             job_run is None or
             job_run.status not in ["finished", "failed", "aborted"]
         ):
+            time.sleep(10)
             job_run = self._conn.get_job_run(job_run_id)
 
             if addon.is_representation_paused(
@@ -406,7 +407,6 @@ class ResilioHandler(AbstractProvider):
                     side=side,
                     progress=progress_value
                 )
-            time.sleep(10)
 
         if job_run.status == "finished":
             return target_path
