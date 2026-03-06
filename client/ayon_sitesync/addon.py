@@ -32,6 +32,7 @@ from .utils import (
     SyncStatus,
     SiteAlreadyPresentError,
     SiteSyncStatus,
+    get_linked_representation_id,
 )
 
 SYNC_ADDON_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -160,7 +161,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         site_name=None,
         file_id=None,
         force=False,
-        status=SiteSyncStatus.QUEUED
+        status=SiteSyncStatus.QUEUED,
+        link_type="reference",
     ):
         """Adds new site to representation to be synced.
 
@@ -171,6 +173,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         Use 'force' to reset existing site.
 
+        If link_type is provided, also adds site to all linked representations.
+
         Args:
             project_name (str): Project name.
             representation_id (str): Representation id.
@@ -179,6 +183,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             force (bool): Reset site if exists.
             status (SiteSyncStatus): Current status,
                 default SiteSyncStatus.QUEUED
+            link_type (str): Type of link to follow (e.g. 'reference').
+                If provided, will also add site to all linked representations.
 
         Raises:
             SiteAlreadyPresentError: If adding already existing site and
@@ -192,6 +198,65 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if not site_name:
             site_name = self.DEFAULT_SITE
 
+        representation = get_representation_by_id(
+            project_name, representation_id
+        )
+
+        files = representation.get("files", [])
+        if not files:
+            self.log.debug("No files for {}".format(representation_id))
+            return
+
+        # Collect all representation IDs to process (original + linked)
+        representation_ids = [representation_id]
+
+        # If link_type is provided, find all linked representations
+        if link_type:
+            linked_repre_ids = get_linked_representation_id(
+                project_name, representation, link_type
+            )
+            representation_ids.extend(linked_repre_ids)
+            self.log.debug(
+                "Found {} linked representations for {}".format(
+                    len(linked_repre_ids), representation_id
+                )
+            )
+
+        # Add site to each representation
+        for repre_id in representation_ids:
+            self._add_site_to_representation(
+                project_name,
+                repre_id,
+                site_name,
+                file_id,
+                force,
+                status
+            )
+
+    def _add_site_to_representation(
+        self,
+        project_name,
+        representation_id,
+        site_name,
+        file_id,
+        force,
+        status
+    ):
+        """Internal method to add site to a single representation.
+
+        Args:
+            project_name (str): Project name.
+            representation_id (str): Representation id.
+            site_name (str): Site name of configured site.
+            file_id (str): File id.
+            force (bool): Reset site if exists.
+            status (SiteSyncStatus): Current status.
+
+        Raises:
+            SiteAlreadyPresentError: If adding already existing site and
+                not 'force'
+            ValueError: other errors (repre not found, misconfiguration)
+        """
         representation = get_representation_by_id(
             project_name, representation_id
         )
