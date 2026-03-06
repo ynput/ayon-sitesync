@@ -115,9 +115,9 @@ class ResilioHandler(AbstractProvider):
         trg_agent_id = self._get_site_agent_id(addon, project_name, "remote")
 
         job_data = self._build_job_data(
-            os.path.normpath(source_path),
+            source_path,
             src_agent_id,
-            os.path.normpath(target_path),
+            target_path,
             trg_agent_id
         )
 
@@ -338,6 +338,8 @@ class ResilioHandler(AbstractProvider):
         Returns:
             dict: Job data configuration
         """
+        source_path = os.path.normpath(source_path)
+        target_path = os.path.normpath(target_path)
         return {
             "name": f"Sync Job via API  {datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]}",
             "description": "Created using the connect_api module",
