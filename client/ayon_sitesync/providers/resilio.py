@@ -397,7 +397,8 @@ class ResilioHandler(AbstractProvider):
             if not last_tick or \
                     time.time() - last_tick >= addon.LOG_PROGRESS_SEC:
                 last_tick = time.time()
-                self.log.debug("Uploaded %d%%." % int(progress_value * 100))
+                progress_value_log = min(int(progress_value * 100), 100)
+                self.log.debug("Uploaded %d%%." % progress_value_log)
                 addon.update_db(
                     project_name=project_name,
                     new_file_id=None,
