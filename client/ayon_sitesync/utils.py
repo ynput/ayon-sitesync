@@ -61,7 +61,7 @@ class EditableScopes:
 def get_linked_representation_id(
         project_name,
         repre_entity,
-        link_type,
+        link_type="reference",
 ):
     """Returns list of linked ids of particular type (if provided).
 
