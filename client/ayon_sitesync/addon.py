@@ -307,9 +307,78 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         project_name,
         representation_id,
         site_name,
-        remove_local_files=False
+        remove_local_files=False,
+        link_type="reference",
     ):
         """Removes site for particular representation in project.
+
+        If link_type is provided, also removes site from all linked representations.
+        Also removes the remote site from project settings for all representations.
+
+        Args:
+            project_name (str): project name (must match DB)
+            representation_id (str): MongoDB _id value
+            site_name (str): name of configured and active site
+            remove_local_files (bool): remove only files for 'local_id'
+                site
+            link_type (str): Type of link to follow (e.g. 'reference').
+                If provided, will also remove site from all linked representations.
+
+        Raises:
+            ValueError: Throws if any issue.
+
+        """
+        if not self.get_sync_project_setting(project_name):
+            raise ValueError("Project not configured")
+
+        representation = get_representation_by_id(
+            project_name, representation_id
+        )
+
+        # Collect all representation IDs to process (original + linked)
+        representation_ids = [representation_id]
+
+        # If link_type is provided, find all linked representations
+        if link_type:
+            linked_repre_ids = get_linked_representation_id(
+                project_name, representation, link_type
+            )
+            representation_ids.extend(linked_repre_ids)
+            self.log.debug(
+                "Found {} linked representations for {}".format(
+                    len(linked_repre_ids), representation_id
+                )
+            )
+
+        # Get remote site from project settings
+        remote_site = self.get_remote_site(project_name)
+
+        # Remove site from each representation (both local and remote)
+        for repre_id in representation_ids:
+            # Remove local site
+            self._remove_site_from_representation(
+                project_name,
+                repre_id,
+                site_name,
+                remove_local_files
+            )
+            # Remove remote site if different from local site
+            if remote_site and remote_site != site_name:
+                self._remove_site_from_representation(
+                    project_name,
+                    repre_id,
+                    remote_site,
+                    remove_local_files
+                )
+
+    def _remove_site_from_representation(
+        self,
+        project_name,
+        representation_id,
+        site_name,
+        remove_local_files=False
+    ):
+        """Internal method to remove site from a single representation.
 
         Args:
             project_name (str): project name (must match DB)
@@ -322,9 +391,6 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             ValueError: Throws if any issue.
 
         """
-        if not self.get_sync_project_setting(project_name):
-            raise ValueError("Project not configured")
-
         sync_info = self.get_repre_sync_state(
             project_name,
             representation_id,
