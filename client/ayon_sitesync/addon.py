@@ -781,23 +781,32 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             {"work": "c:/projects_local"}
         """
 
-        # Validate that site name is valid
-        if site_name not in ("studio", "local"):
-            # Consider local site id as 'local'
-            if site_name != get_local_site_id():
-                return {}
-            site_name = "local"
-
         sitesync_settings = self.get_sync_project_setting(project_name)
 
         roots = {}
         if not sitesync_settings["enabled"]:
             return roots
         local_project_settings = sitesync_settings["local_setting"]
+        # look for local roots overrides
         if site_name == "local":
             for root_info in local_project_settings["local_roots"]:
                 roots[root_info["name"]] = root_info["path"]
 
+        # check if there are roots in Studio settings
+        # (background process doesn't have local settings,
+        # but it should have roots for local site in Studio settings)
+        if not roots:
+            for setting_site_name, site_info in sitesync_settings["sites"].items():
+                if setting_site_name == site_name:
+                    site_roots = site_info.get("root")
+                    if not site_roots:
+                        continue
+                    if isinstance(site_roots, dict):
+                        roots = site_roots
+                    else:
+                        for root_info in site_roots:
+                            platform_key = platform.system().lower()
+                            roots[root_info["name"]] = root_info[platform_key]
         return roots
 
     def get_local_normalized_site(self, site_name):
@@ -1162,6 +1171,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     @property
     def sync_project_settings(self):
         if self._sync_project_settings is None:
+            with open("c:/projects/site_sync", "a") as f:
+                f.write("sync_project_settings called\n")
             self.set_sync_project_settings()
 
         return self._sync_project_settings
@@ -1249,6 +1260,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """Transforms list of 'sites' from Setting to dict.
 
         It processes both System and Project Settings as they have same format.
+        Returns:
+            dict[str, dict]: {'site_name': {site_info}...}
         """
         sites = {}
         if not self.enabled:
