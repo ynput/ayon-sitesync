@@ -1308,8 +1308,6 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     @property
     def sync_project_settings(self):
         if self._sync_project_settings is None:
-            with open("c:/projects/site_sync", "a") as f:
-                f.write("sync_project_settings called\n")
             self.set_sync_project_settings()
 
         return self._sync_project_settings
