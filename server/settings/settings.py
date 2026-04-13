@@ -12,6 +12,7 @@ from .providers.gdrive import GoogleDriveSubmodel
 from .providers.dropbox import DropboxSubmodel
 from .providers.sftp import SFTPSubmodel
 from .providers.resilio import ResilioSubmodel
+from .providers.rclone import RCloneSubmodel
 
 if typing.TYPE_CHECKING:
     from ayon_server.addons import BaseServerAddon
@@ -71,6 +72,7 @@ def provider_resolver():
         "dropbox": "Dropbox",
         "sftp": "SFTP",
         "resilio": "Resilio",
+        "rclone": "Rclone"
     }
     return [
         {"value": f"{key}", "label": f"{label}"}
@@ -161,6 +163,10 @@ class SitesSubmodel(BaseSettingsModel):
     resilio: ResilioSubmodel = Field(
         default_factory=ResilioSubmodel,
         scope=["studio", "project"]
+    )
+    rclone: RCloneSubmodel = Field(
+        default_factory=RCloneSubmodel,
+        scope=["studio", "project", "site"]
     )
 
     name: str = Field(
