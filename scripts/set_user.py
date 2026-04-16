@@ -2,6 +2,7 @@ SERVER_URL = "https://localhost:5000/" # FILL
 SERVICE_API_KEY = "999aaaaaacddddd"  # FILL
 PROJECT_NAME = "resilio_sync"  # FILL
 ADDON_VERSION =  "1.2.6+dev"
+ADDON_VERSION =  "1.2.6+dev.1"
 
 
 USER_NAME = "test"  # FILL, - use service user name for background process
