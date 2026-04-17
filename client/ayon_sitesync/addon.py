@@ -210,28 +210,41 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         # Collect all representation IDs to process (original + linked)
         representation_ids = [representation_id]
 
+        self._add_site_to_representation(
+            project_name,
+            representation_id,
+            site_name,
+            file_id,
+            force,
+            status
+        )
+
         # If link_type is provided, find all linked representations
         if link_type:
             linked_repre_ids = get_linked_representation_id(
                 project_name, representation, link_type
             )
-            representation_ids.extend(linked_repre_ids)
             self.log.debug(
                 "Found {} linked representations for {}".format(
                     len(linked_repre_ids), representation_id
                 )
             )
+            # Add site to each representation
+            for repre_id in linked_repre_ids:
+                try:
+                    self._add_site_to_representation(
+                        project_name,
+                        repre_id,
+                        site_name,
+                        file_id,
+                        force,
+                        status
+                    )
+                except SiteAlreadyPresentError:
+                    self.log.warning(
+                        f"Site {site_name} already present on {repre_id}"
+                    )
 
-        # Add site to each representation
-        for repre_id in representation_ids:
-            self._add_site_to_representation(
-                project_name,
-                repre_id,
-                site_name,
-                file_id,
-                force,
-                status
-            )
 
     def _add_site_to_representation(
         self,
