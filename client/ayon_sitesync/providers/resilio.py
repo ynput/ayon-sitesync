@@ -16,6 +16,13 @@ class ResilioHandler(AbstractProvider):
     CODE = "resilio"
     LABEL = "Resilio"
 
+    # Error codes to ignore (not raise exception for)
+    # TODO expose as Settings maybe
+    IGNORE_ERRORS = {
+        # currently separate job per repre >> to same folder
+        "SE_SM_DUPLICATE_FOLDER",
+    }
+
     _log = None
 
     def __init__(self, project_name, site_name, tree=None, presets=None):
@@ -380,8 +387,7 @@ class ResilioHandler(AbstractProvider):
         job_run = None
         while (
             job_run is None or
-            (job_run.status not in ["finished", "failed", "aborted"] and
-             not job_run.errors)
+            job_run.status not in ["finished", "failed", "aborted"]
         ):
             time.sleep(10)
             job_run = self._conn.get_job_run(job_run_id)
@@ -412,8 +418,14 @@ class ResilioHandler(AbstractProvider):
                     side=side,
                     progress=progress_value
                 )
-        if job_run.errors:
-            raise ValueError(job_run.errors)
+                # Filter out ignorable errors
+                if job_run.errors:
+                    filtered_errors = [
+                        err for err in job_run.errors
+                        if err.get("code_str") not in self.IGNORE_ERRORS
+                    ]
+                    if filtered_errors:
+                        raise ValueError(filtered_errors)
 
         if job_run.status == "finished":
             return target_path
