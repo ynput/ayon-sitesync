@@ -1,8 +1,8 @@
 import os.path
 import time
-from datetime import datetime
 from sys import platform
 import platform
+import secrets
 
 from ayon_core.lib import Logger
 from ayon_core.pipeline import Anatomy
@@ -340,8 +340,9 @@ class ResilioHandler(AbstractProvider):
         """
         source_path = os.path.normpath(source_path)
         target_path = os.path.normpath(target_path)
+        job_id =f"{os.path.basename(source_path)}_{secrets.token_hex(3)}"
         return {
-            "name": f"Sync Job via API  {datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]}",
+            "name": f"Sync Job via API  {job_id}",
             "description": "Created using the connect_api module",
             "type": "distribution",
             "agents": [
