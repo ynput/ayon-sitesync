@@ -368,10 +368,9 @@ class SFTPHandler(AbstractProvider):
             source_file_size = self.conn.stat(source_path).st_size
 
         target_file_size = 0
-        last_tick = status_val = None
+        last_tick = 0
         while source_file_size != target_file_size:
-            if not last_tick or \
-                    time.time() - last_tick >= server.LOG_PROGRESS_SEC:
+            if time.time() - last_tick >= server.LOG_PROGRESS_SEC:
                 status_val = target_file_size / source_file_size
                 last_tick = time.time()
                 self.log.debug(direction + "ed %d%%." % int(status_val * 100))
