@@ -332,7 +332,7 @@ class SFTPHandler(AbstractProvider):
                 raise ValueError(
                     f"Certificate at '{key_paths}' doesn't exist."
                 )
-                
+
         if self.sftp_key_pass:
             conn_params["private_key_pass"] = self.sftp_key_pass
 
@@ -355,11 +355,9 @@ class SFTPHandler(AbstractProvider):
         target_path,
         direction
     ):
-        """
-            Updates progress field in DB by values 0-1.
-            
+        """Updates progress field in DB by values 0-1.
 
-            Compares file sizes of source and target.
+        Compares file sizes of source and target.
         """
         pass
         if direction == "upload":
@@ -370,13 +368,12 @@ class SFTPHandler(AbstractProvider):
             source_file_size = self.conn.stat(source_path).st_size
 
         target_file_size = 0
-        last_tick = status_val = None
+        last_tick = 0
         while source_file_size != target_file_size:
-            if not last_tick or \
-                    time.time() - last_tick >= server.LOG_PROGRESS_SEC:
+            if time.time() - last_tick >= server.LOG_PROGRESS_SEC:
                 status_val = target_file_size / source_file_size
                 last_tick = time.time()
-                self.log.debug(direction + "ed %d%%." % int(status_val * 100))
+                self.log.debug(f"{direction}ed {int(status_val * 100)}%.")
                 server.update_db(
                     project_name=project_name,
                     new_file_id=None,
