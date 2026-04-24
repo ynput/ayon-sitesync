@@ -332,7 +332,7 @@ class SFTPHandler(AbstractProvider):
                 raise ValueError(
                     f"Certificate at '{key_paths}' doesn't exist."
                 )
-                
+
         if self.sftp_key_pass:
             conn_params["private_key_pass"] = self.sftp_key_pass
 
@@ -355,11 +355,9 @@ class SFTPHandler(AbstractProvider):
         target_path,
         direction
     ):
-        """
-            Updates progress field in DB by values 0-1.
-            
+        """Updates progress field in DB by values 0-1.
 
-            Compares file sizes of source and target.
+        Compares file sizes of source and target.
         """
         pass
         if direction == "upload":
