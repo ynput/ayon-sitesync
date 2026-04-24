@@ -5,6 +5,7 @@ title = "SiteSync"
 version = "1.2.5+dev"
 client_dir = "ayon_sitesync"
 
+ayon_launcher_version = ">=1.4.3"
 ayon_required_addons = {
     "core": ">=0.3.0",
 }
