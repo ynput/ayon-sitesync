@@ -373,7 +373,7 @@ class SFTPHandler(AbstractProvider):
             if time.time() - last_tick >= server.LOG_PROGRESS_SEC:
                 status_val = target_file_size / source_file_size
                 last_tick = time.time()
-                self.log.debug(direction + "ed %d%%." % int(status_val * 100))
+                self.log.debug(f"{direction}ed {int(status_val * 100)}%.")
                 server.update_db(
                     project_name=project_name,
                     new_file_id=None,
