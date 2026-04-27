@@ -1,7 +1,7 @@
 {
   "name": "sitesync-addon",
   "private": true,
-  "version": "1.2.6+dev",
+  "version": "1.2.6+dev.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -34,5 +34,6 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-simple-import-sort": "^10.0.0",
     "prettier": "^3.0.3"
-  }
+  },
+  "packageManager": "yarn@1.22.21+sha1.1959a18351b811cdeedbd484a8f86c3cc3bbaf72"
 }
