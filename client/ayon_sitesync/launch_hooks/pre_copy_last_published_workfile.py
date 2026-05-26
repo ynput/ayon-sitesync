@@ -58,9 +58,8 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
         last_workfile = self.data.get("last_workfile_path")
         if os.path.exists(last_workfile):
             self.log.debug(
-                "Last workfile exists. Skipping {} process.".format(
-                    self.__class__.__name__
-                )
+                "Last workfile exists."
+                f" Skipping {self.__class__.__name__} process."
             )
             return
 
@@ -99,25 +98,18 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
             task_type,
             project_settings=project_settings
         )
+        if use_last_published_workfile is False:
+            self.log.info(
+                f'Project "{project_name}" has turned off to use last'
+                ' published workfile as first workfile for host'
+                f' "{host_name}"'
+            )
+            return
 
         if use_last_published_workfile is None:
             self.log.info(
-                (
-                    "Seems like old version of settings is used."
-                    ' Can\'t access custom templates in host "{}".'.format(
-                        host_name
-                    )
-                )
-            )
-            return
-        elif use_last_published_workfile is False:
-            self.log.info(
-                (
-                    'Project "{}" has turned off to use last published'
-                    ' workfile as first workfile for host "{}"'.format(
-                        project_name, host_name
-                    )
-                )
+                "Seems like old version of settings is used."
+                f' Can\'t access custom templates in host "{host_name}".'
             )
             return
 
@@ -152,7 +144,7 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
         )
         if not last_published_workfile_path:
             self.log.debug(
-                "Couldn't download {}".format(last_published_workfile_path)
+                f"Couldn't download {last_published_workfile_path}"
             )
             return
 
