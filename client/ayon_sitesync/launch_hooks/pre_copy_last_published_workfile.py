@@ -44,6 +44,11 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
         Returns:
             None: This is a void method.
         """
+        workfile_path = self.data.get("workfile_path")
+        if workfile_path:
+            self.log.debug("Explicit workfile path to open is defined.")
+            return
+
         project_name = self.data["project_name"]
         sitesync_addon = self.addons_manager.get("sitesync")
         if (
