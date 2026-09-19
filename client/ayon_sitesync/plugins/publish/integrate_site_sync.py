@@ -48,7 +48,7 @@ class IntegrateSiteSync(pyblish.api.InstancePlugin):
                 )
 
         hero_version_entity = instance.data.get("heroVersionEntity")
-        self.log.info(f"hero_version_entity::{hero_version_entity}")
+        self.log.debug(f"hero_version_entity::{hero_version_entity}")
         if not hero_version_entity:
             return
 
