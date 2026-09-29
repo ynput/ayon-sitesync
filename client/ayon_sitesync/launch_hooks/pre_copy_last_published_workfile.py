@@ -7,6 +7,7 @@ from ayon_api import (
     get_last_versions
 )
 
+from ayon_core.lib import is_func_signature_supported
 from ayon_core.pipeline.template_data import get_template_data
 from ayon_core.pipeline.workfile import get_workfile_template_key
 from ayon_core.pipeline.workfile import should_use_last_workfile_on_launch
@@ -43,6 +44,11 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
         Returns:
             None: This is a void method.
         """
+        workfile_path = self.data.get("workfile_path")
+        if workfile_path:
+            self.log.debug("Explicit workfile path to open is defined.")
+            return
+
         project_name = self.data["project_name"]
         sitesync_addon = self.addons_manager.get("sitesync")
         if (
@@ -57,9 +63,8 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
         last_workfile = self.data.get("last_workfile_path")
         if os.path.exists(last_workfile):
             self.log.debug(
-                "Last workfile exists. Skipping {} process.".format(
-                    self.__class__.__name__
-                )
+                "Last workfile exists."
+                f" Skipping {self.__class__.__name__} process."
             )
             return
 
@@ -98,25 +103,18 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
             task_type,
             project_settings=project_settings
         )
+        if use_last_published_workfile is False:
+            self.log.info(
+                f'Project "{project_name}" has turned off to use last'
+                ' published workfile as first workfile for host'
+                f' "{host_name}"'
+            )
+            return
 
         if use_last_published_workfile is None:
             self.log.info(
-                (
-                    "Seems like old version of settings is used."
-                    ' Can\'t access custom templates in host "{}".'.format(
-                        host_name
-                    )
-                )
-            )
-            return
-        elif use_last_published_workfile is False:
-            self.log.info(
-                (
-                    'Project "{}" has turned off to use last published'
-                    ' workfile as first workfile for host "{}"'.format(
-                        project_name, host_name
-                    )
-                )
+                "Seems like old version of settings is used."
+                f' Can\'t access custom templates in host "{host_name}".'
             )
             return
 
@@ -151,7 +149,7 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
         )
         if not last_published_workfile_path:
             self.log.debug(
-                "Couldn't download {}".format(last_published_workfile_path)
+                f"Couldn't download {last_published_workfile_path}"
             )
             return
 
@@ -187,11 +185,18 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
     ):
         """Looks for last published representation for host and context"""
 
-        product_entities = get_products(
-            project_name,
+        kwargs = dict(
             folder_ids={folder_id},
-            product_types={"workfile"}
+            product_base_types={"workfile"},
         )
+        # TODO add requirement for AYON launcher 1.4.3 when removed
+        if not is_func_signature_supported(
+            get_products, project_name, **kwargs
+        ):
+            kwargs["product_types"] = kwargs.pop("product_base_types")
+
+        product_entities = get_products(project_name, **kwargs)
+
         product_ids = {
             product_entity["id"]
             for product_entity in product_entities
