@@ -32,6 +32,7 @@ from .utils import (
     SyncStatus,
     SiteAlreadyPresentError,
     SiteSyncStatus,
+    get_linked_representation_id,
 )
 
 SYNC_ADDON_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -160,7 +161,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         site_name=None,
         file_id=None,
         force=False,
-        status=SiteSyncStatus.QUEUED
+        status=SiteSyncStatus.QUEUED,
+        link_type="reference",
     ):
         """Adds new site to representation to be synced.
 
@@ -171,6 +173,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         Use 'force' to reset existing site.
 
+        If link_type is provided, also adds site to all linked representations.
+
         Args:
             project_name (str): Project name.
             representation_id (str): Representation id.
@@ -179,6 +183,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             force (bool): Reset site if exists.
             status (SiteSyncStatus): Current status,
                 default SiteSyncStatus.QUEUED
+            link_type (str): Type of link to follow (e.g. 'reference').
+                If provided, will also add site to all linked representations.
 
         Raises:
             SiteAlreadyPresentError: If adding already existing site and
@@ -192,6 +198,78 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if not site_name:
             site_name = self.DEFAULT_SITE
 
+        representation = get_representation_by_id(
+            project_name, representation_id
+        )
+
+        files = representation.get("files", [])
+        if not files:
+            self.log.debug("No files for {}".format(representation_id))
+            return
+
+        # Collect all representation IDs to process (original + linked)
+        representation_ids = [representation_id]
+
+        self._add_site_to_representation(
+            project_name,
+            representation_id,
+            site_name,
+            file_id,
+            force,
+            status
+        )
+
+        # If link_type is provided, find all linked representations
+        if link_type:
+            linked_repre_ids = get_linked_representation_id(
+                project_name, representation, link_type
+            )
+            self.log.debug(
+                "Found {} linked representations for {}".format(
+                    len(linked_repre_ids), representation_id
+                )
+            )
+            # Add site to each representation
+            for repre_id in linked_repre_ids:
+                try:
+                    self._add_site_to_representation(
+                        project_name,
+                        repre_id,
+                        site_name,
+                        file_id,
+                        force,
+                        status
+                    )
+                except SiteAlreadyPresentError:
+                    self.log.warning(
+                        f"Site {site_name} already present on {repre_id}"
+                    )
+
+
+    def _add_site_to_representation(
+        self,
+        project_name,
+        representation_id,
+        site_name,
+        file_id,
+        force,
+        status
+    ):
+        """Internal method to add site to a single representation.
+
+        Args:
+            project_name (str): Project name.
+            representation_id (str): Representation id.
+            site_name (str): Site name of configured site.
+            file_id (str): File id.
+            force (bool): Reset site if exists.
+            status (SiteSyncStatus): Current status.
+
+        Raises:
+            SiteAlreadyPresentError: If adding already existing site and
+                not 'force'
+            ValueError: other errors (repre not found, misconfiguration)
+        """
         representation = get_representation_by_id(
             project_name, representation_id
         )
@@ -242,9 +320,78 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         project_name,
         representation_id,
         site_name,
-        remove_local_files=False
+        remove_local_files=False,
+        link_type="reference",
     ):
         """Removes site for particular representation in project.
+
+        If link_type is provided, also removes site from all linked representations.
+        Also removes the remote site from project settings for all representations.
+
+        Args:
+            project_name (str): project name (must match DB)
+            representation_id (str): MongoDB _id value
+            site_name (str): name of configured and active site
+            remove_local_files (bool): remove only files for 'local_id'
+                site
+            link_type (str): Type of link to follow (e.g. 'reference').
+                If provided, will also remove site from all linked representations.
+
+        Raises:
+            ValueError: Throws if any issue.
+
+        """
+        if not self.get_sync_project_setting(project_name):
+            raise ValueError("Project not configured")
+
+        representation = get_representation_by_id(
+            project_name, representation_id
+        )
+
+        # Collect all representation IDs to process (original + linked)
+        representation_ids = [representation_id]
+
+        # If link_type is provided, find all linked representations
+        if link_type:
+            linked_repre_ids = get_linked_representation_id(
+                project_name, representation, link_type
+            )
+            representation_ids.extend(linked_repre_ids)
+            self.log.debug(
+                "Found {} linked representations for {}".format(
+                    len(linked_repre_ids), representation_id
+                )
+            )
+
+        # Get remote site from project settings
+        remote_site = self.get_remote_site(project_name)
+
+        # Remove site from each representation (both local and remote)
+        for repre_id in representation_ids:
+            # Remove local site
+            self._remove_site_from_representation(
+                project_name,
+                repre_id,
+                site_name,
+                remove_local_files
+            )
+            # Remove remote site if different from local site
+            if remote_site and remote_site != site_name:
+                self._remove_site_from_representation(
+                    project_name,
+                    repre_id,
+                    remote_site,
+                    remove_local_files
+                )
+
+    def _remove_site_from_representation(
+        self,
+        project_name,
+        representation_id,
+        site_name,
+        remove_local_files=False
+    ):
+        """Internal method to remove site from a single representation.
 
         Args:
             project_name (str): project name (must match DB)
@@ -257,9 +404,6 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             ValueError: Throws if any issue.
 
         """
-        if not self.get_sync_project_setting(project_name):
-            raise ValueError("Project not configured")
-
         sync_info = self.get_repre_sync_state(
             project_name,
             representation_id,
@@ -781,30 +925,36 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             {"work": "c:/projects_local"}
         """
 
-        # Validate that site name is valid
-        if site_name not in ("studio", "local"):
-            # Consider local site id as 'local'
-            if site_name != get_local_site_id():
-                raise ValueError((
-                    "Root overrides are available only for"
-                    " default sites not for \"{}\""
-                ).format(site_name))
-            site_name = "local"
-
         sitesync_settings = self.get_sync_project_setting(project_name)
 
         roots = {}
         if not sitesync_settings["enabled"]:
             return roots
         local_project_settings = sitesync_settings["local_setting"]
+        # look for local roots overrides
         if site_name == "local":
             for root_info in local_project_settings["local_roots"]:
                 roots[root_info["name"]] = root_info["path"]
 
+        # check if there are roots in Studio settings
+        # (background process doesn't have local settings,
+        # but it should have roots for local site in Studio settings)
+        if not roots:
+            for setting_site_name, site_info in sitesync_settings["sites"].items():
+                if setting_site_name == site_name:
+                    site_roots = site_info.get("root")
+                    if not site_roots:
+                        continue
+                    if isinstance(site_roots, dict):
+                        roots = site_roots
+                    else:
+                        for root_info in site_roots:
+                            platform_key = platform.system().lower()
+                            roots[root_info["name"]] = root_info[platform_key]
         return roots
 
     def get_local_normalized_site(self, site_name):
-        """Normlize local site name.
+        """Normalize local site name.
 
          Return 'local' if 'site_name' is local id.
 
@@ -815,7 +965,13 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             str: Normalized site name.
 
         """
-        if site_name == get_local_site_id():
+        studio_site_names = self._transform_sites_from_settings(
+                self.sync_studio_settings
+            ).keys()
+        if (
+            site_name not in studio_site_names and
+            site_name == get_local_site_id()
+        ):
             site_name = self.LOCAL_SITE
 
         return site_name
@@ -1252,6 +1408,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """Transforms list of 'sites' from Setting to dict.
 
         It processes both System and Project Settings as they have same format.
+        Returns:
+            dict[str, dict]: {'site_name': {site_info}...}
         """
         sites = {}
         if not self.enabled:
