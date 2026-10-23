@@ -204,12 +204,12 @@ class SiteSync(BaseServerAddon):
         ),
         sortDesc: bool = Query(
             False,
-            name="Sort descending",
+            title="Sort descending",
             description="Sort the result in descending order",
         ),
         bothOnly: bool = Query(
             False,
-            name="Query only with both sites",
+            title="Query only with both sites",
             description="Used for front end UI to show only repres with"
                         " both sides",
         ),
