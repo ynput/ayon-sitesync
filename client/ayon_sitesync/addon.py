@@ -8,6 +8,7 @@ import threading
 import copy
 import signal
 from collections import deque, defaultdict
+from concurrent.futures import ThreadPoolExecutor
 
 import platform
 
@@ -81,6 +82,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     LOCAL_SITE = "local"
     LOG_PROGRESS_SEC = 5  # how often log progress to DB
     DEFAULT_PRIORITY = 50  # higher is better, allowed range 1 - 1000
+    # max parallel requests when receiving settings of all projects
+    SETTINGS_QUERY_WORKERS = 8
 
     name = "sitesync"
     version = __version__
@@ -1176,22 +1179,29 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         self._sync_project_settings = sync_project_settings
 
     def _prepare_sync_project_settings(self, exclude_locals):
-        sync_project_settings = {}
-
         studio_sites = self._transform_sites_from_settings(
             self.sync_studio_settings)
 
-        project_names = get_project_names()
-        for project_name in project_names:
+        def prepare_project(project_name):
             project_settings = self._query_project_settings(project_name)
             if project_settings is None:
-                continue
-
-            sync_project_settings[project_name] = (
-                self._prepare_project_sync_settings(
-                    project_name, project_settings, studio_sites
-                )
+                return None
+            return self._prepare_project_sync_settings(
+                project_name, project_settings, studio_sites
             )
+
+        # Settings are received per project, so query the projects in
+        #   parallel to not wait for each request one by one.
+        project_names = get_project_names()
+        sync_project_settings = {}
+        with ThreadPoolExecutor(
+            max_workers=self.SETTINGS_QUERY_WORKERS
+        ) as executor:
+            for project_name, project_settings in zip(
+                project_names, executor.map(prepare_project, project_names)
+            ):
+                if project_settings is not None:
+                    sync_project_settings[project_name] = project_settings
 
         if not sync_project_settings:
             self.log.info("No enabled and configured projects for sync.")
@@ -1226,6 +1236,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     ):
         """Add prepared 'sites' to settings of a project.
 
+        Default 'studio' and local sites are added only to projects with
+        sync enabled, as they require querying project roots from server.
+
         Args:
             project_name (str): Project name.
             project_settings (dict[str, Any]): Project settings. They are
@@ -1237,9 +1250,10 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         """
         project_sites = copy.deepcopy(studio_sites)
-        project_sites.update(self._get_default_site_configs(
-            project_settings["enabled"], project_name, project_settings
-        ))
+        if project_settings["enabled"]:
+            project_sites.update(self._get_default_site_configs(
+                True, project_name, project_settings
+            ))
         project_sites.update(
             self._transform_sites_from_settings(project_settings))
 
