@@ -11,7 +11,7 @@ from collections import deque, defaultdict
 
 import platform
 
-from ayon_core.settings import get_studio_settings
+from ayon_core.settings import get_studio_settings, get_project_settings
 from ayon_core.addon import AYONAddon, ITrayAddon, IPluginPaths, click_wrap
 from ayon_core.lib import get_local_site_id, NestedCacheItem
 
@@ -85,11 +85,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     name = "sitesync"
     version = __version__
 
-    # Settings of single projects shared by all addon instances. Tools
-    #   like 'Anatomy' create new addon instances often, so the cache has
-    #   to outlive the instance.
-    _project_settings_cache = NestedCacheItem(levels=1, lifetime=60)
-    # Same settings with prepared 'sites'
+    # Settings of single projects with prepared 'sites', shared by all
+    #   addon instances. Tools like 'Anatomy' create new addon instances
+    #   often, so the cache has to outlive the instance.
     _prepared_project_settings_cache = NestedCacheItem(
         levels=1, lifetime=60
     )
@@ -1267,24 +1265,34 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """Sitesync settings of a single project.
 
         Uses settings of all projects when they are already prepared, e.g.
-        by the sync loop. Otherwise queries only the requested project.
+        by the sync loop. Otherwise uses cached project settings from
+        ayon-core.
 
         Args:
             project_name (str): Project name.
 
         Returns:
             Optional[dict[str, Any]]: Project settings, or None if the user
-                doesn't have permission to access them.
+                doesn't have permission to access them. They're shared,
+                so they must not be modified.
 
         """
         project_settings = self._get_loaded_project_settings(project_name)
         if project_settings is not None:
             return project_settings
 
-        cache_item = self._project_settings_cache[project_name]
-        if not cache_item.is_valid:
-            cache_item.update_data(self._query_project_settings(project_name))
-        return cache_item.get_data()
+        # Use project settings from core which are cached
+        try:
+            project_settings = get_project_settings(project_name)
+        except ayon_api.exceptions.HTTPRequestError as exp:
+            if exp.response.status_code == 403:
+                self.log.debug(
+                    f"Doesn't have permission to access settings of "
+                    f"'{project_name}'."
+                )
+                return None
+            raise
+        return project_settings.get(self.name)
 
     def get_sync_project_setting(
         self, project_name, exclude_locals=False, cached=True
