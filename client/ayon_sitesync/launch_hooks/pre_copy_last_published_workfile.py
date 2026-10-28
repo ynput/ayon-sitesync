@@ -131,8 +131,7 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
             return
 
         max_retries = int(
-            sitesync_addon.sync_project_settings
-            [project_name]
+            sitesync_addon.get_sync_project_setting(project_name)
             ["config"]
             ["retry_cnt"]
         )
