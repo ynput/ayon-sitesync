@@ -13,7 +13,7 @@ import platform
 
 from ayon_core.settings import get_studio_settings
 from ayon_core.addon import AYONAddon, ITrayAddon, IPluginPaths, click_wrap
-from ayon_core.lib import get_local_site_id
+from ayon_core.lib import get_local_site_id, NestedCacheItem
 
 import ayon_api
 from ayon_api import (
@@ -35,27 +35,6 @@ from .utils import (
 )
 
 SYNC_ADDON_DIR = os.path.dirname(os.path.abspath(__file__))
-
-
-class _ProjectSettingsCacheItem:
-    """Sitesync settings of a single project with a limited lifetime.
-
-    Args:
-        settings (Optional[dict[str, Any]]): Addon project settings, or
-            None if the user can't access them.
-
-    """
-    lifetime = 60
-
-    def __init__(self, settings):
-        self.settings = settings
-        # Settings with prepared 'sites', filled on demand
-        self.prepared = None
-        self._outdate_time = time.time() + self.lifetime
-
-    @property
-    def is_outdated(self):
-        return time.time() > self._outdate_time
 
 
 class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
@@ -109,7 +88,11 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     # Settings of single projects shared by all addon instances. Tools
     #   like 'Anatomy' create new addon instances often, so the cache has
     #   to outlive the instance.
-    _project_settings_cache = {}
+    _project_settings_cache = NestedCacheItem(levels=1, lifetime=60)
+    # Same settings with prepared 'sites'
+    _prepared_project_settings_cache = NestedCacheItem(
+        levels=1, lifetime=60
+    )
 
     def initialize(self, addon_settings):
         """Called during Addon Manager creation.
@@ -1265,27 +1248,23 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         project_settings["sites"] = project_sites
         return project_settings
 
-    def _get_project_cache_item(self, project_name):
-        """Cached sitesync settings of a single project.
+    def _get_loaded_project_settings(self, project_name):
+        """Settings of a project prepared for all projects, e.g. by sync loop.
 
         Args:
             project_name (str): Project name.
 
         Returns:
-            _ProjectSettingsCacheItem: Cache item of the project.
+            Optional[dict[str, Any]]: Project settings with prepared
+                'sites', or None if settings of all projects aren't loaded.
 
         """
-        cache_key = (self.version, ayon_api.get_site_id(), project_name)
-        cache_item = self._project_settings_cache.get(cache_key)
-        if cache_item is None or cache_item.is_outdated:
-            cache_item = _ProjectSettingsCacheItem(
-                self._query_project_settings(project_name)
-            )
-            self._project_settings_cache[cache_key] = cache_item
-        return cache_item
+        if self._sync_project_settings is None:
+            return None
+        return self._sync_project_settings.get(project_name)
 
     def _get_project_settings(self, project_name):
-        """Sitesync settings of a single project, without prepared 'sites'.
+        """Sitesync settings of a single project.
 
         Uses settings of all projects when they are already prepared, e.g.
         by the sync loop. Otherwise queries only the requested project.
@@ -1298,11 +1277,14 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 doesn't have permission to access them.
 
         """
-        if self._sync_project_settings is not None:
-            project_settings = self._sync_project_settings.get(project_name)
-            if project_settings is not None:
-                return project_settings
-        return self._get_project_cache_item(project_name).settings
+        project_settings = self._get_loaded_project_settings(project_name)
+        if project_settings is not None:
+            return project_settings
+
+        cache_item = self._project_settings_cache[project_name]
+        if not cache_item.is_valid:
+            cache_item.update_data(self._query_project_settings(project_name))
+        return cache_item.get_data()
 
     def get_sync_project_setting(
         self, project_name, exclude_locals=False, cached=True
@@ -1315,18 +1297,32 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         Args:
             project_name (str): used in project settings
             exclude_locals (bool): ignore overrides from Local Settings
-            cached (bool): use cached values, or return fresh ones
+            cached (bool): use cached values, or query fresh ones from
+                server
 
         Returns:
             Optional[dict[str, Any]]: Settings of the project with prepared
                 'sites', or None if the user can't access them.
 
         """
-        if not cached:
+        if cached:
+            project_settings = self._get_loaded_project_settings(project_name)
+            if project_settings is not None:
+                return project_settings
+
+            cache_item = self._prepared_project_settings_cache[project_name]
+            if cache_item.is_valid:
+                return cache_item.get_data()
+
+            # Prepare a copy, the cached settings are shared
+            project_settings = copy.deepcopy(
+                self._get_project_settings(project_name)
+            )
+        else:
             project_settings = self._query_project_settings(project_name)
-            if project_settings is None:
-                return None
-            return self._prepare_project_sync_settings(
+
+        if project_settings is not None:
+            project_settings = self._prepare_project_sync_settings(
                 project_name,
                 project_settings,
                 self._transform_sites_from_settings(
@@ -1334,24 +1330,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 ),
             )
 
-        if self._sync_project_settings is not None:
-            project_settings = self._sync_project_settings.get(project_name)
-            if project_settings is not None:
-                return project_settings
-
-        cache_item = self._get_project_cache_item(project_name)
-        if cache_item.settings is None:
-            return None
-
-        if cache_item.prepared is None:
-            cache_item.prepared = self._prepare_project_sync_settings(
-                project_name,
-                copy.deepcopy(cache_item.settings),
-                self._transform_sites_from_settings(
-                    self.sync_studio_settings
-                ),
-            )
-        return cache_item.prepared
+        if cached:
+            cache_item.update_data(project_settings)
+        return project_settings
 
     def _transform_sites_from_settings(self, settings):
         """Transforms list of 'sites' from Setting to dict.
