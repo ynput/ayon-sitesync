@@ -21,6 +21,10 @@ class IntegrateSiteSync(pyblish.api.InstancePlugin):
     order = pyblish.api.IntegratorOrder + 0.2
     label = "Integrate Site Sync state"
 
+    @classmethod
+    def apply_settings(cls, project_settings):
+        cls.enabled = project_settings["sitesync"]["enabled"]
+
     def process(self, instance):
         published_representations = instance.data.get(
             "published_representations")
