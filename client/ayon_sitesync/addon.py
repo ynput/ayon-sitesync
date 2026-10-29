@@ -11,9 +11,9 @@ from collections import deque, defaultdict
 
 import platform
 
-from ayon_core.settings import get_studio_settings
+from ayon_core.settings import get_studio_settings, get_project_settings
 from ayon_core.addon import AYONAddon, ITrayAddon, IPluginPaths, click_wrap
-from ayon_core.lib import get_local_site_id
+from ayon_core.lib import get_local_site_id, NestedCacheItem
 
 import ayon_api
 from ayon_api import (
@@ -84,6 +84,13 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
     name = "sitesync"
     version = __version__
+
+    # Settings of single projects with prepared 'sites', shared by all
+    #   addon instances. Tools like 'Anatomy' create new addon instances
+    #   often, so the cache has to outlive the instance.
+    _prepared_project_settings_cache = NestedCacheItem(
+        levels=1, lifetime=60
+    )
 
     def initialize(self, addon_settings):
         """Called during Addon Manager creation.
@@ -186,7 +193,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             ValueError: other errors (repre not found, misconfiguration)
 
         """
-        if not self.get_sync_project_setting(project_name):
+        if not self._get_project_settings(project_name):
             raise ValueError("Project not configured")
 
         if not site_name:
@@ -257,7 +264,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             ValueError: Throws if any issue.
 
         """
-        if not self.get_sync_project_setting(project_name):
+        if not self._get_project_settings(project_name):
             raise ValueError("Project not configured")
 
         sync_info = self.get_repre_sync_state(
@@ -313,9 +320,11 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 status = SiteSyncStatus.QUEUED
             return {"name": name, "status": status}
 
+        project_settings = self._get_project_settings(project_name)
         if (
             not self.sync_studio_settings["enabled"]
-            or not self.sync_project_settings[project_name]["enabled"]
+            or not project_settings
+            or not project_settings["enabled"]
         ):
             return [create_metadata(self.DEFAULT_SITE)]
 
@@ -358,7 +367,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         Returns:
             (list[str]): list of site names
         """
-        sync_settings = self.get_sync_project_setting(project_name)
+        sync_settings = self._get_project_settings(project_name)
         always_accessible_sites = (
             sync_settings["config"].get("always_accessible_on", [])
         )
@@ -704,10 +713,6 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         This method is used by Anatomy.
 
         Todos:
-            Check if sync server is enabled for the project.
-            - To be able to do that the sync settings MUST NOT be cached for
-                all projects at once. The sync settings preparation for all
-                projects is reasonable only in sync server loop.
             `local_settings` is probably obsolete in AYON
 
         Args:
@@ -718,12 +723,14 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             Literal["studio", "local"]: Active site.
         """
         if not self.enabled:
-            return "studio"
+            return self.DEFAULT_SITE
 
-        sync_project_settings = self.get_sync_project_setting(project_name)
-
-        if not sync_project_settings["enabled"]:
-            return "studio"
+        sync_project_settings = self._get_project_settings(project_name)
+        if (
+            not sync_project_settings
+            or not sync_project_settings["enabled"]
+        ):
+            return self.DEFAULT_SITE
 
         return (
             sync_project_settings["local_setting"].get("active_site")
@@ -751,7 +758,9 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     # remote site
     def get_remote_site(self, project_name):
         """Remote (theirs) site for project from settings."""
-        sync_project_settings = self.get_sync_project_setting(project_name)
+        sync_project_settings = self._get_project_settings(project_name)
+        if not sync_project_settings:
+            return self.DEFAULT_SITE
         remote_site = (
             sync_project_settings["local_setting"].get("remote_site")
             or sync_project_settings["config"]["remote_site"]
@@ -791,10 +800,10 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 ).format(site_name))
             site_name = "local"
 
-        sitesync_settings = self.get_sync_project_setting(project_name)
+        sitesync_settings = self._get_project_settings(project_name)
 
         roots = {}
-        if not sitesync_settings["enabled"]:
+        if not sitesync_settings or not sitesync_settings["enabled"]:
             return roots
         local_project_settings = sitesync_settings["local_setting"]
         if site_name == "local":
@@ -892,30 +901,15 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
     def is_project_enabled(self, project_name, single=False):
         """Checks if 'project_name' is enabled for syncing.
-        'get_sync_project_setting' is potentially expensive operation (pulls
-        settings for all projects if cached version is not available), using
-        project_settings for specific project should be faster.
+
         Args:
-            project_name (str)
-            single (bool): use 'get_addon_project_settings' method
+            project_name (str): Project name.
+            single (bool): Kept for backwards compatibility, has no effect.
+                Settings are always received only for the passed project.
+
         """
         if self.enabled:
-            if single:
-                try:
-                    project_settings = get_addon_project_settings(
-                        self.name, self.version, project_name
-                    )
-                except ayon_api.exceptions.HTTPRequestError as exp:
-                    if exp.response.status_code == 403:
-                        self.log.debug(
-                            f"Doesn't have permission to access settings of "
-                            f"'{project_name}', skipping."
-                        )
-                        return False
-                    raise
-
-            else:
-                project_settings = self.get_sync_project_setting(project_name)
+            project_settings = self._get_project_settings(project_name)
             if project_settings and project_settings.get("enabled"):
                 return True
         return False
@@ -1184,69 +1178,169 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     def _prepare_sync_project_settings(self, exclude_locals):
         sync_project_settings = {}
 
-        sites = self._transform_sites_from_settings(
+        studio_sites = self._transform_sites_from_settings(
             self.sync_studio_settings)
 
         project_names = get_project_names()
         for project_name in project_names:
-            project_sites = copy.deepcopy(sites)
-            try:
-                project_settings = get_addon_project_settings(
-                    self.name, self.version, project_name
+            project_settings = self._query_project_settings(project_name)
+            if project_settings is None:
+                continue
+
+            sync_project_settings[project_name] = (
+                self._prepare_project_sync_settings(
+                    project_name, project_settings, studio_sites
                 )
-            except ayon_api.exceptions.HTTPRequestError as exp:
-                if exp.response.status_code == 403:
-                    self.log.debug(
-                        f"Doesn't have permission to access settings of "
-                        f"'{project_name}', skipping."
-                    )
-                    continue
-                raise
-
-            project_sites.update(self._get_default_site_configs(
-                project_settings["enabled"], project_name, project_settings
-            ))
-
-            project_sites.update(
-                self._transform_sites_from_settings(project_settings))
-
-            project_settings["sites"] = project_sites
-
-            sync_project_settings[project_name] = project_settings
+            )
 
         if not sync_project_settings:
             self.log.info("No enabled and configured projects for sync.")
         return sync_project_settings
+
+    def _query_project_settings(self, project_name):
+        """Query sitesync settings of a single project from server.
+
+        Args:
+            project_name (str): Project name.
+
+        Returns:
+            Optional[dict[str, Any]]: Project settings, or None if the user
+                doesn't have permission to access them.
+
+        """
+        try:
+            return get_addon_project_settings(
+                self.name, self.version, project_name
+            )
+        except ayon_api.exceptions.HTTPRequestError as exp:
+            if exp.response.status_code == 403:
+                self.log.debug(
+                    f"Doesn't have permission to access settings of "
+                    f"'{project_name}', skipping."
+                )
+                return None
+            raise
+
+    def _prepare_project_sync_settings(
+        self, project_name, project_settings, studio_sites
+    ):
+        """Add prepared 'sites' to settings of a project.
+
+        Args:
+            project_name (str): Project name.
+            project_settings (dict[str, Any]): Project settings. They are
+                modified in place.
+            studio_sites (dict[str, Any]): Sites from studio settings.
+
+        Returns:
+            dict[str, Any]: Project settings with prepared 'sites'.
+
+        """
+        project_sites = copy.deepcopy(studio_sites)
+        project_sites.update(self._get_default_site_configs(
+            project_settings["enabled"], project_name, project_settings
+        ))
+        project_sites.update(
+            self._transform_sites_from_settings(project_settings))
+
+        project_settings["sites"] = project_sites
+        return project_settings
+
+    def _get_loaded_project_settings(self, project_name):
+        """Settings of a project prepared for all projects, e.g. by sync loop.
+
+        Args:
+            project_name (str): Project name.
+
+        Returns:
+            Optional[dict[str, Any]]: Project settings with prepared
+                'sites', or None if settings of all projects aren't loaded.
+
+        """
+        if self._sync_project_settings is None:
+            return None
+        return self._sync_project_settings.get(project_name)
+
+    def _get_project_settings(self, project_name):
+        """Sitesync settings of a single project.
+
+        Uses settings of all projects when they are already prepared, e.g.
+        by the sync loop. Otherwise uses cached project settings from
+        ayon-core.
+
+        Args:
+            project_name (str): Project name.
+
+        Returns:
+            Optional[dict[str, Any]]: Project settings, or None if the user
+                doesn't have permission to access them. They're shared,
+                so they must not be modified.
+
+        """
+        project_settings = self._get_loaded_project_settings(project_name)
+        if project_settings is not None:
+            return project_settings
+
+        # Use project settings from core which are cached
+        try:
+            project_settings = get_project_settings(project_name)
+        except ayon_api.exceptions.HTTPRequestError as exp:
+            if exp.response.status_code == 403:
+                self.log.debug(
+                    f"Doesn't have permission to access settings of "
+                    f"'{project_name}'."
+                )
+                return None
+            raise
+        return project_settings.get(self.name)
 
     def get_sync_project_setting(
         self, project_name, exclude_locals=False, cached=True
     ):
         """ Handles pulling sitesync's settings for enabled 'project_name'
 
+        Only settings of the passed project are received, unless settings
+        of all projects were already prepared, e.g. by the sync loop.
+
         Args:
             project_name (str): used in project settings
             exclude_locals (bool): ignore overrides from Local Settings
-            cached (bool): use pre-cached values, or return fresh ones
-                cached values needed for single loop (with all overrides)
-                fresh values needed for Local settings (without overrides)
+            cached (bool): use cached values, or query fresh ones from
+                server
 
         Returns:
-            dict: settings dictionary for the enabled project,
-                empty if no settings or sync is disabled
+            Optional[dict[str, Any]]: Settings of the project with prepared
+                'sites', or None if the user can't access them.
 
         """
-        # presets set already, do not call again and again
-        # self.log.debug("project preset {}".format(self.presets))
-        if not cached:
-            return self._prepare_sync_project_settings(exclude_locals)\
-                [project_name]
+        if cached:
+            project_settings = self._get_loaded_project_settings(project_name)
+            if project_settings is not None:
+                return project_settings
 
-        if (
-            not self.sync_project_settings
-            or not self.sync_project_settings.get(project_name)
-        ):
-            self.set_sync_project_settings(exclude_locals)
-        return self.sync_project_settings.get(project_name)
+            cache_item = self._prepared_project_settings_cache[project_name]
+            if cache_item.is_valid:
+                return cache_item.get_data()
+
+            # Prepare a copy, the cached settings are shared
+            project_settings = copy.deepcopy(
+                self._get_project_settings(project_name)
+            )
+        else:
+            project_settings = self._query_project_settings(project_name)
+
+        if project_settings is not None:
+            project_settings = self._prepare_project_sync_settings(
+                project_name,
+                project_settings,
+                self._transform_sites_from_settings(
+                    self.sync_studio_settings
+                ),
+            )
+
+        if cached:
+            cache_item.update_data(project_settings)
+        return project_settings
 
     def _transform_sites_from_settings(self, settings):
         """Transforms list of 'sites' from Setting to dict.

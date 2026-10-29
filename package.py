@@ -8,7 +8,7 @@ client_dir = "ayon_sitesync"
 ayon_launcher_version = ">=1.4.3"
 ayon_server_version = ">=1.17.0-dev"
 ayon_required_addons = {
-    "core": ">=0.3.0",
+    "core": ">=0.3.1",
 }
 ayon_compatible_addons = {
     "applications": ">=0.2.0",
