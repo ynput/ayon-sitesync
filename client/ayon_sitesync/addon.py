@@ -129,6 +129,11 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             "publish": os.path.join(SYNC_ADDON_DIR, "plugins", "publish")
         }
 
+    def get_loader_action_plugin_paths(self, host_name=None):
+        if not self.enabled:
+            return []
+        return [os.path.join(SYNC_ADDON_DIR, "plugins", "loader")]
+
     def get_site_icons(self):
         """Icons for sites.
 
