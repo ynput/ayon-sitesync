@@ -19,6 +19,7 @@ from ayon_server.entities.representation import RepresentationEntity
 from ayon_server.exceptions import ForbiddenException
 from ayon_server.helpers.roots import get_roots_for_projects
 from ayon_server.lib.postgres import Postgres
+from ayon_server.types import Platform
 from ayon_server.utils import SQLTool
 
 from .settings.settings import SiteSyncSettings
@@ -93,7 +94,7 @@ class SiteSync(BaseServerAddon):
         user: CurrentUser,
         site_id: SiteID,
         variant: str = Query("production", description="Settings variant"),
-        platform: str | None = Query(
+        platform: Platform | None = Query(
             None,
             description=(
                 "Platform of the roots, used if the site isn't registered"
