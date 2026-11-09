@@ -5,6 +5,7 @@ import os
 from fastapi import Path, Query, Response
 
 from ayon_server.addons import BaseServerAddon
+from ayon_server.addons.settings_caching import AddonSettingsCache
 
 from ayon_server.access.utils import folder_access_list
 from ayon_server.api.dependencies import (
@@ -132,15 +133,24 @@ class SiteSync(BaseServerAddon):
                 continue
             project_names.append(row["name"])
 
+        # Studio overrides are the same for all projects, load them once
+        studio_overrides = await self.get_studio_overrides(variant=variant)
         projects = {}
         for project_name in project_names:
+            settings_cache = AddonSettingsCache(studio=studio_overrides)
             if site_id:
                 settings = await self.get_project_site_settings(
-                    project_name, user.name, site_id, variant=variant
+                    project_name,
+                    user.name,
+                    site_id,
+                    variant=variant,
+                    settings_cache=settings_cache,
                 )
             else:
                 settings = await self.get_project_settings(
-                    project_name, variant=variant
+                    project_name,
+                    variant=variant,
+                    settings_cache=settings_cache,
                 )
             if settings is None:
                 continue
