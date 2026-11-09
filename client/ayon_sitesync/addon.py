@@ -1196,7 +1196,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             self.sync_studio_settings)
 
         def prepare_project(project_name):
-            project_settings = self._query_project_settings(project_name)
+            project_settings = self._fetch_project_settings(project_name)
             if project_settings is None:
                 return None
             return self._prepare_project_sync_settings(
