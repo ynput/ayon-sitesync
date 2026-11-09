@@ -54,7 +54,7 @@ class CopyLastPublishedWorkfile(PreLaunchHook):
         if (
             not sitesync_addon
             or not sitesync_addon.enabled
-            or not sitesync_addon.is_project_enabled(project_name, True)
+            or not sitesync_addon.is_project_enabled(project_name)
         ):
             self.log.debug("Sync server module is not enabled or available")
             return
