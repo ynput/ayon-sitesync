@@ -8,7 +8,6 @@ import threading
 import copy
 import signal
 from collections import deque, defaultdict
-from concurrent.futures import ThreadPoolExecutor
 
 import platform
 
@@ -82,8 +81,6 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     LOCAL_SITE = "local"
     LOG_PROGRESS_SEC = 5  # how often log progress to DB
     DEFAULT_PRIORITY = 50  # higher is better, allowed range 1 - 1000
-    # max parallel requests when receiving settings of all projects
-    SETTINGS_QUERY_WORKERS = 8
 
     name = "sitesync"
     version = __version__
@@ -1195,30 +1192,51 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         studio_sites = self._transform_sites_from_settings(
             self.sync_studio_settings)
 
-        def prepare_project(project_name):
-            project_settings = self._fetch_project_settings(project_name)
-            if project_settings is None:
-                return None
-            return self._prepare_project_sync_settings(
-                project_name, project_settings, studio_sites
-            )
-
-        # Settings are received per project, so query the projects in
-        #   parallel to not wait for each request one by one.
-        project_names = get_project_names()
         sync_project_settings = {}
-        with ThreadPoolExecutor(
-            max_workers=self.SETTINGS_QUERY_WORKERS
-        ) as executor:
-            for project_name, project_settings in zip(
-                project_names, executor.map(prepare_project, project_names)
-            ):
-                if project_settings is not None:
-                    sync_project_settings[project_name] = project_settings
+        projects_data = self._fetch_projects_sync_settings()
+        for project_name, project_data in projects_data.items():
+            sync_project_settings[project_name] = (
+                self._prepare_project_sync_settings(
+                    project_name,
+                    project_data["settings"],
+                    studio_sites,
+                    project_data["roots"],
+                )
+            )
 
         if not sync_project_settings:
             self.log.info("No enabled and configured projects for sync.")
         return sync_project_settings
+
+    def _fetch_projects_sync_settings(self, project_names=None):
+        """Fetch sitesync settings and roots of projects in one request.
+
+        Roots of the local site are received only for projects that have
+        sync enabled. Projects the user can't access are skipped.
+
+        Args:
+            project_names (Optional[Iterable[str]]): Projects to fetch. All
+                active projects are fetched if not passed.
+
+        Returns:
+            dict[str, dict[str, Any]]: Data by project name, with
+                'settings' and 'roots' keys. 'roots' are None for projects
+                with sync disabled.
+
+        """
+        params = {
+            "variant": ayon_api.get_default_settings_variant(),
+            "site_id": get_local_site_id(),
+            "platform": platform.system().lower(),
+        }
+        if project_names is not None:
+            params["projectNames"] = list(project_names)
+        response = ayon_api.get(
+            f"addons/{self.name}/{self.version}/projects_sync_settings",
+            **params
+        )
+        response.raise_for_status()
+        return response.data["projects"]
 
     def _fetch_project_settings(self, project_name):
         """Fetch sitesync settings of a single project from server.
@@ -1245,18 +1263,20 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             raise
 
     def _prepare_project_sync_settings(
-        self, project_name, project_settings, studio_sites
+        self, project_name, project_settings, studio_sites, roots=None
     ):
         """Add prepared 'sites' to settings of a project.
 
         Default 'studio' and local sites are added only to projects with
-        sync enabled, as they require querying project roots from server.
+        sync enabled, as they require project roots.
 
         Args:
             project_name (str): Project name.
             project_settings (dict[str, Any]): Project settings. They are
                 modified in place.
             studio_sites (dict[str, Any]): Sites from studio settings.
+            roots (Optional[dict[str, str]]): Roots of the local site,
+                queried from server if not passed.
 
         Returns:
             dict[str, Any]: Project settings with prepared 'sites'.
@@ -1265,7 +1285,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         project_sites = copy.deepcopy(studio_sites)
         if project_settings["enabled"]:
             project_sites.update(self._get_default_site_configs(
-                True, project_name, project_settings
+                True, project_name, project_settings, roots
             ))
         project_sites.update(
             self._transform_sites_from_settings(project_settings))
@@ -1343,20 +1363,18 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             if cache_item.is_valid:
                 return cache_item.get_data()
 
-            # Prepare a copy, the cached settings are shared
-            project_settings = copy.deepcopy(
-                self._get_project_settings(project_name)
-            )
-        else:
-            project_settings = self._fetch_project_settings(project_name)
-
-        if project_settings is not None:
+        project_data = self._fetch_projects_sync_settings(
+            [project_name]
+        ).get(project_name)
+        project_settings = None
+        if project_data is not None:
             project_settings = self._prepare_project_sync_settings(
                 project_name,
-                project_settings,
+                project_data["settings"],
                 self._transform_sites_from_settings(
                     self.sync_studio_settings
                 ),
+                project_data["roots"],
             )
 
         if cached:
@@ -1412,7 +1430,11 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         return roots
 
     def _get_default_site_configs(
-        self, sync_enabled=True, project_name=None, project_settings=None
+        self,
+        sync_enabled=True,
+        project_name=None,
+        project_settings=None,
+        roots=None,
     ):
         """Settings for 'studio' and user's local site
 
@@ -1423,12 +1445,15 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             sync_enabled (Optional[bool]): Is sync enabled.
             project_name (Optional[str]): Project name.
             project_settings (Optional[dict]): Project settings.
+            roots (Optional[dict[str, str]]): Roots of the local site,
+                queried from server if not passed.
 
         """
         local_site_id = get_local_site_id()
-        roots = self._get_project_root_overrides_by_site_id(
-            project_name, local_site_id
-        )
+        if roots is None:
+            roots = self._get_project_root_overrides_by_site_id(
+                project_name, local_site_id
+            )
         studio_config = {
             "enabled": True,
             "provider": "local_drive",
