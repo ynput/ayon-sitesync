@@ -5,16 +5,21 @@ import os
 from fastapi import Path, Query, Response
 
 from ayon_server.addons import BaseServerAddon
+from ayon_server.addons.settings_caching import AddonSettingsCache
 
 from ayon_server.access.utils import folder_access_list
 from ayon_server.api.dependencies import (
     CurrentUser,
     ProjectName,
     RepresentationID,
+    SiteID,
 )
 
 from ayon_server.entities.representation import RepresentationEntity
+from ayon_server.exceptions import ForbiddenException
+from ayon_server.helpers.roots import get_roots_for_projects
 from ayon_server.lib.postgres import Postgres
+from ayon_server.types import Platform
 from ayon_server.utils import SQLTool
 
 from .settings.settings import SiteSyncSettings
@@ -37,6 +42,12 @@ class SiteSync(BaseServerAddon):
     frontend_scopes: dict[str, Any] = {"project": {}}
 
     def initialize(self) -> None:
+
+        self.add_endpoint(
+            "/projects_sync_settings",
+            self.get_projects_sync_settings,
+            method="GET",
+        )
 
         self.add_endpoint(
             "/{project_name}/get_user_sites",
@@ -73,6 +84,96 @@ class SiteSync(BaseServerAddon):
             self.remove_site_sync_representation_state,
             method="DELETE",
         )
+
+    #
+    # GET SYNC SETTINGS OF PROJECTS
+    #
+
+    async def get_projects_sync_settings(
+        self,
+        user: CurrentUser,
+        site_id: SiteID,
+        variant: str = Query("production", description="Settings variant"),
+        platform: Platform | None = Query(
+            None,
+            description=(
+                "Platform of the roots, used if the site isn't registered"
+            ),
+            example="windows",
+        ),
+        projectNames: list[str] | None = Query(
+            None,
+            description="Limit to these projects. All active projects by default",
+        ),
+    ) -> dict[str, Any]:
+        """Sitesync settings of projects, with site roots if sync is enabled.
+
+        Returns in one request what the client otherwise receives with up
+        to 3 requests per project: project settings with site overrides,
+        and roots of the site for projects that have sync enabled. Projects
+        the user can't access are skipped.
+
+        Result: {"projects": {project_name: {"settings": ..., "roots": ...}}}
+        """
+        query = """
+            SELECT name FROM public.projects
+            WHERE data->>'isSkeleton' IS DISTINCT FROM 'true'
+        """
+        args = []
+        if projectNames is None:
+            query += " AND active IS TRUE"
+        else:
+            query += " AND name = ANY($1)"
+            args.append(projectNames)
+
+        project_names = []
+        for row in await Postgres.fetch(f"{query} ORDER BY name", *args):
+            try:
+                await user.ensure_project_access(row["name"])
+            except ForbiddenException:
+                continue
+            project_names.append(row["name"])
+
+        # Studio overrides are the same for all projects, load them once
+        studio_overrides = await self.get_studio_overrides(variant=variant)
+        projects = {}
+        for project_name in project_names:
+            settings_cache = AddonSettingsCache(studio=studio_overrides)
+            if site_id:
+                settings = await self.get_project_site_settings(
+                    project_name,
+                    user.name,
+                    site_id,
+                    variant=variant,
+                    settings_cache=settings_cache,
+                )
+            else:
+                settings = await self.get_project_settings(
+                    project_name,
+                    variant=variant,
+                    settings_cache=settings_cache,
+                )
+            if settings is None:
+                continue
+            projects[project_name] = {
+                "settings": settings.model_dump(by_alias=True),
+                "roots": None,
+            }
+
+        # Roots are needed only by projects with sync enabled
+        enabled_names = [
+            project_name
+            for project_name, project in projects.items()
+            if project["settings"]["enabled"]
+        ]
+        if enabled_names and (site_id or platform):
+            roots_by_project = await get_roots_for_projects(
+                user.name, site_id, enabled_names, platform
+            )
+            for project_name, roots in roots_by_project.items():
+                projects[project_name]["roots"] = roots
+
+        return {"projects": projects}
 
     #
     # GET SITE SYNC PARAMS
