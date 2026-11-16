@@ -1,8 +1,4 @@
-from .gdrive import GDriveHandler
-from .dropbox import DropboxHandler
-from .local_drive import LocalDriveHandler
-from .sftp import SFTPHandler
-from .rclone import RCloneHandler
+from importlib import import_module
 
 
 class ProviderFactory:
@@ -20,7 +16,8 @@ class ProviderFactory:
             Provide all necessary information for one specific remote provider
         Args:
             provider (string): name of provider
-            creator (class): class implementing AbstractProvider
+            creator (class | str): Class implementing AbstractProvider, or
+                relative module and class name for deferred import.
             batch_limit (int): number of files that could be processed in
                                     one loop (based on provider API quota)
         Returns:
@@ -48,9 +45,9 @@ class ProviderFactory:
         Returns:
             (implementation of AbstractProvider)
         """
-        creator_info = self._get_creator_info(provider)
+        creator = self.get_provider_cls(provider)
         # call init
-        site = creator_info[0](project_name, site_name, tree, presets)
+        site = creator(project_name, site_name, tree, presets)
 
         return site
 
@@ -74,8 +71,12 @@ class ProviderFactory:
             Returns class object for 'provider_code' to run class methods on.
         """
         provider_info = self._get_creator_info(provider_code)
-
-        return provider_info[0]
+        creator, batch_limit = provider_info
+        if isinstance(creator, str):
+            module_name, class_name = creator.rsplit(".", 1)
+            creator = getattr(import_module(module_name, __package__), class_name)
+            self.register_provider(provider_code, creator, batch_limit)
+        return creator
 
     def _get_creator_info(self, provider):
         """
@@ -85,7 +86,7 @@ class ProviderFactory:
             provider (string): 'gdrive' etc
         Returns:
             (tuple): (creator, batch_limit)
-                creator is class of a provider (ex: GDriveHandler)
+                creator is a provider class or its deferred import path
                 batch_limit denotes how many files synced at single loop
                    its provided via 'register_provider' as its needed even
                    before provider class is initialized itself
@@ -103,8 +104,8 @@ factory = ProviderFactory()
 # there is implementing 'GDriveHandler' class
 # 7 denotes number of files that could be synced in single loop - learned by
 # trial and error
-factory.register_provider(GDriveHandler.CODE, GDriveHandler, 7)
-factory.register_provider(DropboxHandler.CODE, DropboxHandler, 10)
-factory.register_provider(LocalDriveHandler.CODE, LocalDriveHandler, 50)
-factory.register_provider(SFTPHandler.CODE, SFTPHandler, 20)
-factory.register_provider(RCloneHandler.CODE, RCloneHandler, 20)
+factory.register_provider("gdrive", ".gdrive.GDriveHandler", 7)
+factory.register_provider("dropbox", ".dropbox.DropboxHandler", 10)
+factory.register_provider("local_drive", ".local_drive.LocalDriveHandler", 50)
+factory.register_provider("sftp", ".sftp.SFTPHandler", 20)
+factory.register_provider("rclone", ".rclone.RCloneHandler", 20)

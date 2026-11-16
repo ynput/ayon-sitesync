@@ -25,7 +25,7 @@ from ayon_api import (
 )
 
 from .version import __version__
-from .providers.local_drive import LocalDriveHandler
+from .providers.lib import factory
 
 from .utils import (
     time_function,
@@ -1074,7 +1074,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             str: Resolved local path.
 
         """
-        handler = LocalDriveHandler(project_name, site_name)
+        handler = factory.get_provider("local_drive", project_name, site_name)
         local_file_path = handler.resolve_path(file_path)
 
         return local_file_path
