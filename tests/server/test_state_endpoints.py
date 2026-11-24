@@ -6,6 +6,8 @@ the variables below are not set or the server is not reachable.
 - AYON_SERVER_URL, AYON_API_KEY: server and key of a service user.
 - AYON_SITESYNC_VERSION: version of the addon on the server.
 - AYON_SITESYNC_PROJECT: project with published representations.
+- AYON_SITESYNC_LIMITED_USER: user who can read only some folders of the
+    project.
 """
 import os
 import uuid
@@ -18,6 +20,7 @@ SERVER_URL = os.environ.get("AYON_SERVER_URL", "").rstrip("/")
 API_KEY = os.environ.get("AYON_API_KEY")
 VERSION = os.environ.get("AYON_SITESYNC_VERSION")
 PROJECT = os.environ.get("AYON_SITESYNC_PROJECT")
+LIMITED_USER = os.environ.get("AYON_SITESYNC_LIMITED_USER")
 
 
 def _server_available():
@@ -97,6 +100,32 @@ def representation_ids(admin):
     return repre_ids
 
 
+@pytest.fixture(scope="module")
+def limited():
+    if not LIMITED_USER:
+        pytest.skip("AYON_SITESYNC_LIMITED_USER is not set")
+    return Client(LIMITED_USER)
+
+
+@pytest.fixture(scope="module")
+def readable_and_denied_ids(limited, representation_ids):
+    """Representation ids the limited user can and cannot read."""
+    response = limited.state(pageLength=100000)
+    assert response.status_code == 200, response.text
+    readable_ids = {
+        repre["representationId"]
+        for repre in response.json()["representations"]
+    }
+    denied_ids = [
+        repre_id
+        for repre_id in representation_ids
+        if repre_id not in readable_ids
+    ]
+    if not readable_ids or not denied_ids:
+        pytest.skip(f"'{LIMITED_USER}' can read all or nothing")
+    return min(readable_ids), denied_ids[0]
+
+
 @pytest.mark.parametrize(
     "params",
     [
@@ -143,3 +172,49 @@ def test_site_states_with_quotes(admin, representation_ids, test_site):
         [f"{representation_ids[0]}') OR TRUE --"]
     )
     assert response.status_code == 400, response.text
+
+
+def test_site_states_skip_denied_representations(
+    admin, limited, readable_and_denied_ids, test_site
+):
+    readable_id, denied_id = readable_and_denied_ids
+    try:
+        for repre_id in readable_and_denied_ids:
+            response = admin.set_state(repre_id, test_site)
+            assert response.status_code == 204, response.text
+
+        response = limited.site_states(
+            [readable_id, denied_id], site_names=[test_site]
+        )
+        assert response.status_code == 200, response.text
+        assert [
+            item["representationId"] for item in response.json()
+        ] == [readable_id]
+    finally:
+        for repre_id in readable_and_denied_ids:
+            admin.remove_state(repre_id, test_site)
+
+
+def test_set_and_remove_state_require_read_access(
+    admin, limited, readable_and_denied_ids, test_site
+):
+    readable_id, denied_id = readable_and_denied_ids
+    try:
+        response = limited.set_state(denied_id, test_site)
+        assert response.status_code == 403, response.text
+        assert admin.site_states([denied_id], [test_site]).json() == []
+
+        response = admin.set_state(denied_id, test_site)
+        assert response.status_code == 204, response.text
+        response = limited.remove_state(denied_id, test_site)
+        assert response.status_code == 403, response.text
+        assert len(admin.site_states([denied_id], [test_site]).json()) == 1
+
+        response = limited.set_state(readable_id, test_site)
+        assert response.status_code == 204, response.text
+        response = limited.remove_state(readable_id, test_site)
+        assert response.status_code == 204, response.text
+        assert admin.site_states([readable_id], [test_site]).json() == []
+    finally:
+        for repre_id in readable_and_denied_ids:
+            admin.remove_state(repre_id, test_site)

@@ -8,7 +8,7 @@ from pydantic import Field
 from ayon_server.addons import BaseServerAddon
 from ayon_server.addons.settings_caching import AddonSettingsCache
 
-from ayon_server.access.utils import folder_access_list
+from ayon_server.access.utils import ensure_entity_access, folder_access_list
 from ayon_server.api.dependencies import (
     CurrentUser,
     ProjectName,
@@ -512,6 +512,7 @@ class SiteSync(BaseServerAddon):
         self,
         post_data: RepresentationStateModel,
         project_name: ProjectName,
+        user: CurrentUser,
         representation_id: RepresentationID,
         site_name: str = Path(
             ...
@@ -526,6 +527,9 @@ class SiteSync(BaseServerAddon):
         message
         """
         DEFAULT_PRIORITY = 50
+        await ensure_entity_access(
+            user, project_name, "representation", representation_id, "read"
+        )
         await check_sync_status_table(project_name)
 
         priority = post_data.priority
@@ -628,6 +632,9 @@ class SiteSync(BaseServerAddon):
         representation_id: RepresentationID,
         site_name: str = Path(...),  # TODO: add regex validator/dependency here! Important!
     ) -> Response:
+        await ensure_entity_access(
+            user, project_name, "representation", representation_id, "read"
+        )
         await check_sync_status_table(project_name)
 
         async with Postgres.acquire() as conn:
@@ -649,6 +656,7 @@ class SiteSync(BaseServerAddon):
     async def get_representations_site_sync_state(
         self,
         project_name: ProjectName,
+        user: CurrentUser,
         representationIds: EntityIdList = Query(
             None,
             description="Filter by representation ids",
@@ -660,19 +668,40 @@ class SiteSync(BaseServerAddon):
             example="['studio']",
         ),
     ) -> list[RepresentationSiteStateModel]:
-        """List all sites on all representations and their state"""
+        """List all sites on all representations and their state
+
+        Representations in folders the user cannot read are skipped.
+        """
         await check_sync_status_table(project_name)
 
         args = [representationIds]
-        conditions = ["representation_id = ANY($1::text[]::uuid[])"]
+        joins = ""
+        conditions = ["s.representation_id = ANY($1::text[]::uuid[])"]
+
+        access_list = await folder_access_list(user, project_name, "read")
+        if access_list is not None:
+            joins = f"""
+            INNER JOIN project_{project_name}.representations AS r
+                ON r.id = s.representation_id
+            INNER JOIN project_{project_name}.versions AS v
+                ON v.id = r.version_id
+            INNER JOIN project_{project_name}.products AS p
+                ON p.id = v.product_id
+            INNER JOIN project_{project_name}.hierarchy AS h
+                ON h.id = p.folder_id
+            """
+            conditions.append(
+                f"h.path LIKE ANY ('{{ {','.join(access_list)} }}')"
+            )
 
         if siteNames:
             args.append(siteNames)
-            conditions.append("site_name = ANY($2::text[])")
+            conditions.append("s.site_name = ANY($2::text[])")
 
         query = f"""
-            SELECT representation_id, site_name, status
-            FROM project_{project_name}.sitesync_files_status
+            SELECT s.representation_id, s.site_name, s.status
+            FROM project_{project_name}.sitesync_files_status AS s
+            {joins}
             {SQLTool.conditions(conditions)}
         """
         repres = []
