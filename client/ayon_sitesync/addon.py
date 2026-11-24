@@ -299,6 +299,72 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if remove_local_files:
             self._remove_local_file(project_name, representation_id, site_name)
 
+    def add_site_to_representations(
+        self,
+        project_name,
+        representation_ids,
+        site_name,
+        add_referenced=False,
+    ):
+        """Queue representations to be synced to a site.
+
+        Existing state of the site is reset. Representations without files
+        or not accessible by the user are skipped. Uses single request.
+
+        Args:
+            project_name (str): Project name.
+            representation_ids (Iterable[str]): Representation ids.
+            site_name (str): Site name.
+            add_referenced (bool): Add the site also to representations
+                referenced by workfiles, unless they are synced there.
+
+        Returns:
+            list[str]: Ids of representations queued to be synced.
+
+        """
+        response = ayon_api.post(
+            f"{self.endpoint_prefix}/{project_name}/add_site",
+            siteName=site_name,
+            representationIds=list(representation_ids),
+            addReferenced=add_referenced,
+        )
+        response.raise_for_status()
+        return response.data["representationIds"]
+
+    def remove_site_from_representations(
+        self,
+        project_name,
+        representation_ids,
+        site_name,
+        remove_local_files=False,
+    ):
+        """Remove site from representations.
+
+        Representations not accessible by the user are skipped. Uses single
+        request, and one more to remove local files.
+
+        Args:
+            project_name (str): Project name.
+            representation_ids (Iterable[str]): Representation ids.
+            site_name (str): Site name.
+            remove_local_files (bool): Remove files of the representations
+                if 'site_name' is the local site.
+
+        Returns:
+            list[str]: Ids of representations that had the site.
+
+        """
+        response = ayon_api.post(
+            f"{self.endpoint_prefix}/{project_name}/remove_site",
+            siteName=site_name,
+            representationIds=list(representation_ids),
+        )
+        response.raise_for_status()
+        removed_ids = response.data["representationIds"]
+        if remove_local_files and removed_ids:
+            self._remove_local_files(project_name, removed_ids, site_name)
+        return removed_ids
+
     def compute_resource_sync_sites(self, project_name):
         """Get available resource sync sites state for publish process.
 
@@ -2159,6 +2225,17 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             site_name (str): name of configured and active site
 
         """
+        self._remove_local_files(project_name, [representation_id], site_name)
+
+    def _remove_local_files(self, project_name, representation_ids, site_name):
+        """Removes all local files for 'site_name' of representations.
+
+        Args:
+            project_name (str): Project name.
+            representation_ids (list[str]): Representation ids.
+            site_name (str): name of configured and active site
+
+        """
         my_local_site = get_local_site_id()
         if my_local_site != site_name:
             self.log.warning(
@@ -2171,48 +2248,54 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if provider_name != "local_drive":
             return
 
-        representation = get_representation_by_id(
-            project_name, representation_id
+        representations = get_representations(
+            project_name,
+            representation_ids=representation_ids,
+            fields={"id", "files"},
         )
-        if not representation:
-            self.log.debug(
-                "Representation with id {} was not found".format(
-                    representation_id
+        failed_paths = []
+        for representation in representations:
+            for file in representation["files"]:
+                local_file_path = self.get_local_file_path(
+                    project_name,
+                    site_name,
+                    file.get("path")
+                )
+                if local_file_path is None:
+                    raise ValueError("Missing local file path")
+
+                self.log.debug("Removing {}".format(local_file_path))
+                try:
+                    os.remove(local_file_path)
+                except FileNotFoundError:
+                    pass
+                except OSError:
+                    self.log.warning(
+                        "File {} cannot be removed".format(local_file_path),
+                        exc_info=True,
+                    )
+                    failed_paths.append(local_file_path)
+                    continue
+
+                folder = os.path.dirname(local_file_path)
+                try:
+                    if not os.listdir(folder):
+                        os.rmdir(folder)
+                except FileNotFoundError:
+                    pass
+                except OSError:
+                    self.log.warning(
+                        "Folder {} cannot be removed".format(folder),
+                        exc_info=True,
+                    )
+                    failed_paths.append(folder)
+
+        if failed_paths:
+            raise ValueError(
+                "{} local file(s) or folder(s) cannot be removed:\n{}".format(
+                    len(failed_paths), "\n".join(failed_paths)
                 )
             )
-            return
-
-        for file in representation["files"]:
-            local_file_path = self.get_local_file_path(
-                project_name,
-                site_name,
-                file.get("path")
-            )
-            if local_file_path is None:
-                raise ValueError("Missing local file path")
-
-            try:
-                self.log.debug("Removing {}".format(local_file_path))
-                os.remove(local_file_path)
-            except IndexError:
-                msg = "No file set for {}".format(representation_id)
-                self.log.debug(msg)
-                raise ValueError(msg)
-            except OSError:
-                msg = "File {} cannot be removed".format(file["path"])
-                self.log.warning(msg)
-                raise ValueError(msg)
-
-            folder = os.path.dirname(local_file_path)
-            if os.listdir(folder):  # folder is not empty
-                continue
-
-            try:
-                os.rmdir(folder)
-            except OSError:
-                msg = "folder {} cannot be removed".format(folder)
-                self.log.warning(msg)
-                raise ValueError(msg)
 
     def reset_timer(self):
         """
