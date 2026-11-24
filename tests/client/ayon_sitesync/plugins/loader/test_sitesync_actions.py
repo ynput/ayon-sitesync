@@ -35,6 +35,7 @@ class _FakeSiteSyncAddon:
     name = "sitesync"
 
     def __init__(self):
+        self.sync_state = dict(SYNC_STATE)
         self.added: list[tuple[str, str]] = []
         self.removed: list[tuple[str, str, bool]] = []
         self.sync_state_queries: list[set[str]] = []
@@ -50,9 +51,9 @@ class _FakeSiteSyncAddon:
     ):
         self.sync_state_queries.append(set(representation_ids))
         return {
-            repre_id: SYNC_STATE[repre_id]
+            repre_id: self.sync_state[repre_id]
             for repre_id in representation_ids
-            if repre_id in SYNC_STATE
+            if repre_id in self.sync_state
         }
 
     def add_site(self, project_name, representation_id, site_name, force):
@@ -207,6 +208,22 @@ def test_sync_state_is_cached_until_action_runs():
     )
     plugin.get_action_items(_make_selection({"repre_local"}))
     assert addon.sync_state_queries[-1] == {"repre_local"}
+
+
+def test_sync_state_is_queried_in_chunks():
+    """Server returns at most 50 representations per request."""
+    addon = _FakeSiteSyncAddon()
+    plugin = SiteSyncActionPlugin(_FakeContext(addon))
+    repre_ids = {f"repre_{idx}" for idx in range(120)}
+    addon.sync_state.update({repre_id: (0, 1) for repre_id in repre_ids})
+
+    items = plugin.get_action_items(_make_selection(repre_ids))
+
+    assert sorted(len(ids) for ids in addon.sync_state_queries) == [
+        20, 50, 50
+    ]
+    download_item = _items_by_action(items)["download"]
+    assert set(download_item.data["representation_ids"]) == repre_ids
 
 
 @pytest.mark.parametrize(

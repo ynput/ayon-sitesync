@@ -18,6 +18,9 @@ DOWNLOAD_ACTION = "download"
 UPLOAD_ACTION = "upload"
 REMOVE_ACTION = "remove"
 
+# Server returns sync state of at most 50 representations by default
+SYNC_STATE_CHUNK_SIZE = 50
+
 
 class SiteSyncActionPlugin(LoaderActionPlugin):
     """Mark representations to be synced to the active or remote site.
@@ -192,16 +195,17 @@ class SiteSyncActionPlugin(LoaderActionPlugin):
     ) -> dict[str, tuple[float, float]]:
         """Local and remote sync progress of representations."""
         project_cache = self._repre_status_cache[project_name]
-        missing_ids = {
+        missing_ids = [
             repre_id
             for repre_id in repre_ids
             if not project_cache[repre_id].is_valid
-        }
-        if missing_ids:
+        ]
+        for idx in range(0, len(missing_ids), SYNC_STATE_CHUNK_SIZE):
+            chunk_ids = missing_ids[idx:idx + SYNC_STATE_CHUNK_SIZE]
             status_by_repre_id = self._addon.get_representations_sync_state(
-                project_name, list(missing_ids), active_site, remote_site
+                project_name, chunk_ids, active_site, remote_site
             )
-            for repre_id in missing_ids:
+            for repre_id in chunk_ids:
                 project_cache[repre_id].update_data(
                     status_by_repre_id.get(repre_id, (0, 0))
                 )
