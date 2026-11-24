@@ -742,7 +742,18 @@ def get_overal_status(files: dict) -> StatusEnum:
 
 
 async def check_sync_status_table(project_name: str) -> None:
-    """Checks for existence of `sitesync_files_status` table, creates if not."""
+    """Checks for existence of `sitesync_files_status` table, creates if not.
+
+    'CREATE INDEX IF NOT EXISTS' locks the table even if the index exists,
+    so it runs only for a missing table.
+    """
+    row = await Postgres.fetchrow(
+        "SELECT to_regclass($1) IS NOT NULL AS exists",
+        f"project_{project_name}.sitesync_files_status",
+    )
+    if row["exists"]:
+        return
+
     await Postgres.execute(
         f"CREATE TABLE IF NOT EXISTS project_{project_name}.sitesync_files_status ("
         f"""representation_id UUID NOT NULL REFERENCES project_{project_name}.representations(id) ON DELETE CASCADE,

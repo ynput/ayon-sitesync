@@ -8,6 +8,8 @@ the variables below are not set or the server is not reachable.
 - AYON_SITESYNC_PROJECT: project with published representations.
 - AYON_SITESYNC_LIMITED_USER: user who can read only some folders of the
     project.
+- AYON_SITESYNC_POSTGRES: connection string of the server database, needs
+    'psycopg' installed.
 """
 import os
 import uuid
@@ -21,6 +23,7 @@ API_KEY = os.environ.get("AYON_API_KEY")
 VERSION = os.environ.get("AYON_SITESYNC_VERSION")
 PROJECT = os.environ.get("AYON_SITESYNC_PROJECT")
 LIMITED_USER = os.environ.get("AYON_SITESYNC_LIMITED_USER")
+POSTGRES = os.environ.get("AYON_SITESYNC_POSTGRES")
 
 
 def _server_available():
@@ -218,3 +221,32 @@ def test_set_and_remove_state_require_read_access(
     finally:
         for repre_id in readable_and_denied_ids:
             admin.remove_state(repre_id, test_site)
+
+
+def test_state_does_not_wait_for_open_writes(admin, representation_ids):
+    if not POSTGRES:
+        pytest.skip("AYON_SITESYNC_POSTGRES is not set")
+    psycopg = pytest.importorskip("psycopg")
+
+    with psycopg.connect(POSTGRES) as connection:
+        # Same lock as a transaction updating rows of the table
+        connection.execute(
+            f"LOCK TABLE project_{PROJECT.lower()}.sitesync_files_status"
+            " IN ROW EXCLUSIVE MODE"
+        )
+        try:
+            response = admin.request(
+                "GET",
+                "/state",
+                params={
+                    "localSite": "studio",
+                    "remoteSite": "studio",
+                    "representationIds": representation_ids[:1],
+                },
+                timeout=5,
+            )
+        except requests.Timeout:
+            pytest.fail("Request waited for the open transaction")
+        finally:
+            connection.rollback()
+    assert response.status_code == 200, response.text
