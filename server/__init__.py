@@ -1,8 +1,9 @@
 from __future__ import annotations
-from typing import Any, Type
+from typing import Annotated, Any, Type
 from nxtools import logging
 import os
 from fastapi import Path, Query, Response
+from pydantic import Field
 
 from ayon_server.addons import BaseServerAddon
 from ayon_server.addons.settings_caching import AddonSettingsCache
@@ -20,7 +21,7 @@ from ayon_server.exceptions import ForbiddenException
 from ayon_server.helpers.roots import get_roots_for_projects
 from ayon_server.lib.postgres import Postgres
 from ayon_server.types import Platform
-from ayon_server.utils import SQLTool
+from ayon_server.utils import EntityID, SQLTool
 
 from .settings.settings import SiteSyncSettings
 from .settings.models import (
@@ -34,6 +35,8 @@ from .settings.models import (
     SyncStatusModel,
     RepresentationSiteStateModel
 )
+
+EntityIdList = list[Annotated[str, Field(**EntityID.META)]]
 
 
 class SiteSync(BaseServerAddon):
@@ -246,7 +249,7 @@ class SiteSync(BaseServerAddon):
         self,
         project_name: ProjectName,
         user: CurrentUser,
-        representationIds: list[str] | None = Query(
+        representationIds: EntityIdList | None = Query(
             None,
             description="Filter by representation ids",
             example="['57cf375c749611ed89de0242ac140004']",
@@ -268,7 +271,7 @@ class SiteSync(BaseServerAddon):
             description="Filter folders by name",
             example="sh042",
         ),
-        folderIdsFilter: list[str] | None = Query(
+        folderIdsFilter: EntityIdList | None = Query(
             None,
             description="Filter folders by id, eg filtering by asset ids",
             example="['57cf375c749611ed89de0242ac140004']",
@@ -283,7 +286,7 @@ class SiteSync(BaseServerAddon):
             description="Filter products by version",
             example="1",
         ),
-        versionIdsFilter: list[str] | None = Query(
+        versionIdsFilter: EntityIdList | None = Query(
             None,
             description="Filter versions by ids",
             example="['57cf375c749611ed89de0242ac140004']",
@@ -324,25 +327,31 @@ class SiteSync(BaseServerAddon):
         versions and representations to show in Loader UI.
         """
         await check_sync_status_table(project_name)
+        args = [localSite, remoteSite]
         conditions = []
 
         if representationIds is not None:
-            conditions.append(f"r.id IN {SQLTool.array(representationIds)}")
+            args.append(representationIds)
+            conditions.append(f"r.id = ANY(${len(args)}::text[]::uuid[])")
 
         if folderFilter:
-            conditions.append(f"f.name ILIKE '%{folderFilter}%'")
+            args.append(get_contains_pattern(folderFilter))
+            conditions.append(f"f.name ILIKE ${len(args)}")
 
         if folderIdsFilter:
-            conditions.append(f"f.id IN {SQLTool.array(folderIdsFilter)}")
+            args.append(folderIdsFilter)
+            conditions.append(f"f.id = ANY(${len(args)}::text[]::uuid[])")
 
         if productFilter:
-            conditions.append(f"p.name ILIKE '%{productFilter}%'")
+            args.append(get_contains_pattern(productFilter))
+            conditions.append(f"p.name ILIKE ${len(args)}")
 
         if versionFilter:
             conditions.append(f"v.version = {versionFilter}")
 
         if versionIdsFilter:
-            conditions.append(f"v.id IN {SQLTool.array(versionIdsFilter)}")
+            args.append(versionIdsFilter)
+            conditions.append(f"v.id = ANY(${len(args)}::text[]::uuid[])")
 
         if localStatusFilter:
             statusFilter = [str(s.value) for s in localStatusFilter]
@@ -353,7 +362,8 @@ class SiteSync(BaseServerAddon):
             conditions.append(f"remote.status IN ({','.join(statusFilter)})")
 
         if repreNameFilter:
-            conditions.append(f"r.name IN {SQLTool.array(repreNameFilter)}")
+            args.append(repreNameFilter)
+            conditions.append(f"r.name = ANY(${len(args)}::text[])")
 
         access_list = await folder_access_list(user, project_name, "read")
         if access_list is not None:
@@ -395,11 +405,11 @@ class SiteSync(BaseServerAddon):
             {sites_join} JOIN
                 project_{project_name}.sitesync_files_status as local
                 ON local.representation_id = r.id
-                AND local.site_name = '{localSite}'
+                AND local.site_name = $1
             {sites_join} JOIN
                 project_{project_name}.sitesync_files_status as remote
                 ON remote.representation_id = r.id
-                AND remote.site_name = '{remoteSite}'
+                AND remote.site_name = $2
 
             {SQLTool.conditions(conditions)}
 
@@ -409,7 +419,7 @@ class SiteSync(BaseServerAddon):
         """
         repres = []
 
-        async for row in Postgres.iterate(query):
+        async for row in Postgres.iterate(query, *args):
             files = row["representation_files"]
             file_count = len(files)
             total_size = sum([f.get("size") for f in files])
@@ -639,7 +649,7 @@ class SiteSync(BaseServerAddon):
     async def get_representations_site_sync_state(
         self,
         project_name: ProjectName,
-        representationIds: list[str] = Query(
+        representationIds: EntityIdList = Query(
             None,
             description="Filter by representation ids",
             example="['57cf375c749611ed89de0242ac140004']",
@@ -653,12 +663,12 @@ class SiteSync(BaseServerAddon):
         """List all sites on all representations and their state"""
         await check_sync_status_table(project_name)
 
-        conditions = [
-            f"representation_id IN {SQLTool.array(representationIds)}"
-        ]
+        args = [representationIds]
+        conditions = ["representation_id = ANY($1::text[]::uuid[])"]
 
         if siteNames:
-            conditions.append(f"site_name IN {SQLTool.array(siteNames)}")
+            args.append(siteNames)
+            conditions.append("site_name = ANY($2::text[])")
 
         query = f"""
             SELECT representation_id, site_name, status
@@ -667,7 +677,7 @@ class SiteSync(BaseServerAddon):
         """
         repres = []
 
-        async for row in Postgres.iterate(query):
+        async for row in Postgres.iterate(query, *args):
             repres.append(
                 RepresentationSiteStateModel(
                     representationId=row["representation_id"],
@@ -676,6 +686,13 @@ class SiteSync(BaseServerAddon):
                 )
             )
         return repres
+
+
+def get_contains_pattern(value: str) -> str:
+    """ILIKE pattern matching 'value' as literal text anywhere."""
+    for char in ("\\", "%", "_"):
+        value = value.replace(char, f"\\{char}")
+    return f"%{value}%"
 
 
 def get_overal_status(files: dict) -> StatusEnum:
