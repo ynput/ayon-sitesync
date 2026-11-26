@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Any, Type
 from nxtools import logging
 import os
+import re
 from fastapi import Path, Query, Response
 
 from ayon_server.addons import BaseServerAddon
@@ -16,7 +17,7 @@ from ayon_server.api.dependencies import (
 )
 
 from ayon_server.entities.representation import RepresentationEntity
-from ayon_server.exceptions import ForbiddenException
+from ayon_server.exceptions import BadRequestException, ForbiddenException
 from ayon_server.helpers.roots import get_roots_for_projects
 from ayon_server.lib.postgres import Postgres
 from ayon_server.types import Platform
@@ -24,6 +25,7 @@ from ayon_server.utils import SQLTool
 
 from .settings.settings import SiteSyncSettings
 from .settings.models import (
+    AddSiteModel,
     FileModel,
     RepresentationStateModel,
     SiteSyncParamsModel,
@@ -32,8 +34,12 @@ from .settings.models import (
     SortByEnum,
     StatusEnum,
     SyncStatusModel,
-    RepresentationSiteStateModel
+    RepresentationSiteStateModel,
+    RepresentationIdsModel,
+    SiteRepresentationsModel,
 )
+
+ENTITY_ID_RE = re.compile(r"[0-9a-f]{32}")
 
 
 class SiteSync(BaseServerAddon):
@@ -83,6 +89,18 @@ class SiteSync(BaseServerAddon):
             "/{project_name}/state/{representation_id}/{site_name}",  # noqa
             self.remove_site_sync_representation_state,
             method="DELETE",
+        )
+
+        self.add_endpoint(
+            "/{project_name}/add_site",
+            self.add_site,
+            method="POST",
+        )
+
+        self.add_endpoint(
+            "/{project_name}/remove_site",
+            self.remove_site,
+            method="POST",
         )
 
     #
@@ -636,6 +654,150 @@ class SiteSync(BaseServerAddon):
 
                 return Response(status_code=204)
 
+    #
+    # ADD OR REMOVE SITE OF REPRESENTATIONS
+    #
+
+    async def add_site(
+        self,
+        post_data: AddSiteModel,
+        project_name: ProjectName,
+        user: CurrentUser,
+    ) -> RepresentationIdsModel:
+        """Queue representations to be synced to a site.
+
+        Existing state of the site is reset, its priority is kept.
+        Representations without files or in folders the user cannot read
+        are skipped.
+        """
+        representation_ids = validate_representation_ids(
+            post_data.representationIds
+        )
+        if not representation_ids:
+            return RepresentationIdsModel(representationIds=[])
+
+        await check_sync_status_table(project_name)
+        access_condition = await get_read_access_condition(
+            user, project_name
+        )
+        access_joins = f"""
+            INNER JOIN project_{project_name}.versions AS v
+                ON v.id = r.version_id
+            INNER JOIN project_{project_name}.products AS p
+                ON p.id = v.product_id
+            INNER JOIN project_{project_name}.hierarchy AS h
+                ON h.id = p.folder_id
+        """
+        queued = StatusEnum.QUEUED.value
+        rows = await Postgres.fetch(
+            f"""
+            WITH selected AS (
+                SELECT r.id, r.version_id, p.product_type
+                FROM project_{project_name}.representations AS r
+                {access_joins}
+                WHERE r.id = ANY($1::uuid[]) AND {access_condition}
+            ),
+            referenced AS (
+                SELECT r.id
+                FROM selected AS s
+                INNER JOIN project_{project_name}.links AS l
+                    ON l.output_id = s.version_id
+                INNER JOIN project_{project_name}.representations AS r
+                    ON r.version_id = l.input_id
+                {access_joins}
+                WHERE $3::boolean
+                    AND s.product_type = 'workfile'
+                    AND l.link_type = 'reference|version|version'
+                    AND l.input_id != l.output_id
+                    AND r.active
+                    AND {access_condition}
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM project_{project_name}.sitesync_files_status AS st
+                        WHERE st.representation_id = r.id
+                            AND st.site_name = $2
+                            AND st.status = {StatusEnum.SYNCED.value}
+                    )
+            )
+            INSERT INTO project_{project_name}.sitesync_files_status
+                (representation_id, site_name, status, data)
+            SELECT
+                r.id,
+                $2,
+                {queued},
+                jsonb_build_object('files', jsonb_object_agg(
+                    f.file->>'id',
+                    jsonb_build_object(
+                        'hash', f.file->'hash',
+                        'status', {queued},
+                        'size', COALESCE(f.file->'size', '0'),
+                        'timestamp', EXTRACT(EPOCH FROM now())
+                    )
+                ))
+            FROM project_{project_name}.representations AS r
+            CROSS JOIN LATERAL jsonb_array_elements(r.files) AS f(file)
+            WHERE r.id IN (
+                SELECT id FROM selected UNION SELECT id FROM referenced
+            )
+            GROUP BY r.id
+            ORDER BY r.id
+            ON CONFLICT (representation_id, site_name)
+            DO UPDATE SET status = EXCLUDED.status, data = EXCLUDED.data
+            RETURNING representation_id
+            """,
+            representation_ids,
+            post_data.siteName,
+            post_data.addReferenced,
+        )
+        return RepresentationIdsModel(
+            representationIds=[row["representation_id"] for row in rows]
+        )
+
+    async def remove_site(
+        self,
+        post_data: SiteRepresentationsModel,
+        project_name: ProjectName,
+        user: CurrentUser,
+    ) -> RepresentationIdsModel:
+        """Remove site from representations.
+
+        Representations in folders the user cannot read are skipped.
+        Returns ids of representations that had the site.
+        """
+        representation_ids = validate_representation_ids(
+            post_data.representationIds
+        )
+        if not representation_ids:
+            return RepresentationIdsModel(representationIds=[])
+
+        await check_sync_status_table(project_name)
+        access_condition = await get_read_access_condition(
+            user, project_name
+        )
+        rows = await Postgres.fetch(
+            f"""
+            DELETE FROM project_{project_name}.sitesync_files_status AS st
+            USING
+                project_{project_name}.representations AS r,
+                project_{project_name}.versions AS v,
+                project_{project_name}.products AS p,
+                project_{project_name}.hierarchy AS h
+            WHERE st.representation_id = ANY($1::uuid[])
+                AND st.site_name = $2
+                AND r.id = st.representation_id
+                AND v.id = r.version_id
+                AND p.id = v.product_id
+                AND h.id = p.folder_id
+                AND {access_condition}
+            RETURNING st.representation_id
+            """,
+            representation_ids,
+            post_data.siteName,
+        )
+        return RepresentationIdsModel(
+            representationIds=[row["representation_id"] for row in rows]
+        )
+
     async def get_representations_site_sync_state(
         self,
         project_name: ProjectName,
@@ -676,6 +838,21 @@ class SiteSync(BaseServerAddon):
                 )
             )
         return repres
+
+
+def validate_representation_ids(representation_ids: list[str]) -> list[str]:
+    for representation_id in representation_ids:
+        if not ENTITY_ID_RE.fullmatch(representation_id):
+            raise BadRequestException("Invalid representation id")
+    return representation_ids
+
+
+async def get_read_access_condition(user, project_name: str) -> str:
+    """SQL condition on 'h.path' of folders the user can read."""
+    access_list = await folder_access_list(user, project_name, "read")
+    if access_list is None:
+        return "TRUE"
+    return f"h.path LIKE ANY ('{{ {','.join(access_list)} }}')"
 
 
 def get_overal_status(files: dict) -> StatusEnum:

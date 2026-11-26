@@ -3,8 +3,6 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-import ayon_api
-
 from ayon_core.lib import NestedCacheItem
 from ayon_core.lib.icon_definitions import MaterialSymbolsIcon
 from ayon_core.pipeline.actions import (
@@ -94,52 +92,35 @@ class SiteSyncActionPlugin(LoaderActionPlugin):
         active_site, remote_site = sites
 
         action = data["action"]
-        repre_ids = set(data["representation_ids"])
-        # Sync status changes, query it again on the next right-click
-        project_status_cache = self._repre_status_cache[project_name]
-        for repre_id in repre_ids:
-            project_status_cache[repre_id].set_invalid()
-
-        if action == REMOVE_ACTION:
-            for repre_id in repre_ids:
-                self._addon.remove_site(
+        repre_ids = data["representation_ids"]
+        try:
+            if action == REMOVE_ACTION:
+                changed_ids = self._addon.remove_site_from_representations(
                     project_name,
-                    repre_id,
+                    repre_ids,
                     active_site,
                     remove_local_files=True,
                 )
-            return LoaderActionResult(
-                message=(
-                    f"Removed {len(repre_ids)} representation(s)"
+                message = (
+                    f"Removed {len(changed_ids)} representation(s)"
                     f" from '{active_site}'."
                 )
-            )
-
-        site_name = active_site
-        if action == UPLOAD_ACTION:
-            site_name = remote_site
-
-        repre_entities = selection.entities.get_representations(repre_ids)
-        workfile_repre_ids = self._get_workfile_repre_ids(
-            selection, repre_entities
-        )
-        for repre_entity in repre_entities:
-            repre_id = repre_entity["id"]
-            self._addon.add_site(
-                project_name, repre_id, site_name, force=True
-            )
-            if repre_id in workfile_repre_ids:
-                self._add_site_to_linked_representations(
-                    project_name, repre_entity, site_name
+            else:
+                site_name = active_site
+                if action == UPLOAD_ACTION:
+                    site_name = remote_site
+                changed_ids = self._addon.add_site_to_representations(
+                    project_name, repre_ids, site_name, add_referenced=True
                 )
-
-        verb = "download" if action == DOWNLOAD_ACTION else "upload"
-        return LoaderActionResult(
-            message=(
-                f"Marked {len(repre_entities)} representation(s)"
-                f" for {verb} to '{site_name}'."
-            )
-        )
+                verb = "download" if action == DOWNLOAD_ACTION else "upload"
+                message = (
+                    f"Marked {len(changed_ids)} representation(s)"
+                    f" for {verb} to '{site_name}'."
+                )
+        finally:
+            # Representations referenced by workfiles change too
+            self._repre_status_cache.clear_key(project_name)
+        return LoaderActionResult(message=message)
 
     def _create_action_item(
         self,
@@ -213,85 +194,3 @@ class SiteSyncActionPlugin(LoaderActionPlugin):
             repre_id: project_cache[repre_id].get_data()
             for repre_id in repre_ids
         }
-
-    def _get_workfile_repre_ids(
-        self,
-        selection: LoaderActionSelection,
-        repre_entities: list[dict[str, Any]],
-    ) -> set[str]:
-        """Representation ids that belong to 'workfile' products."""
-        version_ids = {
-            repre_entity["versionId"] for repre_entity in repre_entities
-        }
-        versions = selection.entities.get_versions(version_ids)
-        products = selection.entities.get_products({
-            version["productId"] for version in versions
-        })
-        workfile_product_ids = {
-            product["id"]
-            for product in products
-            if product["productType"] == "workfile"
-        }
-        workfile_version_ids = {
-            version["id"]
-            for version in versions
-            if version["productId"] in workfile_product_ids
-        }
-        return {
-            repre_entity["id"]
-            for repre_entity in repre_entities
-            if repre_entity["versionId"] in workfile_version_ids
-        }
-
-    def _add_site_to_linked_representations(
-        self,
-        project_name: str,
-        repre_entity: dict[str, Any],
-        site_name: str,
-    ) -> None:
-        """Sync representations referenced by a workfile too."""
-        for link_repre_id in self._get_linked_representation_ids(
-            project_name, repre_entity["versionId"], "reference"
-        ):
-            if self._addon.is_representation_on_site(
-                project_name, link_repre_id, site_name
-            ):
-                continue
-            self.log.info(
-                f"Adding {site_name} to linked representation:"
-                f" {link_repre_id}"
-            )
-            self._addon.add_site(
-                project_name, link_repre_id, site_name, force=True
-            )
-
-    def _get_linked_representation_ids(
-        self,
-        project_name: str,
-        version_id: str,
-        link_type: str,
-    ) -> list[str]:
-        """Ids of representations of versions linked as inputs."""
-        versions_links = ayon_api.get_versions_links(
-            project_name,
-            {version_id},
-            link_types=[link_type],
-            link_direction="in",
-        )
-        linked_version_ids = {
-            link["entityId"]
-            for links in versions_links.values()
-            for link in links
-            if link["entityType"] == "version"
-        }
-        linked_version_ids.discard(version_id)
-        if not linked_version_ids:
-            return []
-        return [
-            repre["id"]
-            for repre in ayon_api.get_representations(
-                project_name,
-                version_ids=linked_version_ids,
-                fields={"id"},
-            )
-        ]

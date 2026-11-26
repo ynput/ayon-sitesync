@@ -97,3 +97,26 @@ class RepresentationSiteStateModel(OPModel):
     representationId: str = Field(...)
     siteName: str = Field(...)
     status: StatusEnum = Field(StatusEnum.NOT_AVAILABLE)
+
+
+class SiteRepresentationsModel(OPModel):
+    siteName: str = Field(..., min_length=1, description="Site name")
+    representationIds: list[str] = Field(
+        ..., description="Representation ids"
+    )
+
+
+class AddSiteModel(SiteRepresentationsModel):
+    addReferenced: bool = Field(
+        False,
+        description=(
+            "Add the site also to representations referenced by selected"
+            " workfiles, unless they are synced there already"
+        ),
+    )
+
+
+class RepresentationIdsModel(OPModel):
+    representationIds: list[str] = Field(
+        ..., description="Changed representation ids"
+    )
