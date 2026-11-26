@@ -332,6 +332,11 @@ class SiteSync(BaseServerAddon):
             description="Used for front end UI to show only repres with"
                         " both sides",
         ),
+        includeFiles: bool = Query(
+            True,
+            title="Include files",
+            description="Return the files of each representation",
+        ),
         # Pagination
         page: int = Query(1, ge=1),
         pageLength: int = Query(50, ge=1),
@@ -459,39 +464,41 @@ class SiteSync(BaseServerAddon):
                 timestamp=rtime,
             )
 
-            file_list = []
-            for file_info in files:
-                file_id = file_info["id"]
-                local_file = lfiles.get(file_id, {})
-                remote_file = rfiles.get(file_id, {})
+            file_list = None
+            if includeFiles:
+                file_list = []
+                for file_info in files:
+                    file_id = file_info["id"]
+                    local_file = lfiles.get(file_id, {})
+                    remote_file = rfiles.get(file_id, {})
 
-                file_list.append(
-                    FileModel(
-                        id=file_id,
-                        fileHash=file_info["hash"],
-                        size=file_info["size"],
-                        path=file_info["path"],
-                        baseName=os.path.split(file_info["path"])[1],
-                        localStatus=SyncStatusModel(
-                            status=local_file.get("status",
-                                                StatusEnum.NOT_AVAILABLE),
-                            size=local_file.get("size", 0),
-                            totalSize=file_info["size"],
-                            timestamp=local_file.get("timestamp", 0),
-                            message=local_file.get("message", None),
-                            retries=local_file.get("retries", 0),
-                        ),
-                        remoteStatus=SyncStatusModel(
-                            status=remote_file.get("status",
-                                                StatusEnum.NOT_AVAILABLE),
-                            size=remote_file.get("size", 0),
-                            totalSize=file_info["size"],
-                            timestamp=remote_file.get("timestamp", 0),
-                            message=remote_file.get("message", None),
-                            retries=remote_file.get("retries", 0),
-                        ),
+                    file_list.append(
+                        FileModel(
+                            id=file_id,
+                            fileHash=file_info["hash"],
+                            size=file_info["size"],
+                            path=file_info["path"],
+                            baseName=os.path.split(file_info["path"])[1],
+                            localStatus=SyncStatusModel(
+                                status=local_file.get("status",
+                                                    StatusEnum.NOT_AVAILABLE),
+                                size=local_file.get("size", 0),
+                                totalSize=file_info["size"],
+                                timestamp=local_file.get("timestamp", 0),
+                                message=local_file.get("message", None),
+                                retries=local_file.get("retries", 0),
+                            ),
+                            remoteStatus=SyncStatusModel(
+                                status=remote_file.get("status",
+                                                    StatusEnum.NOT_AVAILABLE),
+                                size=remote_file.get("size", 0),
+                                totalSize=file_info["size"],
+                                timestamp=remote_file.get("timestamp", 0),
+                                message=remote_file.get("message", None),
+                                retries=remote_file.get("retries", 0),
+                            ),
+                        )
                     )
-                )
 
             repres.append(
                 SiteSyncSummaryItem.construct(

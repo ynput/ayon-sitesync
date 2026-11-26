@@ -2051,9 +2051,6 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     ):
         """Use server endpoint to get synchronization info for representations.
 
-        Calculates float progress based on progress of all files for repre.
-        If repre is fully synchronized it returns 1, 0 for any other state.
-
         Args:
             project_name (str):
             representation_ids (list): even single repre should be in []
@@ -2063,7 +2060,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 necessary.
 
         Returns:
-            dict[str, tuple[float, float]]: Progress by representation id.
+            dict[str, tuple[int, int]]: Local and remote state by
+                representation id, 1 if fully synchronized, 0 otherwise.
 
         """
         repre_states = self._get_repres_state(
@@ -2071,39 +2069,17 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             representation_ids,
             local_site_name,
             remote_site_name,
+            includeFiles=False,
             **kwargs
         )
         states = {}
         for repre_state in repre_states:
-            repre_files_count = len(repre_state["files"])
-
-            repre_local_status = repre_state["localStatus"]["status"]
-            repre_local_progress = 0
-            if repre_local_status == SiteSyncStatus.OK:
-                repre_local_progress = 1
-            elif repre_local_status == SiteSyncStatus.IN_PROGRESS:
-                local_sum = sum(
-                    file_info["localStatus"].get("progress", 0)
-                    for file_info in repre_state["files"]
-                )
-                repre_local_progress = local_sum / repre_files_count
-
-            repre_remote_status = repre_state["remoteStatus"]["status"]
-            repre_remote_progress = 0
-            if repre_remote_status == SiteSyncStatus.OK:
-                repre_remote_progress = 1
-            elif repre_remote_status == SiteSyncStatus.IN_PROGRESS:
-                remote_sum = sum(
-                    file_info["remoteStatus"].get("progress", 0)
-                    for file_info in repre_state["files"]
-                )
-                repre_remote_progress = remote_sum / repre_files_count
-
+            local_status = repre_state["localStatus"]["status"]
+            remote_status = repre_state["remoteStatus"]["status"]
             states[repre_state["representationId"]] = (
-                repre_local_progress,
-                repre_remote_progress
+                int(local_status == SiteSyncStatus.OK),
+                int(remote_status == SiteSyncStatus.OK),
             )
-
         return states
 
     def _get_repres_state(
@@ -2220,6 +2196,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             remote_site_name,
             "versionIdsFilter",
             version_ids,
+            includeFiles=False,
             **kwargs
         )
 

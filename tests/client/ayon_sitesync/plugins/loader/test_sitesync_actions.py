@@ -325,13 +325,16 @@ class _FakeStateEndpoint:
             for repre_id in repre_ids
         ]
         self.requested_ids = []
+        self.requested_files = []
 
     def get(self, endpoint, **kwargs):
         repre_ids = kwargs.get("representationIds") or []
         version_ids = kwargs.get("versionIdsFilter") or []
         self.requested_ids.append(repre_ids or version_ids)
+        include_files = kwargs.get("includeFiles", True)
+        self.requested_files.append(include_files)
         rows = [
-            row
+            row if include_files else {**row, "files": None}
             for row in self.rows
             if row["representationId"] in repre_ids
             or row["versionId"] in version_ids
@@ -357,6 +360,7 @@ def test_addon_returns_sync_state_of_all_requested_representations(
 
     assert states == {repre_id: (1, 0) for repre_id in repre_ids}
     assert sum(server.requested_ids, []) == repre_ids
+    assert not any(server.requested_files)
     assert all(
         len(ids) <= addon_mod.STATE_QUERY_IDS_LIMIT
         for ids in server.requested_ids
@@ -379,6 +383,7 @@ def test_addon_returns_availability_of_all_requested_versions(monkeypatch):
     assert availability == {
         version_id: (30, 0) for version_id in repre_ids_by_version_id
     }
+    assert not any(server.requested_files)
     assert all(
         len(ids) <= addon_mod.STATE_QUERY_IDS_LIMIT
         for ids in server.requested_ids
