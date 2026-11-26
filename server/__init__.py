@@ -421,7 +421,7 @@ class SiteSync(BaseServerAddon):
 
             {SQLTool.conditions(conditions)}
 
-            ORDER BY {sortBy.value} {'DESC' if sortDesc else 'ASC'}
+            ORDER BY {sortBy.value} {'DESC' if sortDesc else 'ASC'}, r.id
             LIMIT {pageLength}
             OFFSET { (page-1) * pageLength }
         """
