@@ -13,6 +13,7 @@ from ayon_core.pipeline.actions import (
 )
 from ayon_sitesync import addon as addon_mod
 from ayon_sitesync.addon import SiteSyncAddon
+from ayon_sitesync.utils import SiteSyncStatus
 from ayon_sitesync.plugins.loader.sitesync_actions import (
     SiteSyncActionPlugin,
 )
@@ -157,6 +158,8 @@ def _execute(plugin, action, repre_ids, **kwargs):
 
 
 class _FakeResponse:
+    status_code = 200
+
     def __init__(self, data):
         self.data = data
 
@@ -228,22 +231,6 @@ def test_sync_state_is_cached_until_action_runs():
     _execute(plugin, "upload", ["repre_local"])
     plugin.get_action_items(_make_selection({"repre_local"}))
     assert addon.sync_state_queries[-1] == {"repre_local"}
-
-
-def test_sync_state_is_queried_in_chunks():
-    """Server returns at most 50 representations per request."""
-    addon = _FakeSiteSyncAddon()
-    plugin = SiteSyncActionPlugin(_FakeContext(addon))
-    repre_ids = {f"repre_{idx}" for idx in range(120)}
-    addon.sync_state.update({repre_id: (0, 1) for repre_id in repre_ids})
-
-    items = plugin.get_action_items(_make_selection(repre_ids))
-
-    assert sorted(len(ids) for ids in addon.sync_state_queries) == [
-        20, 50, 50
-    ]
-    download_item = _items_by_action(items)["download"]
-    assert set(download_item.data["representation_ids"]) == repre_ids
 
 
 @pytest.mark.parametrize(
@@ -320,6 +307,82 @@ def test_status_is_queried_again_after_failed_action(action):
 
     plugin.get_action_items(_make_selection({"repre_both"}))
     assert addon.sync_state_queries == [{"repre_both"}, {"repre_both"}]
+
+
+class _FakeStateEndpoint:
+    """'/state' paged like the server, 50 rows per page by default."""
+
+    def __init__(self, repre_ids_by_version_id):
+        self.rows = [
+            {
+                "representationId": repre_id,
+                "versionId": version_id,
+                "files": [{}],
+                "localStatus": {"status": SiteSyncStatus.OK},
+                "remoteStatus": {"status": SiteSyncStatus.QUEUED},
+            }
+            for version_id, repre_ids in repre_ids_by_version_id.items()
+            for repre_id in repre_ids
+        ]
+        self.requested_ids = []
+
+    def get(self, endpoint, **kwargs):
+        repre_ids = kwargs.get("representationIds") or []
+        version_ids = kwargs.get("versionIdsFilter") or []
+        self.requested_ids.append(repre_ids or version_ids)
+        rows = [
+            row
+            for row in self.rows
+            if row["representationId"] in repre_ids
+            or row["versionId"] in version_ids
+        ]
+        page_length = kwargs.get("pageLength", 50)
+        start = (kwargs.get("page", 1) - 1) * page_length
+        return _FakeResponse(
+            {"representations": rows[start:start + page_length]}
+        )
+
+
+def test_addon_returns_sync_state_of_all_requested_representations(
+    monkeypatch,
+):
+    repre_ids = [f"repre_{idx}" for idx in range(250)]
+    server = _FakeStateEndpoint({"version": repre_ids})
+    monkeypatch.setattr(addon_mod.ayon_api, "get", server.get)
+    addon = SiteSyncAddon(None, {})
+
+    states = addon.get_representations_sync_state(
+        PROJECT_NAME, repre_ids, ACTIVE_SITE, REMOTE_SITE
+    )
+
+    assert states == {repre_id: (1, 0) for repre_id in repre_ids}
+    assert sum(server.requested_ids, []) == repre_ids
+    assert all(
+        len(ids) <= addon_mod.STATE_QUERY_IDS_LIMIT
+        for ids in server.requested_ids
+    )
+
+
+def test_addon_returns_availability_of_all_requested_versions(monkeypatch):
+    repre_ids_by_version_id = {
+        f"version_{idx}": [f"repre_{idx}_{num}" for num in range(30)]
+        for idx in range(120)
+    }
+    server = _FakeStateEndpoint(repre_ids_by_version_id)
+    monkeypatch.setattr(addon_mod.ayon_api, "get", server.get)
+    addon = SiteSyncAddon(None, {})
+
+    availability = addon.get_version_availability(
+        PROJECT_NAME, list(repre_ids_by_version_id), ACTIVE_SITE, REMOTE_SITE
+    )
+
+    assert availability == {
+        version_id: (30, 0) for version_id in repre_ids_by_version_id
+    }
+    assert all(
+        len(ids) <= addon_mod.STATE_QUERY_IDS_LIMIT
+        for ids in server.requested_ids
+    )
 
 
 def test_addon_adds_site_in_one_request(monkeypatch):

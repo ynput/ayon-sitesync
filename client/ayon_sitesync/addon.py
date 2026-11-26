@@ -35,6 +35,9 @@ from .utils import (
 )
 
 SYNC_ADDON_DIR = os.path.dirname(os.path.abspath(__file__))
+# Ids are sent in the query string, keep the URL below 8 KB proxy limits
+STATE_QUERY_IDS_LIMIT = 100
+STATE_PAGE_LENGTH = 1000
 
 
 class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
@@ -2124,27 +2127,68 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """
         if not remote_site_name:
             remote_site_name = local_site_name
-        payload_dict = {
-            "localSite": local_site_name,
-            "remoteSite": remote_site_name,
-            "representationIds": representation_ids
-        }
-        if kwargs:
-            payload_dict.update(kwargs)
+        return self._get_state_items(
+            project_name,
+            local_site_name,
+            remote_site_name,
+            "representationIds",
+            representation_ids,
+            **kwargs
+        )
 
+    def _get_state_items(
+        self,
+        project_name,
+        local_site_name,
+        remote_site_name,
+        ids_filter_name,
+        ids,
+        **kwargs
+    ):
+        """Representation states of all pages of `Get Site Sync State`.
+
+        Args:
+            project_name (str): Project name.
+            local_site_name (str): Local site name.
+            remote_site_name (str): Remote site name.
+            ids_filter_name (str): Endpoint parameter filtering by ids.
+            ids (Iterable[str]): Ids to filter by.
+            kwargs: All other parameters for `Get Site Sync State` endpoint.
+
+        Returns:
+            list[dict]: Representation states.
+
+        """
         endpoint = "{}/{}/state".format(
             self.endpoint_prefix, project_name
         )
-
-        response = ayon_api.get(endpoint, **payload_dict)
-        if response.status_code != 200:
-            raise RuntimeError(
-                "Cannot get sync state for representations {}".format(
-                    representation_ids
-                )
-            )
-
-        return response.data["representations"]
+        ids = list(ids)
+        items = []
+        for idx in range(0, len(ids), STATE_QUERY_IDS_LIMIT):
+            chunk_ids = ids[idx:idx + STATE_QUERY_IDS_LIMIT]
+            page = 1
+            while True:
+                payload_dict = {
+                    "localSite": local_site_name,
+                    "remoteSite": remote_site_name,
+                    ids_filter_name: chunk_ids,
+                    "page": page,
+                    "pageLength": STATE_PAGE_LENGTH,
+                }
+                payload_dict.update(kwargs)
+                response = ayon_api.get(endpoint, **payload_dict)
+                if response.status_code != 200:
+                    raise RuntimeError(
+                        "Cannot get sync state for {} {}".format(
+                            ids_filter_name, chunk_ids
+                        )
+                    )
+                page_items = response.data["representations"]
+                items.extend(page_items)
+                if len(page_items) < STATE_PAGE_LENGTH:
+                    break
+                page += 1
+        return items
 
     def get_version_availability(
         self,
@@ -2170,24 +2214,14 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         """
         version_ids = list(version_ids)
-        payload_dict = {
-            "localSite": local_site_name,
-            "remoteSite": remote_site_name,
-            "versionIdsFilter": version_ids
-        }
-        payload_dict.update(kwargs)
-
-        endpoint = "{}/{}/state".format(
-            self.endpoint_prefix, project_name
+        repre_states = self._get_state_items(
+            project_name,
+            local_site_name,
+            remote_site_name,
+            "versionIdsFilter",
+            version_ids,
+            **kwargs
         )
-
-        response = ayon_api.get(endpoint, **payload_dict)
-        if response.status_code != 200:
-            raise RuntimeError(
-                "Cannot get sync state for versions {}".format(
-                    version_ids
-                )
-            )
 
         version_statuses = {
             version_id: (0, 0)
@@ -2195,7 +2229,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         }
 
         repre_avail_by_version_id = defaultdict(list)
-        for repre_avail in response.data["representations"]:
+        for repre_avail in repre_states:
             version_id = repre_avail["versionId"]
             repre_avail_by_version_id[version_id].append(repre_avail)
 
