@@ -35,6 +35,9 @@ from .utils import (
 )
 
 SYNC_ADDON_DIR = os.path.dirname(os.path.abspath(__file__))
+# Ids are sent in the query string, keep the URL below 8 KB proxy limits
+STATE_QUERY_IDS_LIMIT = 100
+STATE_PAGE_LENGTH = 1000
 
 
 class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
@@ -298,6 +301,72 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         if remove_local_files:
             self._remove_local_file(project_name, representation_id, site_name)
+
+    def add_site_to_representations(
+        self,
+        project_name,
+        representation_ids,
+        site_name,
+        add_referenced=False,
+    ):
+        """Queue representations to be synced to a site.
+
+        Existing state of the site is reset. Representations without files
+        or not accessible by the user are skipped. Uses single request.
+
+        Args:
+            project_name (str): Project name.
+            representation_ids (Iterable[str]): Representation ids.
+            site_name (str): Site name.
+            add_referenced (bool): Add the site also to representations
+                referenced by workfiles, unless they are synced there.
+
+        Returns:
+            list[str]: Ids of representations queued to be synced.
+
+        """
+        response = ayon_api.post(
+            f"{self.endpoint_prefix}/{project_name}/add_site",
+            siteName=site_name,
+            representationIds=list(representation_ids),
+            addReferenced=add_referenced,
+        )
+        response.raise_for_status()
+        return response.data["representationIds"]
+
+    def remove_site_from_representations(
+        self,
+        project_name,
+        representation_ids,
+        site_name,
+        remove_local_files=False,
+    ):
+        """Remove site from representations.
+
+        Representations not accessible by the user are skipped. Uses single
+        request, and one more to remove local files.
+
+        Args:
+            project_name (str): Project name.
+            representation_ids (Iterable[str]): Representation ids.
+            site_name (str): Site name.
+            remove_local_files (bool): Remove files of the representations
+                if 'site_name' is the local site.
+
+        Returns:
+            list[str]: Ids of representations that had the site.
+
+        """
+        response = ayon_api.post(
+            f"{self.endpoint_prefix}/{project_name}/remove_site",
+            siteName=site_name,
+            representationIds=list(representation_ids),
+        )
+        response.raise_for_status()
+        removed_ids = response.data["representationIds"]
+        if remove_local_files and removed_ids:
+            self._remove_local_files(project_name, removed_ids, site_name)
+        return removed_ids
 
     def compute_resource_sync_sites(self, project_name):
         """Get available resource sync sites state for publish process.
@@ -1982,9 +2051,6 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
     ):
         """Use server endpoint to get synchronization info for representations.
 
-        Calculates float progress based on progress of all files for repre.
-        If repre is fully synchronized it returns 1, 0 for any other state.
-
         Args:
             project_name (str):
             representation_ids (list): even single repre should be in []
@@ -1994,7 +2060,8 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
                 necessary.
 
         Returns:
-            dict[str, tuple[float, float]]: Progress by representation id.
+            dict[str, tuple[int, int]]: Local and remote state by
+                representation id, 1 if fully synchronized, 0 otherwise.
 
         """
         repre_states = self._get_repres_state(
@@ -2002,39 +2069,17 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             representation_ids,
             local_site_name,
             remote_site_name,
+            includeFiles=False,
             **kwargs
         )
         states = {}
         for repre_state in repre_states:
-            repre_files_count = len(repre_state["files"])
-
-            repre_local_status = repre_state["localStatus"]["status"]
-            repre_local_progress = 0
-            if repre_local_status == SiteSyncStatus.OK:
-                repre_local_progress = 1
-            elif repre_local_status == SiteSyncStatus.IN_PROGRESS:
-                local_sum = sum(
-                    file_info["localStatus"].get("progress", 0)
-                    for file_info in repre_state["files"]
-                )
-                repre_local_progress = local_sum / repre_files_count
-
-            repre_remote_status = repre_state["remoteStatus"]["status"]
-            repre_remote_progress = 0
-            if repre_remote_status == SiteSyncStatus.OK:
-                repre_remote_progress = 1
-            elif repre_remote_status == SiteSyncStatus.IN_PROGRESS:
-                remote_sum = sum(
-                    file_info["remoteStatus"].get("progress", 0)
-                    for file_info in repre_state["files"]
-                )
-                repre_remote_progress = remote_sum / repre_files_count
-
+            local_status = repre_state["localStatus"]["status"]
+            remote_status = repre_state["remoteStatus"]["status"]
             states[repre_state["representationId"]] = (
-                repre_local_progress,
-                repre_remote_progress
+                int(local_status == SiteSyncStatus.OK),
+                int(remote_status == SiteSyncStatus.OK),
             )
-
         return states
 
     def _get_repres_state(
@@ -2058,27 +2103,68 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         """
         if not remote_site_name:
             remote_site_name = local_site_name
-        payload_dict = {
-            "localSite": local_site_name,
-            "remoteSite": remote_site_name,
-            "representationIds": representation_ids
-        }
-        if kwargs:
-            payload_dict.update(kwargs)
+        return self._get_state_items(
+            project_name,
+            local_site_name,
+            remote_site_name,
+            "representationIds",
+            representation_ids,
+            **kwargs
+        )
 
+    def _get_state_items(
+        self,
+        project_name,
+        local_site_name,
+        remote_site_name,
+        ids_filter_name,
+        ids,
+        **kwargs
+    ):
+        """Representation states of all pages of `Get Site Sync State`.
+
+        Args:
+            project_name (str): Project name.
+            local_site_name (str): Local site name.
+            remote_site_name (str): Remote site name.
+            ids_filter_name (str): Endpoint parameter filtering by ids.
+            ids (Iterable[str]): Ids to filter by.
+            kwargs: All other parameters for `Get Site Sync State` endpoint.
+
+        Returns:
+            list[dict]: Representation states.
+
+        """
         endpoint = "{}/{}/state".format(
             self.endpoint_prefix, project_name
         )
-
-        response = ayon_api.get(endpoint, **payload_dict)
-        if response.status_code != 200:
-            raise RuntimeError(
-                "Cannot get sync state for representations {}".format(
-                    representation_ids
-                )
-            )
-
-        return response.data["representations"]
+        ids = list(ids)
+        items = []
+        for idx in range(0, len(ids), STATE_QUERY_IDS_LIMIT):
+            chunk_ids = ids[idx:idx + STATE_QUERY_IDS_LIMIT]
+            page = 1
+            while True:
+                payload_dict = {
+                    "localSite": local_site_name,
+                    "remoteSite": remote_site_name,
+                    ids_filter_name: chunk_ids,
+                    "page": page,
+                    "pageLength": STATE_PAGE_LENGTH,
+                }
+                payload_dict.update(kwargs)
+                response = ayon_api.get(endpoint, **payload_dict)
+                if response.status_code != 200:
+                    raise RuntimeError(
+                        "Cannot get sync state for {} {}".format(
+                            ids_filter_name, chunk_ids
+                        )
+                    )
+                page_items = response.data["representations"]
+                items.extend(page_items)
+                if len(page_items) < STATE_PAGE_LENGTH:
+                    break
+                page += 1
+        return items
 
     def get_version_availability(
         self,
@@ -2104,24 +2190,15 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
 
         """
         version_ids = list(version_ids)
-        payload_dict = {
-            "localSite": local_site_name,
-            "remoteSite": remote_site_name,
-            "versionIdsFilter": version_ids
-        }
-        payload_dict.update(kwargs)
-
-        endpoint = "{}/{}/state".format(
-            self.endpoint_prefix, project_name
+        repre_states = self._get_state_items(
+            project_name,
+            local_site_name,
+            remote_site_name,
+            "versionIdsFilter",
+            version_ids,
+            includeFiles=False,
+            **kwargs
         )
-
-        response = ayon_api.get(endpoint, **payload_dict)
-        if response.status_code != 200:
-            raise RuntimeError(
-                "Cannot get sync state for versions {}".format(
-                    version_ids
-                )
-            )
 
         version_statuses = {
             version_id: (0, 0)
@@ -2129,7 +2206,7 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         }
 
         repre_avail_by_version_id = defaultdict(list)
-        for repre_avail in response.data["representations"]:
+        for repre_avail in repre_states:
             version_id = repre_avail["versionId"]
             repre_avail_by_version_id[version_id].append(repre_avail)
 
@@ -2159,6 +2236,17 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
             site_name (str): name of configured and active site
 
         """
+        self._remove_local_files(project_name, [representation_id], site_name)
+
+    def _remove_local_files(self, project_name, representation_ids, site_name):
+        """Removes all local files for 'site_name' of representations.
+
+        Args:
+            project_name (str): Project name.
+            representation_ids (list[str]): Representation ids.
+            site_name (str): name of configured and active site
+
+        """
         my_local_site = get_local_site_id()
         if my_local_site != site_name:
             self.log.warning(
@@ -2171,48 +2259,54 @@ class SiteSyncAddon(AYONAddon, ITrayAddon, IPluginPaths):
         if provider_name != "local_drive":
             return
 
-        representation = get_representation_by_id(
-            project_name, representation_id
+        representations = get_representations(
+            project_name,
+            representation_ids=representation_ids,
+            fields={"id", "files"},
         )
-        if not representation:
-            self.log.debug(
-                "Representation with id {} was not found".format(
-                    representation_id
+        failed_paths = []
+        for representation in representations:
+            for file in representation["files"]:
+                local_file_path = self.get_local_file_path(
+                    project_name,
+                    site_name,
+                    file.get("path")
+                )
+                if local_file_path is None:
+                    raise ValueError("Missing local file path")
+
+                self.log.debug("Removing {}".format(local_file_path))
+                try:
+                    os.remove(local_file_path)
+                except FileNotFoundError:
+                    pass
+                except OSError:
+                    self.log.warning(
+                        "File {} cannot be removed".format(local_file_path),
+                        exc_info=True,
+                    )
+                    failed_paths.append(local_file_path)
+                    continue
+
+                folder = os.path.dirname(local_file_path)
+                try:
+                    if not os.listdir(folder):
+                        os.rmdir(folder)
+                except FileNotFoundError:
+                    pass
+                except OSError:
+                    self.log.warning(
+                        "Folder {} cannot be removed".format(folder),
+                        exc_info=True,
+                    )
+                    failed_paths.append(folder)
+
+        if failed_paths:
+            raise ValueError(
+                "{} local file(s) or folder(s) cannot be removed:\n{}".format(
+                    len(failed_paths), "\n".join(failed_paths)
                 )
             )
-            return
-
-        for file in representation["files"]:
-            local_file_path = self.get_local_file_path(
-                project_name,
-                site_name,
-                file.get("path")
-            )
-            if local_file_path is None:
-                raise ValueError("Missing local file path")
-
-            try:
-                self.log.debug("Removing {}".format(local_file_path))
-                os.remove(local_file_path)
-            except IndexError:
-                msg = "No file set for {}".format(representation_id)
-                self.log.debug(msg)
-                raise ValueError(msg)
-            except OSError:
-                msg = "File {} cannot be removed".format(file["path"])
-                self.log.warning(msg)
-                raise ValueError(msg)
-
-            folder = os.path.dirname(local_file_path)
-            if os.listdir(folder):  # folder is not empty
-                continue
-
-            try:
-                os.rmdir(folder)
-            except OSError:
-                msg = "folder {} cannot be removed".format(folder)
-                self.log.warning(msg)
-                raise ValueError(msg)
 
     def reset_timer(self):
         """
